@@ -1,5 +1,7 @@
 # Speckit Template — ERP de Manufactura y Operaciones
 
+> **Archivos nuevos de la rama `pruebassimplificada` (marcados `_rama2`)**: [`data_model_rama2.md`](./data_model_rama2.md) y [`data_model_diagram_rama2.md`](./data_model_diagram_rama2.md). El resto de cambios de la rama son la plantilla de plan (`.specify/templates/plan-template.md`) y este README.
+
 Una plataforma ERP de manufactura y operaciones necesita diseñar una base de datos relacional para almacenar la información de su producción. La plataforma parte de un módulo base que ya gestiona datos maestros (entidades) y documentos transaccionales con serie y folio; sobre esa base, cada planta registra los artículos que fabrica, las listas de materiales que los componen, las órdenes de fabricación que lanza y los movimientos de existencias que consumen y devuelven material.
 
 Cada artículo se identifica por su código, que es único en la plataforma, y se describe con su nombre, su tipo (fabricado, comprado o subensamblaje), su unidad de medida base, su costo estándar y su stock mínimo. La plataforma admite tantas unidades de medida como necesite cada planta (kilogramos, unidades, metros) y, cuando una cantidad se registra en una unidad distinta de la base, exige que exista una conversión declarada entre ambas unidades con su factor. Un artículo puede archivarse para retirarlo de las listas sin perder su historial.
@@ -12,7 +14,7 @@ Toda entrada o salida de material se registra como un movimiento de inventario q
 
 ## Del enunciado al modelo de datos
 
-Cada enunciado del párrafo anterior se formaliza en [`specs/002-manufacturing-module/data-model.md`](./specs/002-manufacturing-module/data-model.md), cuyo diagrama entidad-relación está en [`specs/002-manufacturing-module/data-model-diagram.md`](./specs/002-manufacturing-module/data-model-diagram.md).
+Cada enunciado del párrafo anterior se formaliza en [`data_model_rama2.md`](./data_model_rama2.md), cuyo diagrama entidad-relación está en [`data_model_diagram_rama2.md`](./data_model_diagram_rama2.md).
 
 | Enunciado | Entidad o campo en el modelo |
 |---|---|
@@ -35,8 +37,9 @@ Cada enunciado del párrafo anterior se formaliza en [`specs/002-manufacturing-m
 
 ## Documentos del repositorio
 
+- [`data_model_rama2.md`](./data_model_rama2.md) — **nuevo en esta rama**: modelo de datos del dominio de manufactura.
+- [`data_model_diagram_rama2.md`](./data_model_diagram_rama2.md) — **nuevo en esta rama**: diagrama entidad-relación derivado del modelo anterior.
 - [`specs/001-erp-base-module/`](./specs/001-erp-base-module/) — Especificación completa del módulo base (entidades y documentos): `spec.md`, `plan.md`, `data-model.md`, `research.md`, `quickstart.md`, `tasks.md` y `contracts/`.
-- [`specs/002-manufacturing-module/`](./specs/002-manufacturing-module/) — Modelo de datos del dominio de manufactura y su diagrama.
 - [`.specify/memory/constitution.md`](./.specify/memory/constitution.md) — Principios del proyecto (calidad, pruebas, experiencia de usuario, rendimiento) que todo plan debe verificar.
 - [`.specify/templates/plan-template.md`](./.specify/templates/plan-template.md) — Plantilla de plan, en español y orientada a los dominios de manufactura.
 
@@ -46,8 +49,9 @@ Cada enunciado del párrafo anterior se formaliza en [`specs/002-manufacturing-m
 └── templates/            # plan-, spec-, tasks-, checklist- y constitution-template
 .opencode/commands/       # comandos /speckit.* disponibles en el agente
 specs/                    # artefactos de cada funcionalidad planificada
-├── 001-erp-base-module/
-└── 002-manufacturing-module/
+└── 001-erp-base-module/
+data_model_rama2.md           # nuevo: modelo de datos de manufactura
+data_model_diagram_rama2.md   # nuevo: diagrama entidad-relación
 tests/                    # pruebas unitarias e de integración del módulo base
 ```
 

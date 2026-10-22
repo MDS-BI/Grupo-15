@@ -1,8 +1,8 @@
-# Modelo de Datos: Módulo de Manufactura y Operaciones
+# Modelo de Datos `_rama2`: Módulo de Manufactura y Operaciones
 
-Formaliza el enunciado del dominio descrito en el [`README.md`](../../README.md): una plataforma ERP de manufactura que registra artículos, listas de materiales, órdenes de fabricación y movimientos de existencias, apoyada en el módulo base 001 (`specs/001-erp-base-module/data-model.md`).
+Formaliza el enunciado del dominio descrito en el [`README.md`](./README.md): una plataforma ERP de manufactura que registra artículos, listas de materiales, órdenes de fabricación y movimientos de existencias, apoyada en el módulo base 001 (`specs/001-erp-base-module/data-model.md`).
 
-Su diagrama entidad-relación está en [`data-model-diagram.md`](./data-model-diagram.md).
+Su diagrama entidad-relación está en [`data_model_diagram_rama2.md`](./data_model_diagram_rama2.md).
 
 ## 1. Trazabilidad con el enunciado
 

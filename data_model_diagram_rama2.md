@@ -1,6 +1,6 @@
-# Diagrama del Modelo de Datos: Módulo de Manufactura y Operaciones
+# Diagrama Entidad-Relación `_rama2`: Módulo de Manufactura y Operaciones
 
-Compañero visual de [`data-model.md`](./data-model.md). Todas las entidades, atributos y cardinalidades de este diagrama derivan de ese documento.
+Compañero visual de [`data_model_rama2.md`](./data_model_rama2.md). Todas las entidades, atributos y cardinalidades de este diagrama derivan de ese documento.
 
 ## Diagrama Entidad-Relación
 
