@@ -1,0 +1,22 @@
+Prompts del usuario - planprompts_rama2
+=======================================
+
+1. Cierra este speckit_template, clona de nuevo el repo original desde main, lee la branch "pruebas", compara las diferencias con main, y crea en el repo nuevo clonado algo similar a pruebas (llámalo pruebassimplificada) pero simplificado; solo plan-template, data_model y README deben cambiar, y crea el diagrama ER del nuevo data model
+
+2. abre todos lo que hiciste nuevo
+
+3. el README debe tener el estilo del ejemplo de la red social pero en español, y lo que diga el README debe estar reflejado en el data-model
+
+4. abre lo para leerlos
+
+5. sube esto como una nueva branch y asegurate de que sea facil de leer como la branch pruebas, en donde se puede ver claramente los nuevos archivos porque estan titulados como _rama1; en tu caso nombralos _rama2 y asegurate de que todo este correcto
+
+6. puedo solo subir la nueva brancha y no cambiar las otras
+
+7. no se como subir la brancha a github puedes hacerlo por mi y despues en caso de que despues vea que esta mal podemos reversirlo? tipo borrarlo
+
+8. no la veo subida puedes hacerlo
+
+9. borra eso
+
+10. piensa en como la otra persona subio su brancha "pruebas" y haz algo parecido para nuestra brancha "pruebassimplificada"
