@@ -1,28 +1,44 @@
 # Speckit Template — ERP de Manufactura y Operaciones
 
-Plantilla de **Spec Kit** para planificar y construir módulos de un ERP sobre una base ya existente: el **Módulo Base ERP** (entidades y documentos enlazados, con CRUD, validación y persistencia en `localStorage`).
+Una plataforma ERP de manufactura y operaciones necesita diseñar una base de datos relacional para almacenar la información de su producción. La plataforma parte de un módulo base que ya gestiona datos maestros (entidades) y documentos transaccionales con serie y folio; sobre esa base, cada planta registra los artículos que fabrica, las listas de materiales que los componen, las órdenes de fabricación que lanza y los movimientos de existencias que consumen y devuelven material.
 
-Esta rama (`pruebassimplificada`) parte de `main` y adapta el flujo de planificación al dominio de **manufactura y operaciones**, con un modelo de datos de referencia reducido y su diagrama entidad-relación.
+Cada artículo se identifica por su código, que es único en la plataforma, y se describe con su nombre, su tipo (fabricado, comprado o subensamblaje), su unidad de medida base, su costo estándar y su stock mínimo. La plataforma admite tantas unidades de medida como necesite cada planta (kilogramos, unidades, metros) y, cuando una cantidad se registra en una unidad distinta de la base, exige que exista una conversión declarada entre ambas unidades con su factor. Un artículo puede archivarse para retirarlo de las listas sin perder su historial.
 
-## Qué cambia respecto a `main`
+Una lista de materiales indica qué componentes forman un artículo. Cada lista se versiona y tiene una vigencia de inicio, y un mismo artículo sólo puede tener una lista activa a la vez; sus líneas señalan el componente, la cantidad necesaria por unidad del artículo padre, la unidad en que se consume ese componente y el porcentaje de merma esperada. La plataforma impide que una lista se refere a sí misma, directa o indirectamente, de modo que la explosión de materiales no pueda entrar en un ciclo.
 
-| Artefacto | Cambio |
+Una orden de fabricación es el documento que lanza la producción de una cantidad determinada de un artículo. Se identifica por serie y folio y pertenece a la entidad —el cliente o la planta— que la solicitó. Al liberarse, la orden fija la versión de la lista de materiales que usará, de manera que los cambios posteriores en esa lista no alteran una producción ya planificada; una orden en curso puede además llevar registradas las cantidades completadas. La orden avanza por los estados borrador, liberada, en curso, recibida y cerrada, y sólo puede cancelarse desde borrador o liberada.
+
+Toda entrada o salida de material se registra como un movimiento de inventario que nunca se modifica ni se borra: una corrección se hace con un movimiento compensatorio. Cada movimiento indica el artículo afectado, su tipo (recepción, consumo, ajuste o transferencia), la cantidad con signo, la unidad en que se registró, el factor de conversión aplicado cuando la unidad difiere de la base, la orden de fabricación a la que se asocia cuando existe, el motivo en el caso de los ajustes y la fecha y hora en que se produjo. La plataforma mantiene además el saldo actual de cada artículo, que es la suma de los movimientos de ese artículo y se verifica al arrancar para que nunca haya descuadres; el saldo sólo puede ser negativo si la configuración lo permite. La planificación de materiales (MRP), las rutas de trabajo, las reservas de existencias y la trazabilidad por lote quedan fuera del alcance de este modelo y se tratan en funcionalidades propias.
+
+## Del enunciado al modelo de datos
+
+Cada enunciado del párrafo anterior se formaliza en [`specs/002-manufacturing-module/data-model.md`](./specs/002-manufacturing-module/data-model.md), cuyo diagrama entidad-relación está en [`specs/002-manufacturing-module/data-model-diagram.md`](./specs/002-manufacturing-module/data-model-diagram.md).
+
+| Enunciado | Entidad o campo en el modelo |
 |---|---|
-| `.specify/templates/plan-template.md` | Plantilla de plan en español, centrada en los dominios de manufactura (BOM, órdenes de fabricación, inventario, MRP) en lugar de la plantilla genérica en inglés |
-| `specs/002-manufacturing-module/data-model.md` | Modelo de datos **simplificado** del módulo de manufactura construido sobre la base 001 |
-| `specs/002-manufacturing-module/data-model-diagram.md` | Diagrama entidad-relación derivado del modelo de datos anterior |
-| `README.md` | Este documento |
+| artículo con código único, nombre, tipo, UoM base, costo estándar y stock mínimo | `Product` (extensión de `Entity`) |
+| artículo archivado sin perder su historial | `Product.isArchived` |
+| unidades de medida con código y nombre | `UnitOfMeasure` |
+| conversión entre unidades con su factor | `UoMConversion.factor` |
+| lista de materiales versionada, con vigencia y una sola activa por artículo | `Bom.version`, `Bom.effectiveFrom`, `Bom.status` |
+| línea con componente, cantidad, unidad y merma esperada | `BomLine.componentProduct_id`, `.quantity`, `.uom`, `.scrapPercent` |
+| lista que no puede referirse a sí misma | reglas de explosión de BOM (§3.3) |
+| orden con serie y folio, perteneciente a una entidad | `WorkOrder` (extensión de `Document`), `WorkOrder.entity_id` |
+| orden que fija la versión de la lista al liberarse | `WorkOrder.bomVersion_id` y la transición a `liberada` (§5) |
+| cantidades completadas durante la producción | `WorkOrder.quantityCompleted` |
+| estados borrador → liberada → en curso → recibida → cerrada, cancelable | máquinas de estados (§5) |
+| movimiento inmutable con tipo, cantidad con signo, unidad, factor, orden, motivo y fecha | `InventoryMovement` |
+| corrección mediante movimiento compensatorio | `InventoryMovement` es append-only (§3.5) |
+| saldo igual a la suma de movimientos, verificado al arrancar | `StockBalance.onHand` e invariante 1 (§3.5) |
+| saldo negativo sólo si la configuración lo permite | `ModuleConfig.allowNegativeStock` (§7) |
+| MRP, rutas, reservas y trazabilidad fuera de alcance | §8 Fuera de alcance |
 
-El resto del repositorio es idéntico a `main`.
+## Documentos del repositorio
 
-## Documentos clave
-
-- [`specs/001-erp-base-module/`](./specs/001-erp-base-module/) — Especificación completa del módulo base: `spec.md`, `plan.md`, `data-model.md`, `research.md`, `quickstart.md`, `tasks.md` y `contracts/`.
-- [`specs/002-manufacturing-module/data-model.md`](./specs/002-manufacturing-module/data-model.md) — Modelo de datos de manufactura: productos, listas de materiales, órdenes de fabricación e inventario.
-- [`specs/002-manufacturing-module/data-model-diagram.md`](./specs/002-manufacturing-module/data-model-diagram.md) — Diagrama entidad-relación, máquinas de estados y flujo del journal de existencias.
+- [`specs/001-erp-base-module/`](./specs/001-erp-base-module/) — Especificación completa del módulo base (entidades y documentos): `spec.md`, `plan.md`, `data-model.md`, `research.md`, `quickstart.md`, `tasks.md` y `contracts/`.
+- [`specs/002-manufacturing-module/`](./specs/002-manufacturing-module/) — Modelo de datos del dominio de manufactura y su diagrama.
 - [`.specify/memory/constitution.md`](./.specify/memory/constitution.md) — Principios del proyecto (calidad, pruebas, experiencia de usuario, rendimiento) que todo plan debe verificar.
-
-## Estructura del repositorio
+- [`.specify/templates/plan-template.md`](./.specify/templates/plan-template.md) — Plantilla de plan, en español y orientada a los dominios de manufactura.
 
 ```text
 .specify/                 # scripts, plantillas, constitución e integraciones de Spec Kit
@@ -47,15 +63,11 @@ Los comandos de Spec Kit están disponibles en el agente a través de `.opencode
 6. `/speckit.analyze` — comprueba la coherencia entre especificación, plan y tareas.
 7. `/speckit.implement` — ejecuta las tareas.
 
-La plantilla de plan (`plan-template.md`) pide marcar el **alcance de dominio** antes de empezar: los dominios de manufactura marcados como *Incluido* se resuelven en esa funcionalidad y los demás se posponen. El modelo de datos de `002-manufacturing-module` cubre el núcleo mínimo (productos, BOM, órdenes, inventario) y enumera explícitamente lo que queda fuera (MRP, rutas, reservas, trazabilidad, compras).
+La plantilla de plan pide marcar el **alcance de dominio** antes de empezar: los dominios marcados como *Incluido* se resuelven en esa funcionalidad y los demás se posponen.
 
 ## Módulo Base ERP
 
-Base sobre la que se construyen los módulos: un espacio de trabajo con barra superior y barra lateral, panel de inicio con acciones rápidas y tarjetas de estadísticas, gestión de **entidades** (datos maestros: nombre, código, identificación fiscal, contacto, condiciones comerciales) y de **documentos** (registros transaccionales: serie y folio, desglose económico, moneda, fechas, estado), con búsqueda y eliminaciones en cascada.
-
-La interfaz está en **español** (Entidad / Documento; módulo: Módulo Base ERP).
-
-### Personalización por configuración
+Base sobre la que se construyen los módulos: un espacio de trabajo con barra superior y barra lateral, panel de inicio con acciones rápidas y tarjetas de estadísticas, gestión de **entidades** (datos maestros: nombre, código, identificación fiscal, contacto, condiciones comerciales) y de **documentos** (registros transaccionales: serie y folio, desglose económico, moneda, fechas, estado), con búsqueda y eliminaciones en cascada. La interfaz está en **español** (Entidad / Documento; módulo: Módulo Base ERP).
 
 Todo el ajuste vive en el objeto `userConfig` de `src/module-config.js`. Sin tocar el código base se puede cambiar:
 
