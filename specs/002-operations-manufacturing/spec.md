@@ -65,6 +65,19 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 - Utilización por centro de trabajo (carga pendiente vs. capacidad efectiva).
 - Trazabilidad por orden: operaciones, consumo plan-vs-real, salida, calidad derivada.
 
+### FR-07: Planificación y Calendarización de Órdenes (US-07)
+
+- Consultar las órdenes de producción existentes, mostrando identificador, producto, cantidad planificada, estado y fechas planificadas disponibles.
+- Asignar y modificar las fechas planificadas de inicio y término de las órdenes de producción.
+- Validar que la fecha de término sea igual o posterior a la fecha de inicio. Si las fechas son inválidas, impedir el guardado y mostrar un mensaje explicativo.
+- Mostrar las órdenes calendarizadas en un listado ordenado cronológicamente e identificar las órdenes que todavía no tienen fechas asignadas.
+- Permitir consultar la programación actualizada después de guardar los cambios.
+- Mantener diferenciadas las fechas planificadas y la información real de ejecución. La calendarización no debe modificar los tiempos reales, las cantidades producidas ni el historial de las operaciones ejecutadas.
+
+**Historia de usuario:** Como planificador de producción, quiero asignar y consultar las fechas planificadas de inicio y término de las órdenes de producción, para organizar las actividades de fabricación y facilitar el cumplimiento de los plazos establecidos.
+
+Alcance del MVP: La funcionalidad se implementará en el frontend, utilizando los datos y mecanismos de persistencia disponibles en el proyecto. No se requiere un algoritmo de optimización automática de la secuencia de producción.
+
 ## 5. Criterios de Aceptación
 
 | ID | Criterio | Estado |
@@ -79,6 +92,12 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 | AC-08 | Panel con KPIs y utilización por centro de trabajo | Implementado |
 | AC-09 | Calidad derivada desde `quality_inspections` (solo lectura) | Implementado |
 | AC-10 | Pruebas unitarias del dominio y del store pasan; build exitoso | Verificado |
+| AC-11 | Consultar órdenes de producción con sus fechas planificadas y estados | Pendiente |
+| AC-12 | Asignar y modificar fechas planificadas de inicio y término | Pendiente |
+| AC-13 | Rechazar fechas inválidas y mostrar un mensaje explicativo | Pendiente |
+| AC-14 | Visualizar las órdenes calendarizadas en orden cronológico e identificar las no calendarizadas | Pendiente |
+| AC-15 | Reflejar los cambios de programación después de guardar | Pendiente |
+| AC-16 | Mantener intactos los tiempos reales, cantidades producidas e historial de ejecución al modificar la planificación | Pendiente |
 
 ## 6. Artefactos Spec-Kit
 
