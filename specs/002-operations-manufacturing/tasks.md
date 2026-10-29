@@ -1,203 +1,147 @@
 # Tareas: Módulo de Operaciones / Manufactura (ERP)
 
 **Entrada**: Documentos de diseño desde `/specs/002-operations-manufacturing/`
-**Prerrequisitos**: plan.md (obligatorio), data-model.md (obligatorio), contracts/ (Fase 1), spec.md (historias de usuario)
-**Stack**: Vanilla JavaScript (ES2022) + Vite + Vitest/jsdom — paridad con `001-erp-base-module` (ver decisión de arquitectura en §Notas)
-**Convención de nombres**: se preservan `snake_case` y claves `_id` de `data-model.md`; los módulos de código usan `camelCase`.
+**Prerrequisitos**: [plan.md](plan.md), [spec.md](spec.md), [data-model.md](data-model.md), [research.md](research.md), [contracts/operator-shift.md](contracts/operator-shift.md)
+**Stack**: Vanilla JavaScript (ES2022) + Vite 8 + Vitest 4/jsdom — paridad con `001-erp-base-module`
+**Convención**: `snake_case` y claves `_id` en datos; `camelCase` en código.
+
+> **Estado de partida (2026-10-29)**: US-01 a US-05 ya están implementadas y verificadas por AC-01..AC-10. Este listado prioriza el incremento pendiente **US-06** y conserva una fase de verificación por cada historia existente para evitar regresiones.
 
 ## Formato: `[ID] [P?] [Historia] Descripción`
 
 - **[P]**: puede ejecutarse en paralelo (archivos distintos, sin dependencias)
-- **[Historia]**: historia de usuario asociada (US1–US5)
+- **[Historia]**: `US1`–`US6` para tareas de historia; sin etiqueta en configuración, fundacional y pulido
 - Rutas de archivo explícitas en cada tarea
 
 ---
 
 ## Fase 1: Configuración (Infraestructura Compartida)
 
-**Propósito**: Preparar el espacio de trabajo del frontend de manufactura.
+**Propósito**: Confirmar que el entorno de ejecución y pruebas del módulo está listo.
 
-- [ ] T001 Crear la estructura de carpetas de manufactura (`src/domain/`, `src/data/fixtures/`, `src/data/ports/`, `src/stores/`, `src/components/{bom,routing,workcenters,orders,execution}/`, `src/pages/`) conforme a plan.md
-- [ ] T002 [P] Añadir scripts de manufactura a `package.json` si se requiere una entrada separada (por defecto se reutiliza `npm run dev` / `npm test`)
-- [ ] T003 [P] Configurar el contexto de pruebas jsdom para los nuevos módulos en `vitest.config.mjs`
+- [ ] T001 [P] Verificar dependencias y scripts de manufactura en `package.json` y `package-lock.json`; ejecutar `npm ci` si `node_modules` no existe
+- [ ] T002 [P] Configurar el entorno jsdom para las pruebas de integración de manufactura en `vitest.config.mjs`
+- [ ] T003 [P] Confirmar la estructura real del proyecto (`src/domain/`, `src/data/`, `src/data/fixtures/`, `src/data/ports/`, `src/components/`, `src/styles/`, `tests/unit/`, `tests/integration/`) contra `plan.md` §6
 
 ---
 
 ## Fase 2: Fundacional (Prerrequisitos Bloqueantes)
 
-**Propósito**: Tipos, contratos, estado y motor mock de los que dependen TODAS las historias.
+**Propósito**: Tipos, persistencia, fixtures y estado compartido que necesitan todas las historias.
 
-**⚠️ CRÍTICO**: ninguna historia puede comenzar hasta completar esta fase.
+**⚠️ CRÍTICO**: ninguna historia puede cerrarse sin completar esta fase.
 
-- [ ] T004 Definir enums y tipos espejo de `data-model.md` (`ProductType`, `WarehouseType`, `BomStatus`, `RoutingStatus`, `ProductionOrderStatus`, `OperationStatus`, `Priority` y entidades `BillOfMaterials`, `BomComponent`, `WorkCenter`, `Routing`, `RoutingOperation`, `ProductionOrder`, `ProductionOrderOperation`, `MaterialConsumption`, `ProductionOutput`, y frontera `Product`, `Warehouse`, `UnitOfMeasure`, `Company`, `SalesOrder`, `QualityInspection`) en `src/domain/types.js`
-- [ ] T005 [P] Implementar la máquina de estados de `production_orders` (`planned → released → in_progress → completed`, `cancelled` lateral, transiciones inversas rechazadas) en `src/domain/order-state-machine.js`
-- [ ] T006 [P] Implementar `planned_time_minutes = setup_time_minutes + run_time_per_unit_minutes × quantity` en `src/domain/operation-planning.js`
-- [ ] T007 [P] Implementar cálculo de consumo teórico y explosión multi-nivel de BOM en `src/domain/bom-explosion.js`
-- [ ] T008 [P] Implementar reglas de reconciliación plan-vs-real (varianza, tolerancia, flags de discrepancia) en `src/domain/reconciliation.js`
-- [ ] T009 [P] Implementar validadores de esquema/negocio (`quantity_planned > 0`, `quantity_consumed > 0`, `UNIQUE (bom_id, component_product_id)`, detección de ciclos) en `src/domain/validators.js`
-- [ ] T010 Definir la interfaz del repositorio `ProductionRepository` en `src/data/ProductionRepository.js`
-- [ ] T011 Definir los puertos de solo lectura `InventoryPort` y `QualityPort` en `src/data/ports/InventoryPort.js` y `src/data/ports/QualityPort.js`
-- [ ] T012 Implementar `MockProductionRepository` con RNG semillado y latencia simulada en `src/data/MockProductionRepository.js`
-- [ ] T013 Crear el store de estado de órdenes (acciones de despacho, guardas de transición, generación de operaciones) en `src/stores/orderStore.js`
-- [ ] T014 [P] Crear el store de BOM/rutas (CRUD, ensamblado de árbol, explosión) en `src/stores/bomStore.js`
-- [ ] T015 [P] Crear el store de ejecución (progreso de operaciones, consumo, salida) en `src/stores/executionStore.js`
-- [ ] T016 [P] Crear el store de datos maestros de solo lectura (`products`, `warehouses`, `units_of_measure`, `sales_orders`, `quality_inspections`) en `src/stores/masterDataStore.js`
+- [ ] T004 [P] Añadir a `src/domain/types.js` los enums `DelayReasonOrigin` (`predefined`/`custom`) y `ShiftStatus` (`in_progress`/`completed`), y los typedefs `ProductionShift`, `OperationDelay`, `DelayReason`; ampliar `ProductionOrderOperation` con `delay_time_minutes`
+- [ ] T005 [P] Implementar el adaptador de snapshot versionado en `src/data/persistence.js` (`loadSnapshot`, `saveSnapshot`, `clearSnapshot`, validación de `version` y forma mínima) según `contracts/operator-shift.md` §6
+- [ ] T006 [P] Añadir pruebas unitarias de persistencia (round-trip, snapshot ausente, JSON corrupto, versión distinta) en `tests/unit/persistence.test.js`
+- [ ] T007 [P] Crear fixtures de motivos y turnos en `src/data/fixtures/delay-reasons.js` y `src/data/fixtures/production-shifts.js`; ampliar `src/data/fixtures/production-orders.js` con un escenario sembrado de turno y atraso
+- [ ] T008 Extender `src/data/ManufacturingStore.js` con las colecciones `productionShifts`, `operationDelays` y `delayReasons`, hidratación desde `src/data/persistence.js` y escritura del snapshot tras cada mutación (depende de T005, T007)
 
-**Punto de control**: tipos, estado y motor mock operativos; las historias pueden comenzar.
+**Punto de control**: tipos, fixtures, persistencia y store listos; las historias pueden validarse sin romper el estado existente.
 
 ---
 
-## Fase 3: Historia de Usuario US-01 - BOM multi-nivel (Prioridad: P1) 🎯 MVP
+## Fase 3: Historia de Usuario US-01 - BOM multi-nivel (Prioridad: P1)
 
-**Objetivo**: Crear y visualizar estructuras de materiales multi-nivel (`bill_of_materials`, `bom_components`).
+**Objetivo**: Confirmar que la gestión y visualización de BOM multi-nivel sigue intacta.
 
-**Prueba Independiente**: un planificador crea una BOM de bien terminado, añade componentes y sub-ensambles, y ve el árbol anidado (≥4 niveles) con consumo teórico total.
+**Prueba Independiente**: un planificador abre una BOM de bien terminado, ve el árbol anidado (≥4 niveles) con consumo teórico total y un ciclo se detecta sin recursión infinita.
 
-### Datos y prueba para US-01
+- [ ] T009 [P] [US1] Verificar AC-01 ejecutando `tests/unit/bom-explosion.test.js` y revisando el árbol y la detección de ciclos en `src/components/BomExplorer.js`
 
-- [ ] T017 [P] [US1] Añadir fixtures de BOM multi-nivel y componentes en `src/data/fixtures/boms.js`
-- [ ] T018 [P] [US1] Añadir pruebas unitarias de explosión de BOM y detección de ciclos en `tests/unit/bom-explosion.test.js`
-- [ ] T019 [P] [US1] Añadir pruebas unitarias de validación de BOM (`UNIQUE (bom_id, component_product_id)`) en `tests/unit/bom-validators.test.js`
-
-### Implementación para US-01
-
-- [ ] T020 [P] [US1] Crear `BomTreeViewer` (árbol expandible/colapsable, ≥4 niveles, distinción sub-ensamble vs. material) en `src/components/bom/BomTreeViewer.js`
-- [ ] T021 [US1] Crear `BomEditor` (cabecera + líneas `bom_components`, `quantity_per_unit`, `scrap_percentage`) en `src/components/bom/BomEditor.js`
-- [ ] T022 [US1] Crear la página explorador de BOM en `src/pages/BomExplorerPage.js`
-- [ ] T023 [US1] Añadir pruebas de integración del árbol de BOM en `tests/integration/bom-explorer.test.js`
-
-**Punto de control**: US-01 completamente funcional y comprobable de forma independiente.
+**Punto de control**: US-01 verificada; cualquier regresión debe corregirse antes de avanzar a US-06.
 
 ---
 
 ## Fase 4: Historia de Usuario US-02 - Centros de trabajo y rutas (Prioridad: P1)
 
-**Objetivo**: Configurar capacidad de centros de trabajo y secuencia de operaciones (`work_centers`, `routings`, `routing_operations`).
+**Objetivo**: Confirmar capacidad, secuencia de operaciones y tiempo estándar.
 
-**Prueba Independiente**: un planificador define un centro de trabajo con capacidad, crea una ruta y ordena sus operaciones; el tiempo estándar total se calcula en vivo.
+**Prueba Independiente**: una ruta conserva secuencia estrictamente creciente y `planned_time_minutes` se calcula como `setup + run × quantity`.
 
-### Datos y prueba para US-02
+- [ ] T010 [P] [US2] Verificar AC-02 ejecutando `tests/unit/operation-planning.test.js` y revisando `src/domain/operation-planning.js` y `src/data/fixtures/routings.js`
 
-- [ ] T024 [P] [US2] Añadir fixtures de centros de trabajo y rutas en `src/data/fixtures/work-centers.js` y `src/data/fixtures/routings.js`
-- [ ] T025 [P] [US2] Añadir pruebas unitarias de `planned_time_minutes` y validación de `sequence` en `tests/unit/operation-planning.test.js`
-
-### Implementación para US-02
-
-- [ ] T026 [P] [US2] Crear `WorkCenterCapacityList` (carga vs. `capacity_per_day_minutes`) en `src/components/routing/WorkCenterCapacityList.js`
-- [ ] T027 [US2] Crear `RoutingEditor` (secuencia de operaciones, prevención de duplicados/fuera de orden) en `src/components/routing/RoutingEditor.js`
-- [ ] T028 [US2] Asegurar que editar una ruta no muta `production_order_operations` ya congeladas en `src/stores/bomStore.js`
-- [ ] T029 [US2] Añadir pruebas de integración del editor de rutas en `tests/integration/routing-editor.test.js`
-
-**Punto de control**: US-01 y US-02 funcionales de forma independiente.
+**Punto de control**: US-02 verificada sin mutar operaciones ya congeladas.
 
 ---
 
-## Fase 5: Historia de Usuario US-03 - Despacho de órdenes de producción (Prioridad: P1) 🎯 MVP
+## Fase 5: Historia de Usuario US-03 - Despacho de órdenes (Prioridad: P1)
 
-**Objetivo**: Crear y liberar órdenes desde reposición o make-to-order (`production_orders` + snapshot de `production_order_operations`).
+**Objetivo**: Confirmar creación, liberación y congelamiento de BOM/ruta/operaciones.
 
-**Prueba Independiente**: un planificador crea una orden (stock o MTO), la libera y observa las operaciones generadas y el estado `released`.
+**Prueba Independiente**: una orden creada desde stock o MTO se libera, genera una operación por paso de ruta y respeta la máquina de estados.
 
-### Datos y prueba para US-03
+- [ ] T011 [P] [US3] Verificar AC-03 y AC-04 ejecutando `tests/unit/order-state-machine.test.js` y revisando `src/data/ManufacturingStore.js` (`createOrder`, `transitionOrder`, `#generateOperations`)
 
-- [ ] T030 [P] [US3] Añadir fixtures de datos maestros (`products`, `warehouses`, `units_of_measure`, `sales_orders` con MTO) en `src/data/fixtures/master-data.js`
-- [ ] T031 [P] [US3] Añadir fixtures de órdenes de producción en varios estados en `src/data/fixtures/production-orders.js`
-- [ ] T032 [P] [US3] Añadir pruebas unitarias de la máquina de estados de órdenes en `tests/unit/order-state-machine.test.js`
-
-### Implementación para US-03
-
-- [ ] T033 [US3] Crear `OrderDispatcher` (crear desde stock o MTO con `sales_order_id` nullable; liberar congela BOM/ruta y genera operaciones) en `src/components/orders/OrderDispatcher.js`
-- [ ] T034 [US3] Crear `ProductionOrderBoard` (lista + kanban por `status`, filtros por `status`/`priority`) en `src/components/orders/ProductionOrderBoard.js`
-- [ ] T035 [US3] Crear la página de seguimiento de órdenes en `src/pages/ProductionOrdersPage.js`
-- [ ] T036 [US3] Implementar liberación/cancelación con confirmación y sin borrado silencioso de registros de ejecución en `src/stores/orderStore.js`
-- [ ] T037 [US3] Añadir pruebas de integración del despacho y el tablero en `tests/integration/production-orders.test.js`
-
-**Punto de control**: US-01, US-02 y US-03 funcionales; tablero de producción operativo (MVP ampliado).
+**Punto de control**: US-03 verificada; las operaciones generadas son la base de US-06.
 
 ---
 
-## Fase 6: Historia de Usuario US-04 - Ejecución en piso de planta (Prioridad: P2)
+## Fase 6: Historia de Usuario US-06 - Registro de turno del operador (Prioridad: P1) 🎯 MVP del incremento
 
-**Objetivo**: Iniciar, pausar y completar operaciones registrando `actual_time_minutes`.
+**Objetivo**: Iniciar/finalizar la operación activa con un botón, justificar atrasos y mantener contadores de turno y acumulado, con persistencia ante recarga.
 
-**Prueba Independiente**: un operador inicia la primera operación (la orden pasa a `in_progress`), completa todas y la orden pasa a `completed` con `actual_end_date`.
+**Prueba Independiente**: un operador inicia una operación, registra un atraso, ajusta ambos contadores, finaliza con confirmación y recarga la página conservando turno, tiempos, atrasos y piezas.
 
-### Datos y prueba para US-04
+### Pruebas para US-06 (escribir primero) ⚠️
 
-- [ ] T038 [P] [US4] Añadir pruebas unitarias de transiciones de operación (`pending → in_progress → completed`, `paused`) en `tests/unit/operation-execution.test.js`
+- [ ] T012 [P] [US6] Añadir pruebas unitarias de tiempo efectivo, descuento de atrasos cerrados, atrasos abiertos y tolerancia de 1 s en `tests/unit/shift-tracking.test.js`
+- [ ] T013 [P] [US6] Añadir pruebas unitarias de guardas y contadores del store (un turno activo, doble cierre, motivo obligatorio, atrasos simultáneos, valores negativos/no numéricos) en `tests/unit/manufacturing-store.test.js`
+- [ ] T014 [P] [US6] Añadir prueba de integración jsdom del botón alterno, confirmación, atraso y contadores en `tests/integration/operator-shift.test.js`
+- [ ] T015 [P] [US6] Añadir prueba de integración de cierre con atraso abierto y corrección posterior en `tests/integration/delay-correction.test.js`
 
-### Implementación para US-04
+### Implementación para US-06
 
-- [ ] T039 [US4] Crear `OperationExecutionPanel` (iniciar/pausar/completar, `actual_time_minutes` vs. `planned_time_minutes`) en `src/components/execution/OperationExecutionPanel.js`
-- [ ] T040 [US4] Propagar la finalización de la primera operación a `production_orders.status = in_progress` y la última a `completed` en `src/stores/executionStore.js`
-- [ ] T041 [US4] Marcar operaciones fuera de secuencia como advertencia (no bloqueo) en `src/components/execution/OperationExecutionPanel.js`
-- [ ] T042 [US4] Añadir pruebas de integración de la consola de ejecución en `tests/integration/operation-execution.test.js`
+- [ ] T016 [P] [US6] Implementar `src/domain/shift-tracking.js` con funciones puras `elapsedMinutes`, `computeEffectiveMinutes`, `sumClosedDelayMinutes`, `hasOpenDelay`, `validateCounter` y guardas de un solo turno/atraso
+- [ ] T017 [US6] Implementar en `src/data/ManufacturingStore.js` las consultas `activeShiftFor`, `openDelayFor`, `delaysForOperation`, `reasonsForShift` y las acciones `startShift`, `finishOperation`, `closeDelay`, `correctOpenDelay`
+- [ ] T018 [US6] Implementar en `src/data/ManufacturingStore.js` `startDelay` con motivo predefinido o personalizado reutilizable, y `adjustShiftCounter`/`setShiftCounter` con delta único hacia `quantity_completed` (depende de T017)
+- [ ] T019 [US6] Crear `src/components/OperatorWorkstationPanel.js` con tarjeta de orden/operación activa, botón alterno `Iniciar`/`Finalizar`, confirmación, cronómetro, lista de atrasos y ambos contadores
+- [ ] T020 [US6] Crear `src/components/DelayCorrectionDialog.js` para listar atrasos abiertos tras el cierre y corregirlos con nota de auditoría
+- [ ] T021 [US6] Integrar `OperatorWorkstationPanel` en `src/components/ProductionOrders.js` y añadir su vista/ruta en `src/manufacturing-main.js`
+- [ ] T022 [US6] Añadir estilos de botón alterno, cronómetro, aviso de atraso abierto y contadores en `src/styles/manufacturing.css`, incluyendo `aria-pressed`, foco del diálogo y cierre con `Esc`
+- [ ] T023 [US6] Asegurar la escritura del snapshot tras cada acción de US-06 y la rehidratación de cronómetros desde `started_at`/`ended_at` en `src/data/ManufacturingStore.js` y `src/data/persistence.js` (depende de T008, T017)
+- [ ] T024 [US6] Ejecutar las pruebas de US-06 (`tests/unit/shift-tracking.test.js`, `tests/unit/manufacturing-store.test.js`, `tests/integration/operator-shift.test.js`, `tests/integration/delay-correction.test.js`) y corregir fallos
 
-**Punto de control**: US-04 funcional de forma independiente.
-
----
-
-## Fase 7: Historia de Usuario US-05 - Consumo y salida (Prioridad: P2)
-
-**Objetivo**: Registrar `material_consumption` real y `production_output` con merma.
-
-**Prueba Independiente**: un operador registra consumo (teórico vs. real), produce un lote parcial y ve yield y scrap rate calculados; el inventario mock se debita/acredita.
-
-### Datos y prueba para US-05
-
-- [ ] T043 [P] [US5] Añadir fixtures de consumo y salida de ejemplo, y hooks de `quality_inspections`, en `src/data/fixtures/consumption-output.js`
-- [ ] T044 [P] [US5] Añadir pruebas unitarias de reconciliación plan-vs-real en `tests/unit/reconciliation.test.js`
-
-### Implementación para US-05
-
-- [ ] T045 [US5] Crear `MaterialConsumptionModal` (teórico vs. real por `bom_components`, lotes, uso no planificado con `bom_component_id = null`) en `src/components/execution/MaterialConsumptionModal.js`
-- [ ] T046 [US5] Crear `ProductionOutputForm` (`quantity_produced` + `scrap_quantity`, salidas parciales) en `src/components/execution/ProductionOutputForm.js`
-- [ ] T047 [US5] Implementar el débito/crédito simulado de inventario vía `InventoryPort` en `src/stores/executionStore.js`
-- [ ] T048 [US5] Calcular y mostrar yield y scrap rate (no persistidos) en `src/components/orders/OrderTraceabilityView.js`
-- [ ] T049 [US5] Añadir pruebas de integración de consumo, salida e inventario en `tests/integration/consumption-output.test.js`
-
-**Punto de control**: US-01 a US-05 completamente funcionales.
+**Punto de control**: US-06 completamente funcional y comprobable de forma independiente; AC-11..AC-13 verificados.
 
 ---
 
-## Fase 8: Panel y Marco (Historia de Usuario US-00 - Dashboard, Prioridad: P1) 🎯 MVP
+## Fase 7: Historia de Usuario US-04 - Ejecución en piso (Prioridad: P2)
 
-**Objetivo**: Punto de entrada con KPIs y navegación consistente (dashboard overview).
+**Objetivo**: Confirmar que la ejecución existente (iniciar/pausar/completar) sigue funcionando junto a US-06.
 
-**Prueba Independiente**: la aplicación abre en un panel con KPIs (órdenes activas, utilización de capacidad, scrap/completitud) y la navegación a cada vista funciona.
+**Prueba Independiente**: iniciar la primera operación mueve la orden a `in_progress`; pausar y completar respetan la máquina de estados; completar la última operación mueve la orden a `completed`.
 
-### Implementación para US-00
+- [ ] T025 [P] [US4] Verificar AC-05 ejecutando `tests/unit/manufacturing-store.test.js` y revisando `startOperation`, `pauseOperation` y `completeOperation` en `src/data/ManufacturingStore.js`
+- [ ] T026 [US4] Asegurar que `finishOperation` reutiliza la lógica de `completeOperation` sin romper pausas ni el cálculo previo de `actual_time_minutes` en `src/data/ManufacturingStore.js`
 
-- [ ] T050 [P] [US0] Crear `DashboardOverview` con KPIs (órdenes activas por `status`, utilización por `work_center`, scrap rate, completion/yield rate) en `src/components/DashboardOverview.js`
-- [ ] T051 [P] [US0] Crear la página panel en `src/pages/DashboardPage.js`
-- [ ] T052 [US0] Crear el componente de estado vacío reutilizable en `src/components/EmptyState.js`
-- [ ] T053 [US0] Reutilizar/adaptar los tokens de diseño del marco ERP en `src/styles/manufacturing.css`
-- [ ] T054 [US0] Añadir pruebas de integración del panel y sus KPIs en `tests/integration/dashboard.test.js`
+**Punto de control**: US-04 y US-06 conviven sin dobles cierres ni transiciones inválidas.
 
-**Punto de control**: pantalla de entrada y navegación listas.
+---
+
+## Fase 8: Historia de Usuario US-05 - Consumo y salida (Prioridad: P2)
+
+**Objetivo**: Confirmar que consumo, salida e inventario simulado no se ven afectados por el seguimiento de turno.
+
+**Prueba Independiente**: registrar consumo debita inventario, registrar salida lo acredita y la reconciliación plan-vs-real sigue calculando varianza y flags.
+
+- [ ] T027 [P] [US5] Verificar AC-06 y AC-07 ejecutando `tests/unit/reconciliation.test.js` y `tests/unit/manufacturing-store.test.js` y revisando `src/data/ports/index.js`
+
+**Punto de control**: US-01 a US-06 verificadas en conjunto.
 
 ---
 
 ## Fase 9: Pulido y Preocupaciones Transversales
 
-**Propósito**: Calidad, accesibilidad, rendimiento y preparación de la defensa.
+**Propósito**: Calidad, accesibilidad, rendimiento, documentación y cierre de AC.
 
-- [ ] T055 [P] Añadir accesibilidad (etiquetas, foco de teclado, estructura semántica) en las vistas de manufactura
-- [ ] T056 [P] Añadir pulido UX para estados vacíos, validación y diseño responsivo en `src/styles/manufacturing.css`
-- [ ] T057 Verificar rendimiento con 500 órdenes y BOM de 4 niveles (< 100 ms por interacción) (plan.md §3 Fase 4)
-- [ ] T058 Verificar la alineación de integración con Logística (débito/crédito) y Calidad (estado derivado de solo lectura)
-- [ ] T059 Ejecutar la suite completa de pruebas y la compilación de producción (`npm test`, `npm run build`) sin regresiones
-- [ ] T060 Preparar el guion de demo E2E de 5 minutos (pedido → orden → ejecución → consumo → salida → trazabilidad)
-
----
-
-## Fase 10: Alineación de Especificación
-
-**Propósito**: Cerrar la trazabilidad de la metodología SDD.
-
-- [ ] T061 Crear `specs/002-operations-manufacturing/spec.md` a partir de plan.md §2 con requisitos funcionales y criterios de aceptación
-- [ ] T062 [P] Crear los contratos de estado y repositorio en `specs/002-operations-manufacturing/contracts/`
-- [ ] T063 [P] Crear `specs/002-operations-manufacturing/research.md` y `quickstart.md`
+- [ ] T028 [P] Reparar o aislar las 12 suites legadas de `001-erp-base-module` que importan `src/storage.js` y `src/module-config.js` inexistentes, ajustando `vitest.config.mjs` o `tests/` según corresponda
+- [ ] T029 [P] Revisar accesibilidad y consistencia de `src/components/OperatorWorkstationPanel.js` y `src/components/DelayCorrectionDialog.js` (etiquetas, foco, `Esc`, mensajes inline)
+- [ ] T030 [P] Actualizar `quickstart.md` con los selectores, etiquetas y pasos finales de US-06 tras la implementación
+- [ ] T031 [P] Validar el rendimiento con 500 órdenes y cronómetro activo (<100 ms por interacción) usando `src/data/ManufacturingStore.js` y `src/components/OperatorWorkstationPanel.js`
+- [ ] T032 Ejecutar `npm test -- --run` y `npm run build`; documentar en `tasks.md` cualquier fallo preexistente no relacionado con US-06
+- [ ] T033 Actualizar `spec.md` AC-11, AC-12 y AC-13 a `Implementado`/`Verificado` cuando T024 y T032 pasen
+- [ ] T034 Preparar el guion de demo de 5 minutos (pedido → orden → turno → atraso → contadores → recarga) en `quickstart.md`
 
 ---
 
@@ -205,48 +149,82 @@
 
 ### Dependencias entre Fases
 
-- Configuración (Fase 1): sin dependencias
-- Fundacional (Fase 2): depende de Configuración; **BLOQUEA** todas las historias
-- US-01 (Fase 3): depende de Fundacional
-- US-02 (Fase 4): depende de Fundacional
-- US-03 (Fase 5): depende de US-01 y US-02 (necesita BOM y ruta para congelarlas)
-- US-04 (Fase 6): depende de US-03 (necesita operaciones generadas)
-- US-05 (Fase 7): depende de US-03 y US-04
-- Panel US-00 (Fase 8): depende de Fundacional; los KPIs se completan tras US-03/US-05
-- Pulido (Fase 9): depende de todas las historias deseadas
-- Alineación de Especificación (Fase 10): puede avanzar en paralelo desde el inicio
+- **Configuración (Fase 1)**: sin dependencias.
+- **Fundacional (Fase 2)**: depende de Fase 1; **BLOQUEA** todas las historias.
+- **US-01, US-02, US-03 (Fases 3–5)**: dependen de Fase 2; son verificaciones de la base ya implementada.
+- **US-06 (Fase 6)**: depende de Fase 2 y de las operaciones generadas por US-03; usa la ejecución existente de US-04.
+- **US-04 (Fase 7)**: depende de US-06 para comprobar la convivencia con `finishOperation`.
+- **US-05 (Fase 8)**: depende de Fase 2; no depende de US-06.
+- **Pulido (Fase 9)**: depende de todas las historias deseadas.
+
+### Dependencias dentro de US-06
+
+- T012–T015 (pruebas) se escriben antes de T016–T023 y deben fallar primero.
+- T016 (dominio puro) antes de T017/T018 (store).
+- T017 antes de T018 y T023.
+- T019 antes de T021/T022.
+- T020 puede avanzar en paralelo con T019.
+- T024 depende de T016–T023.
 
 ### Oportunidades Paralelas
 
-- T003, T005–T009, T014–T016 pueden ejecutarse en paralelo dentro de la Fase 2
-- Las tareas de fixtures y pruebas de cada historia ([P]) pueden crearse en paralelo con la implementación de esa historia
-- US-01 y US-02 pueden proceder en paralelo tras la Fase 2
-- T050–T053 pueden ejecutarse en paralelo; T054 depende de ellas
+- T001–T003 pueden ejecutarse en paralelo.
+- T004–T007 pueden ejecutarse en paralelo; T008 depende de T005 y T007.
+- T009–T011 (verificación de historias existentes) pueden ejecutarse en paralelo.
+- T012–T015 (pruebas de US-06) pueden ejecutarse en paralelo.
+- T016 y T019/T020 pueden avanzar en paralelo; T017/T018 requieren T016.
+- T028–T031 pueden ejecutarse en paralelo tras cerrar US-06.
+
+---
+
+## Ejemplo Paralelo: US-06
+
+```bash
+# Pruebas de US-06 en paralelo
+Task: "Añadir pruebas unitarias de tiempo efectivo en tests/unit/shift-tracking.test.js"
+Task: "Añadir pruebas unitarias de guardas del store en tests/unit/manufacturing-store.test.js"
+Task: "Añadir prueba de integración del botón alterno en tests/integration/operator-shift.test.js"
+Task: "Añadir prueba de integración de corrección de atraso en tests/integration/delay-correction.test.js"
+
+# Implementación paralela tras el dominio puro
+Task: "Implementar src/domain/shift-tracking.js"
+Task: "Crear src/components/OperatorWorkstationPanel.js"
+Task: "Crear src/components/DelayCorrectionDialog.js"
+```
 
 ---
 
 ## Estrategia de Implementación
 
-### MVP Primero
+### MVP del Incremento (US-06)
 
-1. Fase 1 (Configuración) + Fase 2 (Fundacional)
-2. US-01 (BOM) + US-02 (Rutas) + US-03 (Órdenes) + Panel US-00
-3. **DETENER y VALIDAR**: BOM, rutas, despacho y panel funcionan sobre datos mock
-4. Demostrar
+1. Completar Fase 1 y Fase 2.
+2. Verificar US-01 a US-03 (T009–T011).
+3. Implementar US-06 completo (T012–T024).
+4. **DETENER y VALIDAR**: ejecutar las pruebas de US-06, recargar la página y comprobar persistencia.
+5. Demostrar US-06 sobre la base existente.
 
 ### Entrega Incremental
 
-1. Añadir US-04 (ejecución) → validar → demostrar
-2. Añadir US-05 (consumo/salida) → validar → demostrar
-3. Pulido y preparación de defensa
+1. Base verificada (US-01 a US-03) → US-06 → validar → demostrar.
+2. Verificar US-04 y US-05 sin regresiones.
+3. Pulido, accesibilidad, rendimiento y actualización de AC.
+
+### Estrategia de Equipo Paralelo
+
+Con varios desarrolladores, tras Fase 2:
+- Desarrollador A: dominio y store de US-06 (T016–T018, T023).
+- Desarrollador B: UI de US-06 (T019–T022).
+- Desarrollador C: pruebas de US-06 (T012–T015) y verificación de historias existentes (T009–T011).
 
 ---
 
 ## Notas
 
-- [P] = archivos distintos, sin dependencias
-- La etiqueta [USx] mapea la tarea a su historia para trazabilidad
-- Cada historia debe ser completable y comprobable de forma independiente
-- **Decisión de arquitectura (ADR pendiente)**: se adopta **JavaScript ES2022 con JSDoc tipado** para mantener paridad con `001-erp-base-module` y evitar migrar el stack a TypeScript en el MVP; registrar como ADR según plan.md §5.2. Si se aprueba TypeScript, renombrar `.js` → `.ts` sin cambiar la organización de tareas.
-- Verificar que las pruebas fallan antes de implementar
-- Evitar: tareas vagas, conflictos de archivo, dependencias cruzadas que rompan la independencia
+- [P] = archivos distintos, sin dependencias.
+- La etiqueta [USx] mapea la tarea a su historia para trazabilidad.
+- Cada historia debe ser completable y comprobable de forma independiente.
+- Verificar que las pruebas fallan antes de implementar (constitución, principio II).
+- El snapshot usa `erp.manufacturing.v1`; cualquier cambio de forma exige incrementar la versión.
+- No introducir rankings por operador; los tiempos y atrasos son contexto operacional (constitución y `data-model.md` §7).
+- Evitar tareas vagas, conflictos de archivo y dependencias cruzadas que rompan la independencia.

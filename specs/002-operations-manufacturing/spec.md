@@ -9,12 +9,23 @@
 
 Implementar un prototipo funcional de frontend para el módulo de Operaciones / Manufactura que centraliza el ciclo **planificado → programado → ejecutado → registrado**: gestión de BOM y rutas, despacho de órdenes, seguimiento de operaciones en piso, registro de consumo y salida de producción.
 
+## Clarifications
+
+### Session 2026-10-29
+
+- Q: ¿El botón de iniciar/finalizar debe operar sobre la operación activa de la orden o sobre la orden de producción completa? → A: Operación activa; la orden cambia de estado automáticamente según FR-04.
+- Q: ¿El contador de piezas debe actualizar la cantidad completada de la operación activa o ser un conteo independiente del turno? → A: Actualiza `quantity_completed` de la operación activa en tiempo real; salida y merma permanecen en FR-05.
+- Q: ¿El contador debe acumularse por operación a través de varios turnos o reiniciarse en cada turno? → A: Dos contadores: uno por turno (se reinicia al iniciar cada turno) y uno acumulado por operación (no se reinicia).
+- Q: Si el operador finaliza la operación mientras hay un atraso en curso, ¿qué debe hacer el sistema? → A: Permitir el cierre de la operación; el atraso queda abierto para corregirlo después.
+- Q: ¿El operador debe tener un único botón que alterna entre iniciar y finalizar, o dos botones separados? → A: Un único botón alterno ("Iniciar"/"Finalizar") con confirmación antes de finalizar.
+
 ## 2. Alcance
 
 - Gestión de BOM multi-nivel (`bill_of_materials`, `bom_components`) con detección de ciclos.
 - Configuración de centros de trabajo y rutas (`work_centers`, `routings`, `routing_operations`) con tiempos estándar.
 - Despacho de órdenes (`production_orders`) desde reposición o make-to-order (`sales_order_id`), con congelación de BOM/ruta y generación de operaciones.
 - Ejecución en piso (`production_order_operations`) con estados `pending → in_progress → paused → completed`, tiempos reales y cálculo de avance.
+- Registro de turno del operador: inicio/fin de la orden activa con un solo botón, tiempo real, justificación de atrasos con motivos predefinidos o personalizados, y contador de piezas del turno.
 - Consumo real (`material_consumption`) vs. teórico, y salida de bien terminado (`production_output`) con merma.
 - Panel con KPIs, tablero kanban, trazabilidad plan-vs-real y estado de calidad derivado.
 
@@ -65,6 +76,17 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 - Utilización por centro de trabajo (carga pendiente vs. capacidad efectiva).
 - Trazabilidad por orden: operaciones, consumo plan-vs-real, salida, calidad derivada.
 
+### FR-07: Registro de Turno del Operador (US-06)
+**US-06**: Como operador de máquina, quiero iniciar y finalizar mi orden de trabajo activo con un solo botón, registrar el tiempo de trabajo, justificar atrasos seleccionando motivos predefinidos o escribiendo uno nuevo, e ingresar el número de piezas del turno con un contador.
+
+- Mostrar la orden activa del operador y su operación en curso con un único botón que alterna entre "Iniciar" y "Finalizar" según el estado, solicitando confirmación antes de finalizar; la acción actúa sobre la operación activa y la orden cambia de estado automáticamente (FR-04); impedir una segunda operación en ejecución simultánea y el doble cierre.
+- Registrar marcas de tiempo de inicio y fin de la operación activa, y calcular la duración del trabajo con tolerancia máxima de 1 segundo.
+- Ofrecer un catálogo de motivos de atraso predefinidos y permitir crear un motivo personalizado reutilizable durante el turno; impedir atrasos sin motivo o simultáneos.
+- Registrar cada atraso de la operación activa con motivo, inicio, fin y duración; pausar el tiempo de trabajo efectivo mientras el atraso esté en curso y reanudarlo al finalizarlo.
+- Permitir finalizar la operación aunque exista un atraso en curso; el atraso permanece abierto para su corrección posterior y no bloquea el cierre.
+- Mantener dos contadores de piezas: uno del turno actual (se reinicia al iniciar cada turno) y uno acumulado por operación (`quantity_completed`, no se reinicia); permitir incrementar, decrementar y fijar manualmente ambos, rechazando valores negativos o no numéricos y conservando el último valor válido.
+- Presentar un resumen por operación y orden con tiempo total, tiempo de atrasos justificados y piezas del turno y acumuladas; conservar estado, tiempos, atrasos y contadores ante recarga o interrupción de la sesión.
+
 ## 5. Criterios de Aceptación
 
 | ID | Criterio | Estado |
@@ -79,6 +101,9 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 | AC-08 | Panel con KPIs y utilización por centro de trabajo | Implementado |
 | AC-09 | Calidad derivada desde `quality_inspections` (solo lectura) | Implementado |
 | AC-10 | Pruebas unitarias del dominio y del store pasan; build exitoso | Verificado |
+| AC-11 | Inicio/fin de la operación activa con un único botón alterno y confirmación, tiempo real registrado y sin doble cierre | Planificado |
+| AC-12 | Atrasos justificados con motivos predefinidos o personalizados; tiempo efectivo pausado y cierre permitido con atraso abierto para corrección posterior | Planificado |
+| AC-13 | Dos contadores de piezas (turno y acumulado) incrementables, ajustables y validados; totales conservados al finalizar y recargar | Planificado |
 
 ## 6. Artefactos Spec-Kit
 
@@ -87,12 +112,15 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 | `spec.md` | `specs/002-operations-manufacturing/spec.md` | Especificación funcional y criterios de aceptación |
 | `plan.md` | `specs/002-operations-manufacturing/plan.md` | Plan de implementación, fases, gobernanza, estructura |
 | `data-model.md` | `specs/002-operations-manufacturing/data-model.md` | Diccionario de datos, ERD Mermaid, ética/datos, trazabilidad |
+| `research.md` | `specs/002-operations-manufacturing/research.md` | Decisiones técnicas de US-06 (tiempo, contadores, atrasos, persistencia) |
+| `contracts/operator-shift.md` | `specs/002-operations-manufacturing/contracts/operator-shift.md` | Contrato de store/UI para inicio/fin, atrasos y contadores |
+| `quickstart.md` | `specs/002-operations-manufacturing/quickstart.md` | Guía de ejecución y validación de US-06 |
 | `tasks.md` | `specs/002-operations-manufacturing/tasks.md` | Tareas atómicas por fase e historia de usuario |
 
 ## 7. Notas de Implementación
 
 - **Stack**: Vanilla JavaScript ES2022 + Vite + CSS. JSDoc para tipado (paridad con `001-erp-base-module`).
 - **Arquitectura**: `domain/` (lógica pura), `data/` (fixtures + store + puertos), `components/` (vistas), `styles/`.
-- **Estado**: `ManufacturingStore` en memoria con `EventTarget` para re-render reactivo.
+- **Estado**: `ManufacturingStore` en memoria con `EventTarget` para re-render reactivo y snapshot versionado en `localStorage` (`erp.manufacturing.v1`) para sobrevivir recargas.
 - **Datos**: fixtures deterministas con MTO, BOM multi-nivel, órdenes en varios estados.
 - **Ética**: agregación por centro/operación, sin rankings individuales; tiempos como dato de proceso.
