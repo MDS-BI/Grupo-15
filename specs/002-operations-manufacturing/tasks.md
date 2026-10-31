@@ -5,17 +5,18 @@
 **Stack**: Vanilla JavaScript (ES2022) + Vite 8 + Vitest 4/jsdom — paridad con `001-erp-base-module`
 **Convención**: `snake_case` y claves `_id` en datos; `camelCase` en código.
 
-> **Estado de partida (2026-10-29)**: US-01 a US-05 ya están implementadas y verificadas por AC-01..AC-10. Este listado prioriza el incremento pendiente **US-06** y conserva una fase de verificación por cada historia existente para evitar regresiones.
+> **Estado de partida (2026-10-31)**: US-01 a US-05 ya están implementadas y verificadas por AC-01..AC-10. Este listado cubre los incrementos pendientes **US-06 (Operador de Máquina)** y **US-07 / HU-04 (Supervisor de Operaciones / Línea)**, conservando una fase de verificación por cada historia existente para evitar regresiones.
 
 ## Formato: `[ID] [P?] [Historia] Descripción`
 
 - **[P]**: puede ejecutarse en paralelo (archivos distintos, sin dependencias)
-- **[Historia]**: `US1`–`US6` para tareas de historia; sin etiqueta en configuración, fundacional y pulido
+- **[Historia]**: `US1`–`US7` para tareas de historia; sin etiqueta en configuración, fundacional y pulido
 - Rutas de archivo explícitas en cada tarea
 
 ---
 
-## Fase 1: Configuración (Infraestructura Compartida)
+<details open>
+<summary><strong>Fase 1: Configuración (Infraestructura Compartida)</strong></summary>
 
 **Propósito**: Confirmar que el entorno de ejecución y pruebas del módulo está listo.
 
@@ -23,23 +24,31 @@
 - [ ] T002 [P] Configurar el entorno jsdom para las pruebas de integración de manufactura en `vitest.config.mjs`
 - [ ] T003 [P] Confirmar la estructura real del proyecto (`src/domain/`, `src/data/`, `src/data/fixtures/`, `src/data/ports/`, `src/components/`, `src/styles/`, `tests/unit/`, `tests/integration/`) contra `plan.md` §6
 
+</details>
+
 ---
 
-## Fase 2: Fundacional (Prerrequisitos Bloqueantes)
+<details open>
+<summary><strong>Fase 2: Fundacional (Prerrequisitos Bloqueantes)</strong></summary>
 
-**Propósito**: Tipos, persistencia, fixtures y estado compartido que necesitan todas las historias.
+**Propósito**: Tipos, persistencia, fixtures y estado compartido que necesitan todas las historias (incluyendo US-06 y US-07).
 
 **⚠️ CRÍTICO**: ninguna historia puede cerrarse sin completar esta fase.
 
-- [ ] T004 [P] Añadir a `src/domain/types.js` los enums `DelayReasonOrigin` (`predefined`/`custom`) y `ShiftStatus` (`in_progress`/`completed`), y los typedefs `ProductionShift`, `OperationDelay`, `DelayReason`; ampliar `ProductionOrderOperation` con `delay_time_minutes`
-- [ ] T005 [P] Implementar el adaptador de snapshot versionado en `src/data/persistence.js` (`loadSnapshot`, `saveSnapshot`, `clearSnapshot`, validación de `version` y forma mínima) según `contracts/operator-shift.md` §6
+- [ ] T004 [P] Añadir a `src/domain/types.js` los enums `DelayReasonOrigin` (`predefined`/`custom`), `ShiftStatus` (`in_progress`/`completed`), `WorkCenterOperationalStatus` (`in_operation`/`paused`/`fault`/`changeover`) y `MaintenanceTicketStatus` (`open`/`in_progress`/`resolved`); definir los typedefs `ProductionShift` (con `supervisor_validated`, `validated_at`, `supervisor_notes`), `OperationDelay` (con `escalated_to_maint`), `DelayReason`, `ShiftAssignment` (`shift_assignment_id`, `work_center_id`, `ext_hr_employee_id`, `shift_band`, `assigned_at`, `active`) y `MaintenanceTicket` (`ticket_id`, `work_center_id`, `operation_delay_id`, `priority`, `ticket_status`, `reported_by`, `created_at`); ampliar `ProductionOrderOperation` con `delay_time_minutes` y `WorkCenter` con `operational_status`
+- [ ] T005 [P] Implementar el adaptador de snapshot versionado en `src/data/persistence.js` (`loadSnapshot`, `saveSnapshot`, `clearSnapshot`, validación de `version` y forma mínima incluyendo colecciones de turno y supervisión) según `contracts/operator-shift.md` §6
 - [ ] T006 [P] Añadir pruebas unitarias de persistencia (round-trip, snapshot ausente, JSON corrupto, versión distinta) en `tests/unit/persistence.test.js`
-- [ ] T007 [P] Crear fixtures de motivos y turnos en `src/data/fixtures/delay-reasons.js` y `src/data/fixtures/production-shifts.js`; ampliar `src/data/fixtures/production-orders.js` con un escenario sembrado de turno y atraso
-- [ ] T008 Extender `src/data/ManufacturingStore.js` con las colecciones `productionShifts`, `operationDelays` y `delayReasons`, hidratación desde `src/data/persistence.js` y escritura del snapshot tras cada mutación (depende de T005, T007)
+- [ ] T007 [P] Crear fixtures de motivos y turnos en `src/data/fixtures/delay-reasons.js` y `src/data/fixtures/production-shifts.js`; crear fixtures de supervisión en `src/data/fixtures/shift-assignments.js`, `src/data/fixtures/hr-employees.js` (puente `ext_hr_employee_id`) y `src/data/fixtures/maintenance-tickets.js`; ampliar `src/data/fixtures/production-orders.js` y `src/data/fixtures/work-centers.js` con estados iniciales de semáforo y escenario sembrado de turno y atraso
+- [ ] T008 Extender `src/data/ManufacturingStore.js` con las colecciones `productionShifts`, `operationDelays`, `delayReasons`, `shiftAssignments`, `hrEmployees` y `maintenanceTickets`, hidratación desde `src/data/persistence.js` y escritura del snapshot tras cada mutación (depende de T005, T007)
 
 **Punto de control**: tipos, fixtures, persistencia y store listos; las historias pueden validarse sin romper el estado existente.
 
+</details>
+
 ---
+
+<details>
+<summary><strong>Fases 3 a 5: Verificación de Base (US-01, US-02 y US-03)</strong></summary>
 
 ## Fase 3: Historia de Usuario US-01 - BOM multi-nivel (Prioridad: P1)
 
@@ -49,9 +58,7 @@
 
 - [ ] T009 [P] [US1] Verificar AC-01 ejecutando `tests/unit/bom-explosion.test.js` y revisando el árbol y la detección de ciclos en `src/components/BomExplorer.js`
 
-**Punto de control**: US-01 verificada; cualquier regresión debe corregirse antes de avanzar a US-06.
-
----
+**Punto de control**: US-01 verificada; cualquier regresión debe corregirse antes de avanzar a US-06 y US-07.
 
 ## Fase 4: Historia de Usuario US-02 - Centros de trabajo y rutas (Prioridad: P1)
 
@@ -63,8 +70,6 @@
 
 **Punto de control**: US-02 verificada sin mutar operaciones ya congeladas.
 
----
-
 ## Fase 5: Historia de Usuario US-03 - Despacho de órdenes (Prioridad: P1)
 
 **Objetivo**: Confirmar creación, liberación y congelamiento de BOM/ruta/operaciones.
@@ -73,11 +78,14 @@
 
 - [ ] T011 [P] [US3] Verificar AC-03 y AC-04 ejecutando `tests/unit/order-state-machine.test.js` y revisando `src/data/ManufacturingStore.js` (`createOrder`, `transitionOrder`, `#generateOperations`)
 
-**Punto de control**: US-03 verificada; las operaciones generadas son la base de US-06.
+**Punto de control**: US-03 verificada; las operaciones generadas son la base de US-06 y US-07.
+
+</details>
 
 ---
 
-## Fase 6: Historia de Usuario US-06 - Registro de turno del operador (Prioridad: P1) 🎯 MVP del incremento
+<details open>
+<summary><strong>Fase 6: Historia de Usuario US-06 - Registro de turno del operador (Prioridad: P1) 🎯 MVP Operador</strong></summary>
 
 **Objetivo**: Iniciar/finalizar la operación activa con un botón, justificar atrasos y mantener contadores de turno y acumulado, con persistencia ante recarga.
 
@@ -104,127 +112,99 @@
 
 **Punto de control**: US-06 completamente funcional y comprobable de forma independiente; AC-11..AC-13 verificados.
 
----
-
-## Fase 7: Historia de Usuario US-04 - Ejecución en piso (Prioridad: P2)
-
-**Objetivo**: Confirmar que la ejecución existente (iniciar/pausar/completar) sigue funcionando junto a US-06.
-
-**Prueba Independiente**: iniciar la primera operación mueve la orden a `in_progress`; pausar y completar respetan la máquina de estados; completar la última operación mueve la orden a `completed`.
-
-- [ ] T025 [P] [US4] Verificar AC-05 ejecutando `tests/unit/manufacturing-store.test.js` y revisando `startOperation`, `pauseOperation` y `completeOperation` en `src/data/ManufacturingStore.js`
-- [ ] T026 [US4] Asegurar que `finishOperation` reutiliza la lógica de `completeOperation` sin romper pausas ni el cálculo previo de `actual_time_minutes` en `src/data/ManufacturingStore.js`
-
-**Punto de control**: US-04 y US-06 conviven sin dobles cierres ni transiciones inválidas.
+</details>
 
 ---
 
-## Fase 8: Historia de Usuario US-05 - Consumo y salida (Prioridad: P2)
+<details open>
+<summary><strong>Fase 7: Historia de Usuario US-07 (HU-04) - Supervisión de Línea: Semáforo, Asignación, Validación y Escalamiento (Prioridad: P1) 🎯 MVP Supervisor</strong></summary>
 
-**Objetivo**: Confirmar que consumo, salida e inventario simulado no se ven afectados por el seguimiento de turno.
+**Objetivo**: Visualizar el semáforo de estado de cada línea/máquina en tiempo real, vincular operarios (`ext_hr_employee_id`) con máquinas para el turno, revisar y aprobar los cierres de turno (`supervisor_validated = true`) y escalar incidentes a mantenimiento (`escalated_to_maint = true`) con un botón de alerta.
+
+**Prueba Independiente**: el supervisor abre el panel de supervisión, visualiza el semáforo en vivo de todas las máquinas, asigna un operario de RR.HH. a un centro de trabajo para el turno actual, aprueba un cierre de turno completado (sin atrasos abiertos) y dispara un ticket urgente de mantenimiento desde una parada crítica viendo cómo la máquina pasa inmediatamente a estado *En fallo* y persiste tras recargar la página.
+
+### Pruebas para US-07 (escribir primero) ⚠️
+
+- [ ] T025 [P] [US7] Añadir pruebas unitarias de derivación del semáforo (`in_operation`, `paused`, `fault`, `changeover`), validación de asignación única de operario por franja (`ext_hr_employee_id`) y reglas de aprobación de cierre de turno en `tests/unit/line-supervision.test.js`
+- [ ] T026 [P] [US7] Añadir pruebas unitarias en `tests/unit/manufacturing-store.test.js` para `assignOperatorToWorkCenter`, `setWorkCenterOperationalStatus`, `validateShiftClosure` (bloqueo si hay atraso abierto, éxito con `supervisor_validated = true`) y `escalateIncidentToMaintenance` (`escalated_to_maint = true` + creación en `maintenanceTickets` + cambio a `fault`)
+- [ ] T027 [P] [US7] Añadir prueba de integración jsdom del panel de supervisor (semáforo en tiempo real, selector de asignación de operario, aprobación de turno y botón de alerta de escalamiento a mantenimiento) en `tests/integration/supervisor-line-panel.test.js`
+
+### Implementación para US-07
+
+- [ ] T028 [P] [US7] Implementar `src/domain/line-supervision.js` con funciones puras `deriveWorkCenterTrafficLight`, `canAssignOperator`, `canValidateShiftClosure` y `buildUrgentMaintenanceTicket`
+- [ ] T029 [US7] Implementar en `src/data/ManufacturingStore.js` las consultas `trafficLightForWorkCenters`, `activeAssignmentForWorkCenter`, `shiftsPendingValidation`, `openMaintenanceTicketsFor` y las mutaciones `assignOperatorToWorkCenter`, `setWorkCenterOperationalStatus`, `validateShiftClosure` y `escalateIncidentToMaintenance` (depende de T008, T017, T028)
+- [ ] T030 [US7] Crear `src/components/SupervisorLinePanel.js` con cuatro secciones integradas: (1) Semáforo en vivo por línea/máquina (*En operación, En pausa, En fallo, Cambio de formato*), (2) Asignación de personal (`ext_hr_employee_id` → máquina/turno), (3) Bandeja de cierre de turnos con botón de aprobación (`supervisor_validated`) y acceso a `DelayCorrectionDialog`, y (4) Botón de alerta para escalar incidente a mantenimiento (`tblMAINTENANCE_TICKETS`)
+- [ ] T031 [US7] Integrar la pestaña/vista `SupervisorLinePanel` en `src/manufacturing-main.js` y vincular alertas rápidas desde `src/components/ProductionOrders.js` (depende de T030)
+- [ ] T032 [US7] Añadir estilos de semáforo industrial (indicadores cromáticos de alto contraste con etiquetas textuales para accesibilidad: verde `in_operation`, amarillo `paused`, azul/ámbar `changeover`, rojo pulsante `fault`), insignias de validación y botón de emergencia de mantenimiento en `src/styles/manufacturing.css`
+- [ ] T033 [US7] Ejecutar las suites de US-07 (`tests/unit/line-supervision.test.js`, `tests/unit/manufacturing-store.test.js`, `tests/integration/supervisor-line-panel.test.js`) y verificar persistencia del estado de supervisión tras recarga
+
+**Punto de control**: US-07 (HU-04) completamente funcional y comprobable de forma independiente; AC-14 y AC-15 verificados.
+
+</details>
+
+---
+
+<details>
+<summary><strong>Fases 8 y 9: Regresión de Ejecución, Consumo y Salida (US-04 y US-05)</strong></summary>
+
+## Fase 8: Historia de Usuario US-04 - Ejecución en piso (Prioridad: P2)
+
+**Objetivo**: Confirmar que la ejecución existente (iniciar/pausar/completar) sigue funcionando junto a US-06 y US-07.
+
+**Prueba Independiente**: iniciar la primera operación mueve la orden a `in_progress` y el semáforo del centro de trabajo a `in_operation`; pausar y completar respetan la máquina de estados; completar la última operación mueve la orden a `completed`.
+
+- [ ] T034 [P] [US4] Verificar AC-05 ejecutando `tests/unit/manufacturing-store.test.js` y revisando `startOperation`, `pauseOperation` y `completeOperation` en `src/data/ManufacturingStore.js`
+- [ ] T035 [US4] Asegurar que `finishOperation` reutiliza la lógica de `completeOperation` sin romper pausas ni el cálculo previo de `actual_time_minutes`, y actualiza el estado del semáforo de supervisión en `src/data/ManufacturingStore.js`
+
+**Punto de control**: US-04, US-06 y US-07 conviven sin dobles cierres ni estados inconsistentes en el semáforo.
+
+## Fase 9: Historia de Usuario US-05 - Consumo y salida (Prioridad: P2)
+
+**Objetivo**: Confirmar que consumo, salida e inventario simulado no se ven afectados por el seguimiento de turno ni la supervisión de línea.
 
 **Prueba Independiente**: registrar consumo debita inventario, registrar salida lo acredita y la reconciliación plan-vs-real sigue calculando varianza y flags.
 
-- [ ] T027 [P] [US5] Verificar AC-06 y AC-07 ejecutando `tests/unit/reconciliation.test.js` y `tests/unit/manufacturing-store.test.js` y revisando `src/data/ports/index.js`
+- [ ] T036 [P] [US5] Verificar AC-06 y AC-07 ejecutando `tests/unit/reconciliation.test.js` y `tests/unit/manufacturing-store.test.js` y revisando `src/data/ports/index.js`
 
-**Punto de control**: US-01 a US-06 verificadas en conjunto.
+**Punto de control**: US-01 a US-07 verificadas en conjunto.
+
+</details>
 
 ---
 
-## Fase 9: Pulido y Preocupaciones Transversales
+<details open>
+<summary><strong>Fase 10: Pulido y Preocupaciones Transversales</strong></summary>
 
 **Propósito**: Calidad, accesibilidad, rendimiento, documentación y cierre de AC.
 
-- [ ] T028 [P] Reparar o aislar las 12 suites legadas de `001-erp-base-module` que importan `src/storage.js` y `src/module-config.js` inexistentes, ajustando `vitest.config.mjs` o `tests/` según corresponda
-- [ ] T029 [P] Revisar accesibilidad y consistencia de `src/components/OperatorWorkstationPanel.js` y `src/components/DelayCorrectionDialog.js` (etiquetas, foco, `Esc`, mensajes inline)
-- [ ] T030 [P] Actualizar `quickstart.md` con los selectores, etiquetas y pasos finales de US-06 tras la implementación
-- [ ] T031 [P] Validar el rendimiento con 500 órdenes y cronómetro activo (<100 ms por interacción) usando `src/data/ManufacturingStore.js` y `src/components/OperatorWorkstationPanel.js`
-- [ ] T032 Ejecutar `npm test -- --run` y `npm run build`; documentar en `tasks.md` cualquier fallo preexistente no relacionado con US-06
-- [ ] T033 Actualizar `spec.md` AC-11, AC-12 y AC-13 a `Implementado`/`Verificado` cuando T024 y T032 pasen
-- [ ] T034 Preparar el guion de demo de 5 minutos (pedido → orden → turno → atraso → contadores → recarga) en `quickstart.md`
+- [ ] T037 [P] Reparar o aislar las 12 suites legadas de `001-erp-base-module` que importan `src/storage.js` y `src/module-config.js` inexistentes, ajustando `vitest.config.mjs` o `tests/` según corresponda
+- [ ] T038 [P] Revisar accesibilidad y consistencia de `src/components/OperatorWorkstationPanel.js`, `src/components/DelayCorrectionDialog.js` y `src/components/SupervisorLinePanel.js` (etiquetas ARIA del semáforo, foco, `Esc`, mensajes inline)
+- [ ] T039 [P] Actualizar `quickstart.md` y `contracts/operator-shift.md` con los selectores, etiquetas y pasos finales de US-06 y US-07 tras la implementación
+- [ ] T040 [P] Validar el rendimiento con 500 órdenes, semáforo de supervisión y cronómetro activo (<100 ms por interacción) usando `src/data/ManufacturingStore.js`, `src/components/OperatorWorkstationPanel.js` y `src/components/SupervisorLinePanel.js`
+- [ ] T041 Ejecutar `npm test -- --run` y `npm run build`; documentar en `tasks.md` cualquier fallo preexistente no relacionado con US-06/US-07
+- [ ] T042 Actualizar `spec.md` AC-11 a AC-15 a `Implementado`/`Verificado` cuando T024, T033 y T041 pasen
+- [ ] T043 Preparar el guion de demo de 5 minutos (pedido → orden → asignación de operario por supervisor → turno operador → atraso → escalamiento a mantenimiento / corrección → validación de cierre de turno → recarga) en `quickstart.md`
+
+</details>
 
 ---
 
 ## Dependencias y Orden de Ejecución
 
-### Dependencias entre Fases
-
 - **Configuración (Fase 1)**: sin dependencias.
 - **Fundacional (Fase 2)**: depende de Fase 1; **BLOQUEA** todas las historias.
 - **US-01, US-02, US-03 (Fases 3–5)**: dependen de Fase 2; son verificaciones de la base ya implementada.
 - **US-06 (Fase 6)**: depende de Fase 2 y de las operaciones generadas por US-03; usa la ejecución existente de US-04.
-- **US-04 (Fase 7)**: depende de US-06 para comprobar la convivencia con `finishOperation`.
-- **US-05 (Fase 8)**: depende de Fase 2; no depende de US-06.
-- **Pulido (Fase 9)**: depende de todas las historias deseadas.
-
-### Dependencias dentro de US-06
-
-- T012–T015 (pruebas) se escriben antes de T016–T023 y deben fallar primero.
-- T016 (dominio puro) antes de T017/T018 (store).
-- T017 antes de T018 y T023.
-- T019 antes de T021/T022.
-- T020 puede avanzar en paralelo con T019.
-- T024 depende de T016–T023.
-
-### Oportunidades Paralelas
-
-- T001–T003 pueden ejecutarse en paralelo.
-- T004–T007 pueden ejecutarse en paralelo; T008 depende de T005 y T007.
-- T009–T011 (verificación de historias existentes) pueden ejecutarse en paralelo.
-- T012–T015 (pruebas de US-06) pueden ejecutarse en paralelo.
-- T016 y T019/T020 pueden avanzar en paralelo; T017/T018 requieren T016.
-- T028–T031 pueden ejecutarse en paralelo tras cerrar US-06.
-
----
-
-## Ejemplo Paralelo: US-06
-
-```bash
-# Pruebas de US-06 en paralelo
-Task: "Añadir pruebas unitarias de tiempo efectivo en tests/unit/shift-tracking.test.js"
-Task: "Añadir pruebas unitarias de guardas del store en tests/unit/manufacturing-store.test.js"
-Task: "Añadir prueba de integración del botón alterno en tests/integration/operator-shift.test.js"
-Task: "Añadir prueba de integración de corrección de atraso en tests/integration/delay-correction.test.js"
-
-# Implementación paralela tras el dominio puro
-Task: "Implementar src/domain/shift-tracking.js"
-Task: "Crear src/components/OperatorWorkstationPanel.js"
-Task: "Crear src/components/DelayCorrectionDialog.js"
-```
-
----
-
-## Estrategia de Implementación
-
-### MVP del Incremento (US-06)
-
-1. Completar Fase 1 y Fase 2.
-2. Verificar US-01 a US-03 (T009–T011).
-3. Implementar US-06 completo (T012–T024).
-4. **DETENER y VALIDAR**: ejecutar las pruebas de US-06, recargar la página y comprobar persistencia.
-5. Demostrar US-06 sobre la base existente.
-
-### Entrega Incremental
-
-1. Base verificada (US-01 a US-03) → US-06 → validar → demostrar.
-2. Verificar US-04 y US-05 sin regresiones.
-3. Pulido, accesibilidad, rendimiento y actualización de AC.
-
-### Estrategia de Equipo Paralelo
-
-Con varios desarrolladores, tras Fase 2:
-- Desarrollador A: dominio y store de US-06 (T016–T018, T023).
-- Desarrollador B: UI de US-06 (T019–T022).
-- Desarrollador C: pruebas de US-06 (T012–T015) y verificación de historias existentes (T009–T011).
-
----
+- **US-07 / HU-04 (Fase 7)**: depende de Fase 2 y se integra con los turnos y atrasos de US-06 (`productionShifts`, `operationDelays`) para validar cierres y escalar paradas a mantenimiento. El semáforo y la asignación de personal (`T028`, `T030` parcial) pueden avanzar en paralelo con US-06.
+- **US-04 (Fase 8)**: depende de US-06 y US-07 para comprobar la convivencia con `finishOperation` y el semáforo.
+- **US-05 (Fase 9)**: depende de Fase 2; no depende de US-06 ni US-07.
+- **Pulido (Fase 10)**: depende de todas las historias deseadas.
 
 ## Notas
 
-- [P] = archivos distintos, sin dependencias.
-- La etiqueta [USx] mapea la tarea a su historia para trazabilidad.
+- `[P]` = archivos distintos, sin dependencias.
+- La etiqueta `[USx]` mapea la tarea a su historia para trazabilidad.
 - Cada historia debe ser completable y comprobable de forma independiente.
 - Verificar que las pruebas fallan antes de implementar (constitución, principio II).
 - El snapshot usa `erp.manufacturing.v1`; cualquier cambio de forma exige incrementar la versión.
-- No introducir rankings por operador; los tiempos y atrasos son contexto operacional (constitución y `data-model.md` §7).
-- Evitar tareas vagas, conflictos de archivo y dependencias cruzadas que rompan la independencia.
+- No introducir rankings por operador; los tiempos, asignaciones y atrasos son contexto operacional.
