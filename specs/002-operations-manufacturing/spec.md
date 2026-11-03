@@ -166,15 +166,28 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 
 
 <details open>
-<summary><strong>FR-11: Balance de líneas (US-10)</strong></summary>
+<summary><strong>FR-12: Balance de líneas (US-11)</strong></summary>
 
-**US-10**: Como Ingeniero de Producción, quiero consultar la utilización y la carga proyectada de cada centro de trabajo frente a su capacidad nominal, para identificar cuellos de botella, balancear la línea de producción, maximizar la eficiencia global de la línea y diseñar y optimizar las rutas de trabajo.
+**US-11**: Como Ingeniero de Producción, quiero consultar la utilización y la carga proyectada de cada centro de trabajo frente a su capacidad nominal, para identificar cuellos de botella, balancear la línea de producción, maximizar la eficiencia global de la línea y diseñar y optimizar las rutas de trabajo.
 
 - Analizar los tiempos estándar: Medir y determinar los tiempos teóricos de cada preparación para cada paso de la fabricación
 - Identificar cuellos de botella: Evaluar que estaciones o que máquinas tardan más tiempo en procesar un lote, detectando el punto crítico que limita la velocidad de la planta.
 - Optimizar las rutas de trabajo: Reorganiza la secuencia de las tareas y reasigna actividades entre los centros de trabajo para nivelar la carga de trabajo.
 - Calcular y monitorear la capacidad nominal: Compara la demanda planificada frente a capacidad máxima diaria y el factor de eficiencia de cada centro de trabajo.
 - Maximizar la eficiencia: Ajusta la asignación de recursos y personal para reducir los tiempos muertos, reducir costos operativos y maximizar la tasa de salida de productos terminados.
+
+### FR-11: Planificación y Calendarización de Órdenes de Producción (US-10)
+
+**US-10 (Planificador):** Como Planificador de Producción, quiero consultar las órdenes de producción y asignar o modificar sus fechas planificadas de inicio y término, para organizar las actividades de fabricación y facilitar el cumplimiento de los plazos de entrega.
+
+**Funcionalidades:**
+- Consultar las órdenes de producción existentes.
+- Visualizar información de cada orden, incluyendo producto, cantidad, prioridad y estado.
+- Asignar fechas planificadas de inicio y término.
+- Modificar las fechas planificadas cuando existan atrasos o cambios en la programación.
+- Validar que la fecha de término no sea anterior a la fecha de inicio.
+- Consultar las órdenes según su programación y estado.
+- Conservar los cambios realizados en la programación.
 
 ## 5. Criterios de Aceptación
 
@@ -207,6 +220,17 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 | AC-25 | Ticket resuelto sin reapertura; nueva incidencia genera un ticket vinculado al evento correspondiente | Planificado |
 | AC-26 | Tickets, intervenciones, tiempos de parada y órdenes preventivas conservados en el snapshot tras recargar | Planificado |
 | AC-27 | Tiempos de mantenimiento agregados por centro, sin rankings ni evaluación de desempeño de técnicos | Planificado |
+| AC-28 | El sistema permite consultar las órdenes de producción existentes y visualizar sus datos principales.
+
+| AC-29 | El planificador puede asignar fechas planificadas de inicio y término a una orden de producción.
+
+| AC-30 | El planificador puede modificar las fechas planificadas de una orden existente.
+
+| AC-31 | El sistema impide asignar una fecha de término anterior a la fecha de inicio.
+
+| AC-32 | El sistema permite visualizar las órdenes según sus fechas planificadas y estados.
+
+| AC-33 | Las fechas asignadas y sus modificaciones permanecen guardadas al volver a abrir el sistema.
 
 ## 6. Entidades Clave
 
