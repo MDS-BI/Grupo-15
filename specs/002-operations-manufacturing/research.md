@@ -52,7 +52,7 @@ La spec incorporó US-06: el operador inicia y finaliza la operación activa con
 
 ### D-07 — Persistencia con snapshot versionado en `localStorage`
 
-- **Decisión**: `ManufacturingStore` escribe un snapshot JSON versionado (`erp.manufacturing.v1`) tras cada mutación y lo rehidrata al arrancar. Si el snapshot falta, está corrupto o no coincide con la versión, se descarta y se cargan los fixtures con una advertencia.
+- **Decisión**: `ManufacturingStore` escribe un snapshot JSON versionado (`erp.manufacturing.v1` para US-06/US-07; `erp.manufacturing.v2` desde US-08) tras cada mutación y lo rehidrata al arrancar. Si el snapshot falta, está corrupto o no coincide con la versión, se descarta y se cargan los fixtures con una advertencia.
 - **Razón**: US-06 exige conservar estado, tiempos, atrasos y contadores ante recarga o pérdida de sesión. `localStorage` sobrevive al cierre de pestaña; el versionado permite evolucionar el esquema sin romper demos.
 - **Alternativas descartadas**: solo memoria (pierde el turno); `sessionStorage` (pierde el turno al cerrar pestaña); IndexedDB (complejidad innecesaria para un único snapshot de demo).
 
@@ -125,8 +125,8 @@ No quedan incógnitas bloqueantes para la Fase 1.
 
 ### D-15 — Persistencia: snapshot `v2` con migración desde `v1`
 
-- **Decisión**: las nuevas colecciones (`maintenanceTickets`, `preventiveMaintenanceOrders`) viven en `erp.manufacturing.v2`. Al hidratar, un snapshot `v1` válido se migra inicializando ambas colecciones vacías y se reescribe como `v2`; un snapshot inválido cae a fixtures con advertencia.
-- **Razón**: el estado existente de US-01…US-08 se conserva y el cambio de forma queda explícito y verificable.
+- **Decisión**: las nuevas colecciones (`maintenanceTickets`, `preventiveMaintenanceOrders`) viven en `erp.manufacturing.v2`, introducido por US-08. Al hidratar, si solo existe un `v1` válido se migra conservando el estado de US-01…US-07 e inicializando `thresholdSettings`, `rolePermissions`, `maintenanceTickets` y `preventiveMaintenanceOrders` si faltan; un `v2` existente se completa con las colecciones de mantenimiento vacías. Un snapshot inválido cae a fixtures con advertencia.
+- **Razón**: el estado existente se conserva y el cambio de forma queda explícito y verificable, sin exigir dos migraciones consecutivas al usuario.
 - **Alternativas descartadas**: mantener `v1` con colecciones opcionales (oculta el cambio y complica la validación); clave separada solo para mantenimiento (rompe la unidad del snapshot y la transacción).
 
 ### D-16 — Verificación de US-09
@@ -148,3 +148,118 @@ No quedan incógnitas bloqueantes para la Fase 1.
 | ¿Cómo se prueba sin tocar US-01…US-08? | Unitarias + integración jsdom + regresión (D-16). |
 
 No quedan incógnitas bloqueantes para la Fase 1 de US-09.
+
+---
+
+## 5. Investigación US-08 — Panel de desempeño de planta (Fase 0 incremental)
+
+**Entrada**: [spec.md](spec.md) (FR-09 / US-08 / AC-04…AC-07 y AC-20), [data-model.md](data-model.md) §3.21–3.22.
+**Restricción**: no modificar el comportamiento de US-01…US-07 ni US-09; extensiones aditivas.
+
+### D-17 — OEE y carga derivados, nunca persistidos
+
+- **Decisión**: `computeOee` y `computeLoadByWorkCenter` calculan bajo demanda a partir de `production_order_operations`, `operation_delays`, `maintenance_tickets`, `work_centers` y `routing_operations` del período. No se guarda ningún valor de OEE, carga o utilización.
+- **Razón**: evita métricas obsoletas y una segunda fuente de verdad; el OEE depende de datos que cambian con cada operación y parada.
+- **Alternativas descartadas**: persistir snapshots de OEE (deriva y duplicación); recalcular en la UI (no testeable de forma pura).
+
+### D-18 — Umbrales configurables y persistidos en `v2`
+
+- **Decisión**: `threshold_settings` guarda un umbral por indicador (`load`, `oee`, `downtime`, `fulfillment`) con comparación (`lt`/`gt`). `evaluateThresholds` compara los indicadores del período y produce alarmas visibles. Los umbrales se persisten en el snapshot `v2`.
+- **Razón**: el requisito exige configurar umbrales y conservarlos; un valor por indicador evita ambigüedad y permite alarmas deterministas.
+- **Alternativas descartadas**: umbrales fijos en código (no configurables); múltiples umbrales por indicador (fuera de alcance del prototipo).
+
+### D-19 — Permisos por rol simulados y persistidos
+
+- **Decisión**: `role_permissions` es una matriz local rol×acción (`plant_manager`, `planner`, `operator`) que la UI consulta con `canPerformAction`. Se persiste en `v2` para conservar la simulación entre recargas. No hay autenticación real.
+- **Razón**: el requisito pide un selector de rol simulado que oculte o bloquee acciones no permitidas; persistirlo mantiene coherencia en la demo.
+- **Alternativas descartadas**: permisos hardcodeados en componentes (duplicación y difícil testing); autenticación real (fuera de alcance).
+
+### D-20 — Acciones de orden desde el panel reutilizan la máquina de estados
+
+- **Decisión**: `changeOrderPriority` solo aplica a órdenes `planned`; `cancelOrderFromPanel` usa la transición existente a `cancelled`, exige confirmación y conserva los registros de ejecución. No se duplica lógica de estados.
+- **Razón**: mantiene la integridad de la máquina de estados y evita divergencias entre el despachador y el panel de planta.
+- **Alternativas descartadas**: mutar `status` directamente (rompe guardas); cancelación destructiva (pierde trazabilidad).
+
+### D-21 — Exportación local PDF/Excel
+
+- **Decisión**: `src/data/exporters/plant-report.js` construye el reporte consolidado del período y lo serializa localmente a PDF y Excel con los datos mock. No hay backend ni librerías de servidor.
+- **Razón**: cumple el alcance frontend-only y mantiene la demo reproducible sin red.
+- **Alternativas descartadas**: generación en servidor (no existe backend); imprimir HTML como único formato (no cumple ambos formatos).
+
+### Incógnitas resueltas (US-08)
+
+| Incógnita | Resolución |
+|---|---|
+| ¿Se persiste el OEE? | No; se deriva (D-17). |
+| ¿Cómo se configuran los umbrales? | Un umbral por indicador en `threshold_settings` (D-18). |
+| ¿Los permisos sobreviven recargas? | Sí, en `role_permissions` dentro de `v2` (D-19). |
+| ¿Cómo se reprograma/cancela una orden? | Reutilizando la máquina de estados existente (D-20). |
+| ¿Cómo se exporta? | Localmente a PDF y Excel (D-21). |
+
+No quedan incógnitas bloqueantes para la Fase 1 de US-08.
+
+---
+
+## 6. Investigación US-10 — Planificación y calendarización (Fase 0 incremental)
+
+**Entrada**: [spec.md](spec.md) (FR-11 / US-10 / AC-28…AC-33), [data-model.md](data-model.md) §3.11.
+
+### D-22 — Fechas planificadas sobre campos existentes
+
+- **Decisión**: se reutilizan `production_orders.planned_start_date` y `production_orders.planned_end_date` (ya definidos en el modelo). No se crean tablas ni columnas nuevas.
+- **Razón**: el esquema ya soporta la planificación; añadir estructuras paralelas duplicaría datos y rompería la trazabilidad.
+- **Alternativas descartadas**: tabla `order_schedules` separada (duplica la orden); fechas en memoria (no persisten).
+
+### D-23 — Validación en dominio y store
+
+- **Decisión**: `validatePlannedDates` exige que `planned_end_date ≥ planned_start_date` cuando ambas existen y rechaza valores no ISO. `updatePlannedDates` valida antes de mutar, conserva el último valor válido y emite un único `change`.
+- **Razón**: cumple AC-31 y evita estados inconsistentes por edición directa.
+- **Alternativas descartadas**: validar solo en la UI (bypass desde el store); permitir fechas invertidas y corregirlas después (datos inválidos persistidos).
+
+### D-24 — Persistencia en `v2` sin nueva colección
+
+- **Decisión**: los cambios de fechas se escriben en el snapshot `v2` existente; no se añade versión ni colección.
+- **Razón**: el cambio es de campos ya presentes; incrementar la versión sería innecesario.
+- **Alternativas descartadas**: `v3` solo por fechas (migración sin cambio de forma).
+
+### Incógnitas resueltas (US-10)
+
+| Incógnita | Resolución |
+|---|---|
+| ¿Se crean nuevas entidades? | No; se usan campos existentes (D-22). |
+| ¿Dónde se valida? | Dominio puro + store antes de mutar (D-23). |
+| ¿Se necesita nueva versión de snapshot? | No; se escribe en `v2` (D-24). |
+
+---
+
+## 7. Investigación US-11 — Balance de líneas (Fase 0 incremental)
+
+**Entrada**: [spec.md](spec.md) (FR-12 / US-11), [data-model.md](data-model.md) §3.8, §3.10, §3.11.
+
+### D-25 — Carga y utilización derivadas de estándares y órdenes
+
+- **Decisión**: `computeProjectedLoad` suma `planned_time_minutes` de las operaciones del período por centro; `computeUtilization` divide la carga entre `capacity_per_day_minutes × efficiency_factor`. Ambos valores se calculan bajo demanda y no se persisten.
+- **Razón**: el balance es un análisis, no un dato operativo; derivarlo evita desactualización.
+- **Alternativas descartadas**: persistir carga por centro (se invalida con cada orden); calcular con capacidad nominal sin eficiencia (sobreestima la capacidad real).
+
+### D-26 — Cuello de botella determinista
+
+- **Decisión**: `detectBottlenecks` marca el centro con mayor utilización proyectada; en empate, el de mayor carga absoluta. El resultado es una lista ordenada, no un ranking de personas.
+- **Razón**: criterio reproducible y testeable que responde a "qué estación limita la línea".
+- **Alternativas descartadas**: heurísticas con pesos configurables (complejidad sin requisito); ranking por operador (viola la ética de datos).
+
+### D-27 — Sin nuevas entidades ni persistencia
+
+- **Decisión**: US-11 solo consume `work_centers`, `routing_operations` y `production_orders`. No añade tablas, colecciones ni campos.
+- **Razón**: el análisis se deriva de datos existentes; mantenerlo sin persistencia reduce el riesgo de deriva.
+- **Alternativas descartadas**: guardar resultados de balance (datos obsoletos); crear una entidad de escenario (fuera de alcance).
+
+### Incógnitas resueltas (US-11)
+
+| Incógnita | Resolución |
+|---|---|
+| ¿Qué datos alimentan el balance? | Centros, rutas y órdenes existentes (D-25). |
+| ¿Cómo se define el cuello de botella? | Mayor utilización proyectada con desempate por carga (D-26). |
+| ¿Se persiste algo? | No; todo es derivado (D-27). |
+
+No quedan incógnitas bloqueantes para la Fase 1 de US-10 ni US-11.

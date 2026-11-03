@@ -1,6 +1,6 @@
 # Modelo de Datos: Módulo de Operaciones / Manufactura (ERP)
 
-**Rama**: `002-operations-manufacturing` | **Fecha**: 2026-10-21 | **Actualizado**: 2026-10-29
+**Rama**: `002-operations-manufacturing` | **Fecha**: 2026-10-21 | **Actualizado**: 2026-11-03
 **Fuente base**: `erp_data_model.md` — Módulo 7: Operaciones / Manufactura e integraciones cruzadas.
 **Documento relacionado**: [plan.md](plan.md)
 
@@ -31,6 +31,7 @@ El Módulo de Operaciones / Manufactura modela el ciclo **planificado → ejecut
 | **Ejecución transaccional** | `production_orders`, `production_order_operations`, `production_shifts`, `operation_delays`, `material_consumption`, `production_output` | Qué se *ordenó* y qué *ocurrió realmente* en el piso de planta. |
 | **Catálogo de apoyo** | `delay_reasons` | Motivos reutilizables para justificar atrasos (predefinidos y personalizados). |
 | **Mantenimiento** | `maintenance_tickets`, `preventive_maintenance_orders` | Correctivos escalados desde piso y plan preventivo derivado del historial y desgaste de las máquinas. |
+| **Configuración local** | `threshold_settings`, `role_permissions` | Umbrales de alarma y matriz rol×acción simulada del panel de planta (US-08). |
 
 **Pináculo de integración planificado ↔ ejecutado:**
 
@@ -407,6 +408,43 @@ Rol funcional: **orden de mantenimiento preventivo** programada a partir del his
 - El **indicador de desgaste** que justifica la orden es derivado (frecuencia de fallos, paradas acumuladas por período) y **no se persiste**.
 - Las órdenes preventivas son append-only en su historial: los cambios de estado se registran con marcas de tiempo.
 
+### 3.21 `threshold_settings` — Manufactura (configuración local, US-08)
+
+Rol funcional: **umbral crítico** por indicador de planta. Alimenta las alarmas del panel de desempeño y se persiste en el snapshot `erp.manufacturing.v2`.
+
+| Columna | Tipo | PK/FK | Nullable | Restricciones |
+|---|---|---|---|---|
+| id | uuid | PK | No | — |
+| company_id | uuid | FK → companies.id | No | — |
+| indicator | enum | — | No | `load` \| `oee` \| `downtime` \| `fulfillment`; único por empresa |
+| threshold | numeric(10,4) | — | No | rango según indicador (fracción 0–1 o minutos ≥ 0) |
+| comparison | enum | — | No | `lt` \| `gt`; `default lt` salvo `downtime` que usa `gt` |
+| updated_at | timestamp | — | No | marca de la última configuración |
+
+**Reglas**
+- Un solo umbral activo por `company_id` + `indicator`.
+- `indicator = oee | load | fulfillment` ⇒ `threshold` en `[0, 1]`.
+- `indicator = downtime` ⇒ `threshold ≥ 0` en minutos y `comparison = gt`.
+- Los umbrales son configuración, no métricas de desempeño de personas.
+
+### 3.22 `role_permissions` — Manufactura (configuración local, US-08)
+
+Rol funcional: **matriz rol×acción** simulada para el selector de rol del panel. La UI oculta o bloquea acciones no permitidas; no existe autenticación real.
+
+| Columna | Tipo | PK/FK | Nullable | Restricciones |
+|---|---|---|---|---|
+| id | uuid | PK | No | — |
+| company_id | uuid | FK → companies.id | No | — |
+| role | enum | — | No | `plant_manager` \| `planner` \| `operator`; único por empresa |
+| action | enum | — | No | `view_plant_panel` \| `set_threshold` \| `change_priority` \| `cancel_order` \| `export_report`; único por rol |
+| allowed | boolean | — | No | `default false`; define si la acción está habilitada |
+| updated_at | timestamp | — | No | marca de la última configuración |
+
+**Reglas**
+- `(company_id, role, action)` es único.
+- `plant_manager` tiene permitidas todas las acciones; `planner` puede `view_plant_panel`, `change_priority` y `export_report`; `operator` solo `view_plant_panel`.
+- La matriz es una simulación de UX: no sustituye controles de seguridad ni autenticación.
+
 ---
 
 ## 4. Relaciones y Cardinalidades
@@ -445,6 +483,8 @@ Rol funcional: **orden de mantenimiento preventivo** programada a partir del his
 | companies → preventive_maintenance_orders | 1:N | aislamiento multiempresa del plan preventivo |
 | work_centers → preventive_maintenance_orders (`work_center_id`) | 1:N | plan preventivo por máquina |
 | maintenance_tickets → preventive_maintenance_orders (`source_ticket_id`) | 1:N (nullable) | tickets de desgaste que sustentan órdenes preventivas |
+| companies → threshold_settings | 1:N | configuración de umbrales por empresa (US-08) |
+| companies → role_permissions | 1:N | matriz rol×acción simulada por empresa (US-08) |
 
 `companies`, `units_of_measure` y `warehouses` aparecen como destinos FK (`1:N` cada uno) desde las tablas operativas que los referencian.
 
@@ -506,6 +546,9 @@ erDiagram
     companies ||--o{ preventive_maintenance_orders : "owns"
     work_centers ||--o{ preventive_maintenance_orders : "plans"
     maintenance_tickets ||--o{ preventive_maintenance_orders : "justifies"
+
+    companies ||--o{ threshold_settings : "configures"
+    companies ||--o{ role_permissions : "grants"
 
     companies {
         uuid id PK
@@ -577,6 +620,7 @@ erDiagram
     production_orders {
         uuid id PK
         uuid company_id FK
+        string order_number
         uuid product_id FK
         uuid bom_id FK
         uuid routing_id FK
@@ -584,6 +628,9 @@ erDiagram
         uuid warehouse_id FK
         numeric quantity_planned
         enum status
+        enum priority
+        date planned_start_date
+        date planned_end_date
     }
     production_order_operations {
         uuid id PK
@@ -678,6 +725,22 @@ erDiagram
         timestamp completed_at
         numeric downtime_minutes
     }
+    threshold_settings {
+        uuid id PK
+        uuid company_id FK
+        enum indicator
+        numeric threshold
+        enum comparison
+        timestamp updated_at
+    }
+    role_permissions {
+        uuid id PK
+        uuid company_id FK
+        enum role
+        enum action
+        boolean allowed
+        timestamp updated_at
+    }
 ```
 
 ---
@@ -727,6 +790,24 @@ erDiagram
 
 **Indicadores derivados (no persistidos):** *Desgaste de la máquina* = frecuencia de fallos y paradas acumuladas por período; *Tiempo medio de reparación (MTTR)* = promedio de `downtime_minutes` de tickets resueltos; *Disponibilidad* = 1 − (paradas de mantenimiento / tiempo planificado). El desgaste es un indicador de contexto operativo, no una evaluación de personas.
 
+### 6.5 Panel de planta (US-08) y balance de líneas (US-11)
+
+| Variable derivada | Fuente | Significado en el negocio |
+|---|---|---|
+| `availability` | `planned_time_minutes`, `downtime_minutes` | Fracción del tiempo planificado sin paradas; componente del OEE. |
+| `performance` | `quantity_completed`, `run_time_per_unit_minutes`, `quantity_planned` | Ritmo real frente al estándar; componente del OEE. |
+| `quality` | `quantity_completed`, `scrap_quantity` | Proporción conforme de la producción; componente del OEE. |
+| `oee` | `availability × performance × quality` | Eficiencia global del centro en el período. |
+| `load` | `Σ planned_time_minutes`, `capacity_per_day_minutes × efficiency_factor` | Carga del centro frente a su capacidad efectiva. |
+| `utilization` | `Σ planned_time_minutes`, `capacity_per_day_minutes` | Uso de la capacidad nominal; base del cuello de botella. |
+| `bottleneck` | `utilization` por centro | Centro que limita la velocidad de la línea (mayor utilización; desempate por carga). |
+
+**Reglas**
+- `availability`, `performance` y `quality` se acotan a `[0, 1]`; `oee` nunca supera `1`.
+- `load` puede superar `1` para señalar sobrecarga; el panel debe destacarlo.
+- Los indicadores se calculan por centro de trabajo y período; nunca por operador.
+- `detectBottlenecks` devuelve una lista ordenada, no un ranking de personas.
+
 ---
 
 ## 7. Ética de Datos, Privacidad y Gestión de Sesgos
@@ -758,6 +839,16 @@ erDiagram
 - **Transparencia:** el registro de tiempos se presenta como trazabilidad de la intervención y de la disponibilidad de la planta, no como evaluación de desempeño.
 - **Reporte de fallos:** `reported_by` no debe usarse para penalizar a quien reporta; reportar una avería es un acto de seguridad operativa y se desacopla del desempeño individual.
 
+### 7.4 Panel de planta y balance de líneas: agregación por centro
+
+`threshold_settings`, `role_permissions` y los indicadores derivados de US-08/US-11 permiten analizar la planta y la línea, no a las personas.
+
+- **Riesgo de sesgo:** atribuir un OEE bajo o un cuello de botella a un operador ignora la máquina, la ruta, la demanda y el turno.
+- **Control de diseño:** todos los indicadores se agregan por **centro de trabajo / operación**; no se generan rankings individuales.
+- **Minimización:** los permisos por rol son una simulación de UX; no se almacenan datos personales adicionales.
+- **Transparencia:** los umbrales y alarmas son configuración operativa visible, no evaluación de desempeño.
+- **Integridad:** la exportación del reporte conserva la agregación por centro y no permite desagregar por operador.
+
 ---
 
 ## 8. Reglas de Validación Consolidadas
@@ -783,3 +874,7 @@ erDiagram
 - `maintenance_tickets.priority` restringido a `urgent | high | normal`; el escalamiento de US-07 crea `urgent` y `escalated_to_maint = true`.
 - `preventive_maintenance_orders.status`: transiciones permitidas `planned → in_progress → completed`; `cancelled` solo desde `planned` o `in_progress`; `completed` ⇒ `completed_at` no nulo; `downtime_minutes ≥ 0`.
 - `preventive_maintenance_orders` no reabre ni reemplaza su `source_ticket_id`; el ticket de origen se conserva como trazabilidad.
+- `production_orders.planned_end_date ≥ planned_start_date` cuando ambas existen; `updatePlannedDates` rechaza fechas no ISO y conserva el último valor válido.
+- `threshold_settings`: `(company_id, indicator)` único; `oee | load | fulfillment` ⇒ `threshold ∈ [0, 1]`; `downtime` ⇒ `threshold ≥ 0` y `comparison = gt`.
+- `role_permissions`: `(company_id, role, action)` único; `plant_manager` ⇒ todas las acciones permitidas; `operator` ⇒ solo `view_plant_panel`.
+- Los valores de OEE, carga, utilización y cuello de botella son derivados y no se persisten en ninguna colección.

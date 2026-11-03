@@ -62,23 +62,7 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 <details>
 <summary><strong>FR-01 a FR-06: Base Implementada (US-01 a US-05 y Panel)</strong></summary>
 
-### FR-01:<details open>
-<summary><strong>FR-09: Supervisión del Desempeño de Planta, OEE, Alarmas, Reportes y Permisos (US-08)</strong></summary>
-
-**US-01 (Jefa de Planta)**: Como Jefa de Planta, quiero consultar en un solo lugar la carga de cada centro de trabajo, el OEE, las paradas acumuladas y el cumplimiento de órdenes (por día, semana o mes), recibir alertas cuando un indicador cae bajo su umbral crítico y reprogramar o cancelar órdenes desde la misma vista, para mantener una visión global del desempeño de la planta y decidir en minutos.
-
-- **Carga y capacidad**: Mostrar la carga por centro de trabajo contra `capacity_per_day_minutes` ajustada por `efficiency_factor`, destacando los centros sobre el 100%.
-- **OEE derivado**: Calcular el OEE (Disponibilidad × Rendimiento × Calidad) por centro y período (diario, semanal, mensual), derivado de `planned_time_minutes`, `actual_time_minutes`, `operation_delays`, `quantity_completed` y `scrap_quantity`; no se persiste.
-- **Paradas acumuladas**: Resumir las paradas acumuladas por centro y motivo (`delay_reasons`), ordenadas de mayor a menor, sin atribuirlas a personas.
-- **Umbrales y alarmas**: Configurar umbrales críticos por indicador (ej. rendimiento < 75%), mostrar alarmas visibles y conservar los umbrales en el snapshot `erp.manufacturing.v1`.
-- **Gestión de órdenes**: Filtrar órdenes por `status` y `priority`, cambiar la prioridad de órdenes `planned` y cancelar órdenes con confirmación explícita, conservando los registros de ejecución.
-- **Centros desactivados**: Bloquear la programación de órdenes nuevas sobre centros de trabajo desactivados.
-- **Exportación**: Exportar el reporte consolidado del período (OEE, paradas, cumplimiento y alarmas activas) en PDF y Excel, generado localmente con datos mock.
-- **Permisos por rol**: Definir permisos por rol (Jefa de Planta, Planificador, Operador) con un selector de rol simulado, sin autenticación real; la interfaz oculta o bloquea las acciones no permitidas.
-- **Ética de datos**: Agregar siempre por centro de trabajo y operación, sin ranking entre operadores; todo detalle por persona lleva la etiqueta *solo contexto operativo — no evaluación de desempeño*.
-- **Rendimiento**: Responder en menos de 100 ms con el dataset de volumen (500 órdenes, BOM de 4 niveles).
-
-</details>
+### FR-01: Lista de Materiales (BOM) (US-01)
 - Crear/ver BOM por producto terminado con `base_quantity > 0`, `version`, `effective_from`.
 - Añadir componentes con `quantity_per_unit > 0`, unidad y merma. Rechazar duplicados (`UNIQUE (bom_id, component_product_id)`).
 - Visualizar árbol multi-nivel (≥4 niveles), distinguir sub-ensamble vs. material.
@@ -140,10 +124,28 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 - **Asignación de personal al turno (`shift_assignments` / `tblSHIFT_ASSIGNMENTS`)**: Permitir vincular un operario (`ext_hr_employee_id`, puente hacia *Recursos Humanos y Planillas*) con un centro de trabajo/máquina (`work_center_id` / `lineIdRef`) y franja de turno (`morning`, `afternoon`, `night`); impedir que un mismo operario sea asignado simultáneamente a dos máquinas activas en la misma franja sin confirmación de reasignación.
 - **Revisión y aprobación de cierres de turno (`production_shifts` / `tblPRODUCTION_COUNTS`)**: Listar los turnos finalizados (`status === 'completed'`) pendientes de revisión con su resumen de piezas conformes, merma, tiempo efectivo y atrasos (`operation_delays` / `tblDOWNTIME_EVENTS`); permitir al supervisor aprobar el cierre marcando `supervisor_validated = true`, `validated_at` y nota opcional de supervisión. Bloquear la aprobación si el turno aún tiene un atraso abierto sin corregir (integración con `DelayCorrectionDialog` de US-06).
 - **Escalamiento de incidentes a mantenimiento (`maintenance_tickets` / `tblMAINTENANCE_TICKETS`)**: Incluir un botón de alerta rápida en cada línea/máquina o evento de parada para escalar incidentes críticos; al activarlo, marcar `escalated_to_maint = true` en el evento de atraso/parada (`operation_delays` / `tblDOWNTIME_EVENTS`), crear un ticket urgente (`priority = 'urgent'`, `ticket_status = 'open'`) en `maintenance_tickets` y cambiar automáticamente el estado operativo del centro de trabajo a `fault` (*En fallo*).
-- **Persistencia**: Conservar asignaciones de personal, estados del semáforo, validaciones de turno y tickets de mantenimiento escalados dentro del snapshot versionado en `localStorage` (`erp.manufacturing.v1`).
+- **Persistencia**: Conservar asignaciones de personal, estados del semáforo, validaciones de turno y tickets de mantenimiento escalados dentro del snapshot versionado en `localStorage` (`erp.manufacturing.v2`; un `v1` existente se migra automáticamente).
 
 </details>
 
+
+<details open>
+<summary><strong>FR-09: Supervisión del Desempeño de Planta, OEE, Alarmas, Reportes y Permisos (US-08)</strong></summary>
+
+**US-08 (Jefa de Planta)**: Como Jefa de Planta, quiero consultar en un solo lugar la carga de cada centro de trabajo, el OEE, las paradas acumuladas y el cumplimiento de órdenes (por día, semana o mes), recibir alertas cuando un indicador cae bajo su umbral crítico y reprogramar o cancelar órdenes desde la misma vista, para mantener una visión global del desempeño de la planta y decidir en minutos.
+
+- **Carga y capacidad**: Mostrar la carga por centro de trabajo contra `capacity_per_day_minutes` ajustada por `efficiency_factor`, destacando los centros sobre el 100%.
+- **OEE derivado**: Calcular el OEE (Disponibilidad × Rendimiento × Calidad) por centro y período (diario, semanal, mensual), derivado de `planned_time_minutes`, `actual_time_minutes`, `operation_delays`, `quantity_completed` y `scrap_quantity`; no se persiste.
+- **Paradas acumuladas**: Resumir las paradas acumuladas por centro y motivo (`delay_reasons`), ordenadas de mayor a menor, sin atribuirlas a personas.
+- **Umbrales y alarmas**: Configurar umbrales críticos por indicador (ej. rendimiento < 75%), mostrar alarmas visibles y conservar los umbrales en el snapshot `erp.manufacturing.v2`.
+- **Gestión de órdenes**: Filtrar órdenes por `status` y `priority`, cambiar la prioridad de órdenes `planned` y cancelar órdenes con confirmación explícita, conservando los registros de ejecución.
+- **Centros desactivados**: Bloquear la programación de órdenes nuevas sobre centros de trabajo desactivados.
+- **Exportación**: Exportar el reporte consolidado del período (OEE, paradas, cumplimiento y alarmas activas) en PDF y Excel, generado localmente con datos mock.
+- **Permisos por rol**: Definir permisos por rol (Jefa de Planta, Planificador, Operador) con un selector de rol simulado, sin autenticación real; la interfaz oculta o bloquea las acciones no permitidas.
+- **Ética de datos**: Agregar siempre por centro de trabajo y operación, sin ranking entre operadores; todo detalle por persona lleva la etiqueta *solo contexto operativo — no evaluación de desempeño*.
+- **Rendimiento**: Responder en menos de 100 ms con el dataset de volumen (500 órdenes, BOM de 4 niveles).
+
+</details>
 
 <details open>
 <summary><strong>FR-10: Gestión de Mantenimiento y Disponibilidad de Máquinas (US-09 / HU-06)</strong></summary>
@@ -159,24 +161,14 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 - **Registro de tiempos de parada**: Al cerrar la intervención, registrar el tiempo real de parada técnica (inicio, fin y duración en minutos) y la causa; estos tiempos alimentan el OEE y las paradas acumuladas de US-08.
 - **Resolución y disponibilidad**: Al marcar el ticket como `resolved`, registrar fecha de resolución, notas y técnico, y restablecer la disponibilidad del centro de trabajo; el semáforo vuelve a *En operación* o *En pausa* según la operación activa y nunca permanece en `fault` sin un ticket abierto.
 - **Integración con supervisión**: Consumir de forma reactiva los tickets generados por el escalamiento de US-07 sin duplicar registros; un ticket resuelto no se reabre, se crea uno nuevo vinculado al mismo evento o a uno nuevo.
-- **Persistencia**: Conservar tickets, intervenciones, tiempos de parada y órdenes preventivas dentro del snapshot versionado en `localStorage` (`erp.manufacturing.v1`).
+- **Persistencia**: Conservar tickets, intervenciones, tiempos de parada y órdenes preventivas dentro del snapshot versionado en `localStorage` (`erp.manufacturing.v2`).
 - **Ética de datos**: Los tiempos de intervención son contexto operativo de la máquina, no evaluación de desempeño del técnico; las vistas agregan por centro de trabajo y no generan rankings de personal.
 
 </details>
 
 
 <details open>
-<summary><strong>FR-12: Balance de líneas (US-11)</strong></summary>
-
-**US-11**: Como Ingeniero de Producción, quiero consultar la utilización y la carga proyectada de cada centro de trabajo frente a su capacidad nominal, para identificar cuellos de botella, balancear la línea de producción, maximizar la eficiencia global de la línea y diseñar y optimizar las rutas de trabajo.
-
-- Analizar los tiempos estándar: Medir y determinar los tiempos teóricos de cada preparación para cada paso de la fabricación
-- Identificar cuellos de botella: Evaluar que estaciones o que máquinas tardan más tiempo en procesar un lote, detectando el punto crítico que limita la velocidad de la planta.
-- Optimizar las rutas de trabajo: Reorganiza la secuencia de las tareas y reasigna actividades entre los centros de trabajo para nivelar la carga de trabajo.
-- Calcular y monitorear la capacidad nominal: Compara la demanda planificada frente a capacidad máxima diaria y el factor de eficiencia de cada centro de trabajo.
-- Maximizar la eficiencia: Ajusta la asignación de recursos y personal para reducir los tiempos muertos, reducir costos operativos y maximizar la tasa de salida de productos terminados.
-
-### FR-11: Planificación y Calendarización de Órdenes de Producción (US-10)
+<summary><strong>FR-11: Planificación y Calendarización de Órdenes de Producción (US-10)</strong></summary>
 
 **US-10 (Planificador):** Como Planificador de Producción, quiero consultar las órdenes de producción y asignar o modificar sus fechas planificadas de inicio y término, para organizar las actividades de fabricación y facilitar el cumplimiento de los plazos de entrega.
 
@@ -187,7 +179,22 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 - Modificar las fechas planificadas cuando existan atrasos o cambios en la programación.
 - Validar que la fecha de término no sea anterior a la fecha de inicio.
 - Consultar las órdenes según su programación y estado.
-- Conservar los cambios realizados en la programación.
+- Conservar los cambios realizados en la programación dentro del snapshot `erp.manufacturing.v2`.
+
+</details>
+
+<details open>
+<summary><strong>FR-12: Balance de líneas (US-11)</strong></summary>
+
+**US-11**: Como Ingeniero de Producción, quiero consultar la utilización y la carga proyectada de cada centro de trabajo frente a su capacidad nominal, para identificar cuellos de botella, balancear la línea de producción, maximizar la eficiencia global de la línea y diseñar y optimizar las rutas de trabajo.
+
+- **Analizar los tiempos estándar**: Medir y determinar los tiempos teóricos de cada preparación para cada paso de la fabricación.
+- **Identificar cuellos de botella**: Evaluar qué estaciones o máquinas tardan más tiempo en procesar un lote, detectando el punto crítico que limita la velocidad de la planta.
+- **Optimizar las rutas de trabajo**: Reorganizar la secuencia de las tareas y reasignar actividades entre los centros de trabajo para nivelar la carga de trabajo.
+- **Calcular y monitorear la capacidad nominal**: Comparar la demanda planificada frente a la capacidad máxima diaria y el factor de eficiencia de cada centro de trabajo.
+- **Maximizar la eficiencia**: Ajustar la asignación de recursos y personal para reducir los tiempos muertos, reducir costos operativos y maximizar la tasa de salida de productos terminados.
+
+</details>
 
 ## 5. Criterios de Aceptación
 
@@ -220,17 +227,12 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 | AC-25 | Ticket resuelto sin reapertura; nueva incidencia genera un ticket vinculado al evento correspondiente | Planificado |
 | AC-26 | Tickets, intervenciones, tiempos de parada y órdenes preventivas conservados en el snapshot tras recargar | Planificado |
 | AC-27 | Tiempos de mantenimiento agregados por centro, sin rankings ni evaluación de desempeño de técnicos | Planificado |
-| AC-28 | El sistema permite consultar las órdenes de producción existentes y visualizar sus datos principales.
-
-| AC-29 | El planificador puede asignar fechas planificadas de inicio y término a una orden de producción.
-
-| AC-30 | El planificador puede modificar las fechas planificadas de una orden existente.
-
-| AC-31 | El sistema impide asignar una fecha de término anterior a la fecha de inicio.
-
-| AC-32 | El sistema permite visualizar las órdenes según sus fechas planificadas y estados.
-
-| AC-33 | Las fechas asignadas y sus modificaciones permanecen guardadas al volver a abrir el sistema.
+| AC-28 | El sistema permite consultar las órdenes de producción existentes y visualizar sus datos principales | Planificado |
+| AC-29 | El planificador puede asignar fechas planificadas de inicio y término a una orden de producción | Planificado |
+| AC-30 | El planificador puede modificar las fechas planificadas de una orden existente | Planificado |
+| AC-31 | El sistema impide asignar una fecha de término anterior a la fecha de inicio | Planificado |
+| AC-32 | El sistema permite visualizar las órdenes según sus fechas planificadas y estados | Planificado |
+| AC-33 | Las fechas asignadas y sus modificaciones permanecen guardadas al volver a abrir el sistema | Planificado |
 
 ## 6. Entidades Clave
 
@@ -256,13 +258,13 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 
 ## 8. Supuestos y Dependencias
 
-- El snapshot local se mantiene versionado (`erp.manufacturing.v1`); cualquier cambio de forma incrementa la versión y se valida al hidratar.
-- `maintenance_tickets` y las órdenes preventivas se modelan como entidades locales del módulo; `data-model.md` debe actualizarse antes de implementar US-09.
+- El snapshot local se mantiene versionado con `erp.manufacturing.v2` como versión vigente desde US-08; `erp.manufacturing.v1` se migra automáticamente. Cualquier cambio de forma incrementa la versión y se valida al hidratar.
+- `maintenance_tickets`, las órdenes preventivas, `threshold_settings` y `role_permissions` se modelan como entidades locales del módulo y ya están descritas en `data-model.md` §3.19–3.22.
 - Los roles (Jefa de Planta, Planificador, Operador, Encargado de Mantenimiento) son simulados con un selector; no existe autenticación real.
 - La exportación a PDF y Excel se genera localmente con los datos mock, sin backend ni servicios externos.
 - Los catálogos de RR.HH., calidad y ventas son datos simulados de solo lectura.
 - Los tiempos de turno y de parada se derivan de marcas de tiempo persistidas, no de temporizadores en memoria.
-- El OEE y el indicador de desgaste son valores derivados y no se persisten.
+- El OEE, la carga, la utilización, el cuello de botella y el indicador de desgaste son valores derivados y no se persisten.
 
 ## 9. Artefactos Spec-Kit
 
@@ -272,8 +274,11 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 | `checklists/requirements.md` | `specs/002-operations-manufacturing/checklists/requirements.md` | Validación de calidad de la especificación |
 | `plan.md` | `specs/002-operations-manufacturing/plan.md` | Plan de implementación, fases, gobernanza, estructura |
 | `data-model.md` | `specs/002-operations-manufacturing/data-model.md` | Diccionario de datos, ERD Mermaid, ética/datos, trazabilidad |
-| `research.md` | `specs/002-operations-manufacturing/research.md` | Decisiones técnicas de US-06, US-07 y US-09 (tiempo, contadores, atrasos, semáforo, escalamiento, mantenimiento, persistencia) |
+| `research.md` | `specs/002-operations-manufacturing/research.md` | Decisiones técnicas de US-06, US-07, US-08, US-09, US-10 y US-11 |
 | `contracts/operator-shift.md` | `specs/002-operations-manufacturing/contracts/operator-shift.md` | Contrato de store/UI para operador (US-06) y supervisor de línea (US-07) |
+| `contracts/plant-performance.md` | `specs/002-operations-manufacturing/contracts/plant-performance.md` | Contrato de panel de planta, umbrales, permisos y exportación (US-08) |
+| `contracts/order-scheduling.md` | `specs/002-operations-manufacturing/contracts/order-scheduling.md` | Contrato de planificación y fechas planificadas (US-10) |
+| `contracts/line-balance.md` | `specs/002-operations-manufacturing/contracts/line-balance.md` | Contrato de balance de líneas y cuellos de botella (US-11) |
 | `quickstart.md` | `specs/002-operations-manufacturing/quickstart.md` | Guía de ejecución y validación de las historias de usuario |
 | `tasks.md` | `specs/002-operations-manufacturing/tasks.md` | Tareas atómicas por fase e historia de usuario |
 
@@ -281,6 +286,6 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 
 - **Stack**: Vanilla JavaScript ES2022 + Vite + CSS. JSDoc para tipado (paridad con `001-erp-base-module`).
 - **Arquitectura**: `domain/` (lógica pura), `data/` (fixtures + store + puertos), `components/` (vistas), `styles/`.
-- **Estado**: `ManufacturingStore` en memoria con `EventTarget` para re-render reactivo y snapshot versionado en `localStorage` (`erp.manufacturing.v1`) para sobrevivir recargas.
+- **Estado**: `ManufacturingStore` en memoria con `EventTarget` para re-render reactivo y snapshot versionado en `localStorage` (`erp.manufacturing.v2`, con migración desde `v1`) para sobrevivir recargas.
 - **Puentes Inter-Modulares (US-07 / HU-04)**: `ext_hr_employee_id` consume catálogo simulado de operarios de RR.HH. (`src/data/fixtures/hr-employees.js`) y el escalamiento genera registros en `maintenance_tickets` consumibles por la vista de Mantenimiento (HU-06).
 - **Ética**: agregación por centro/operación, sin rankings individuales; tiempos y asignaciones como dato de coordinación operativa.

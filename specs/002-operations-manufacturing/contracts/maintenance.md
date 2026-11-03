@@ -144,6 +144,6 @@ si no hay operación activa              → work_center.operational_status = di
 8. **Historial y desgaste**: el historial lista tickets resueltos y el indicador de desgaste se calcula sin persistirse.
 9. **Preventiva**: crear una orden desde el historial la deja `planned`; `planned → in_progress → completed` funciona; `cancelled` desde `completed` falla.
 10. **Persistencia**: tras intervenir y resolver, recargar rehidrata tickets, marcas de tiempo y órdenes preventivas.
-11. **Migración**: un snapshot `v1` válido se migra a `v2` con las colecciones de mantenimiento vacías y sin perder el estado de US-01…US-08.
+11. **Migración**: un snapshot `v1` válido se migra a `v2` conservando el estado de US-01…US-07 e inicializando umbrales, permisos y colecciones de mantenimiento vacías; un `v2` existente de US-08 se completa sin perder su estado.
 12. **Snapshot corrupto**: un JSON inválido o `version` desconocida se descarta y se cargan fixtures sin romper el arranque.
 13. **Regresión**: las suites de US-01…US-08 siguen pasando sin cambios de comportamiento.

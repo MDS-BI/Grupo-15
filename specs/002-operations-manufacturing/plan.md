@@ -1,6 +1,6 @@
 # Implementation Plan: Operations & Manufacturing Module (ERP)
 
-**Branch**: `002-operations-manufacturing` | **Date**: 2026-10-21 | **Updated**: 2026-10-29
+**Branch**: `002-operations-manufacturing` | **Date**: 2026-10-21 | **Updated**: 2026-11-03
 **Spec**: `specs/002-operations-manufacturing/spec.md`
 **Input**: Feature specification and data contracts derived from `erp_data_model.md` (Module 7: Operations / Manufacturing) and `specs/002-operations-manufacturing/data-model.md`
 **Methodology**: Spec-Driven Development (Spec-Kit)
@@ -209,7 +209,7 @@ The module references, but does **not** own, the following boundary entities. Al
   - Operation progress, consumption and output records.
   - Shift tracking: `startShift`, `finishOperation`, `startDelay`, `closeDelay`, `correctOpenDelay`, `incrementCounter`, `setCounter`.
   - Read-only boundary data (`products`, `warehouses`, `units_of_measure`, `sales_orders`, `quality_inspections`) loaded from fixtures.
-  - Persistence: versioned `localStorage` snapshot (`erp.manufacturing.v1`) written through on every mutation and rehydrated on boot; fall back to fixtures when the snapshot is absent or invalid.
+  - Persistence: versioned `localStorage` snapshot written through on every mutation and rehydrated on boot; `erp.manufacturing.v1` for US-06/US-07 and `erp.manufacturing.v2` from US-08 onward (§10.6) with automatic migration. Fall back to fixtures when the snapshot is absent or invalid.
 - **Ports**: `InventoryPort` (stock debit/credit simulation) and `QualityPort` (read-only inspection lookup), both backed by mocks.
 
 **Deliverables**: `src/data/fixtures/*` (including shifts, delays and delay reasons), `src/data/ManufacturingStore.js` actions + snapshot adapter, `src/data/ports/*`.
@@ -284,7 +284,7 @@ The module references, but does **not** own, the following boundary entities. Al
 | **Framework / UI** | Vanilla JS DOM rendering with template strings and `EventTarget` change events; shared branded shell from `001-erp-base-module`. |
 | **Build / dev server** | Vite 8 (`npm run dev`, `npm run build`, `npm run preview`). |
 | **Testing** | Vitest 4 with `jsdom`; unit tests under `tests/unit/`, integration under `tests/integration/` when present. |
-| **State / persistence** | Single in-memory `ManufacturingStore` seeded from fixtures; versioned `localStorage` snapshot (`erp.manufacturing.v1`) for reload/session survival. |
+| **State / persistence** | Single in-memory `ManufacturingStore` seeded from fixtures; versioned `localStorage` snapshot (`v1` for US-06/US-07, `v2` from US-08 onward with migration) for reload/session survival. |
 | **Boundary integration** | Read-only fixture adapters + in-memory `InventoryPort` / `QualityPort`; no backend, auth, or network calls. |
 | **Target platform** | Modern desktop browser (latest Chrome/Edge/Firefox); responsive down to tablet width. |
 | **Performance goals** | Interactions `< 100 ms` with up to 500 orders; timers derived from timestamps, never from polling loops. |
@@ -498,7 +498,7 @@ No other constitution violations.
 | **Framework / UI** | Vanilla JS con plantillas de string y `EventTarget`; shell reutilizado de `001-erp-base-module`. |
 | **Build / pruebas** | Vite 8 + Vitest 4 con `jsdom`. |
 | **Estado** | Extensión aditiva de `ManufacturingStore` (nuevas colecciones, consultas y acciones); ninguna acción existente cambia de firma ni de efecto. |
-| **Persistencia** | Snapshot versionado en `localStorage`. Se pasa a `erp.manufacturing.v2` con migración desde `v1`; las nuevas colecciones arrancan vacías si no existen. |
+| **Persistencia** | Extiende el snapshot `erp.manufacturing.v2` introducido por US-08 (§10.6) con las colecciones de mantenimiento; la migración desde `v1` la garantiza §10.6 y las nuevas colecciones arrancan vacías si no existen. |
 | **Integración de entrada** | US-07 (escalamiento) crea el ticket en `maintenance_tickets`; US-09 lo consume de forma reactiva. Contrato de admisión en [contracts/maintenance.md](contracts/maintenance.md). |
 | **Integración de salida** | US-08 consume los tiempos de parada y los tickets resueltos en modo solo lectura para OEE y paradas acumuladas. |
 | **Puente RR.HH.** | Técnico asignado por `technician_ext_hr_employee_id` (mismo puente que `shift_assignments`). |
@@ -600,8 +600,8 @@ Contrato completo en [contracts/maintenance.md](contracts/maintenance.md).
 
 ## 9.6 Persistencia y migración
 
-- **Snapshot**: `erp.manufacturing.v2`.
-- **Migración**: al hidratar, si existe `v1` se copia su contenido y se inicializan `maintenanceTickets = []` y `preventiveMaintenanceOrders = []`; se reescribe como `v2`. Si `v2` falta, está corrupto o es inválido, se cargan fixtures con advertencia visible.
+- **Snapshot**: `erp.manufacturing.v2`, introducido por US-08 (§10.6).
+- **Migración**: un `v2` existente se completa con `maintenanceTickets = []` y `preventiveMaintenanceOrders = []` si faltan. Si solo existe `v1`, se copia su contenido, se inicializan también `thresholdSettings` y `rolePermissions` y se reescribe como `v2`. Si `v2` falta, está corrupto o es inválido, se cargan fixtures con advertencia visible.
 - **Escritura**: write-through tras cada mutación de mantenimiento, sin bloquear la UI.
 - **Rehidratación**: las marcas de tiempo y los cronómetros de intervención se recalculan desde `intervention_started_at`/`downtime_*`, nunca desde intervalos en memoria.
 - **Reset de demo**: elimina `v2` (y opcionalmente `v1`) y recarga fixtures.
@@ -679,3 +679,203 @@ No hay violaciones que requieran justificación adicional.
 | Snapshot `v2` con migración | El nuevo estado debe persistir sin romper sesiones `v1`. | Reutilizar `v1` con colecciones opcionales oculta el cambio de forma y dificulta la validación. |
 | Indicador de desgaste derivado | Evita persistir métricas que pueden recalcularse y sesgar decisiones. | Persistir un score de desgaste añade complejidad de mantenimiento y posible deriva. |
 | Técnico vía `ext_hr_employee_id` | Coherente con el puente de RR.HH. de US-07. | Duplicar un catálogo de técnicos rompe la integración. |
+
+---
+
+# 10. Plan Técnico Incremental — US-08 (Panel de Planta), US-10 (Planificación) y US-11 (Balance de Líneas)
+
+**Alcance**: FR-09 / US-08 (AC-04…AC-07 y AC-20), FR-11 / US-10 (AC-28…AC-33) y FR-12 / US-11 (sin AC propio; se apoya en FR-02, FR-03, FR-09 y FR-11). No reabre ni rediseña US-01…US-07 ni US-09.
+
+## 10.1 Alcance y no objetivos
+
+**Incluye**
+- Panel consolidado de planta: carga por centro contra capacidad efectiva, OEE derivado, paradas acumuladas por motivo y cumplimiento de órdenes por período.
+- Umbrales críticos configurables por indicador, alarmas visibles y persistencia de umbrales y permisos por rol simulado.
+- Reprogramación de prioridad y cancelación de órdenes desde el panel, conservando los registros de ejecución.
+- Exportación local del reporte consolidado a PDF y Excel con datos mock.
+- Asignación y edición de fechas planificadas de inicio y término por orden, con validación `planned_end_date ≥ planned_start_date`.
+- Panel de balance de líneas: tiempos estándar, carga proyectada, utilización vs. capacidad nominal y detección de cuellos de botella.
+
+**No objetivos**
+- No hay backend, autenticación real ni motor de permisos del servidor; los roles y permisos son simulados con un selector.
+- No hay MRP, programación automática por capacidad finita ni optimizador de rutas.
+- No se persisten OEE, carga, utilización ni cuellos de botella: son valores derivados.
+- No se modifican los contratos ni el comportamiento de US-01…US-07 y US-09.
+
+**Regla de aislamiento**: las nuevas funcionalidades se añaden con archivos nuevos y extensiones aditivas a `types.js`, al snapshot y a la ruta del shell. Las suites de regresión deben seguir pasando sin cambios de comportamiento.
+
+## 10.2 Contexto técnico (US-08, US-10, US-11)
+
+| Aspecto | Decisión |
+|---|---|
+| **Lenguaje / runtime** | JavaScript ES2022, navegador y Node para pruebas. |
+| **Framework / UI** | Vanilla JS con plantillas de string y `EventTarget`; shell reutilizado de `001-erp-base-module`. |
+| **Build / pruebas** | Vite 8 + Vitest 4 con `jsdom`. |
+| **Estado** | Extensión aditiva de `ManufacturingStore`: nuevas consultas y acciones; ninguna firma existente cambia. |
+| **Persistencia** | `erp.manufacturing.v2` introducido en esta fase con migración desde `v1`; colecciones nuevas `thresholdSettings` y `rolePermissions`. US-09 extiende `v2` con mantenimiento. |
+| **Derivados** | OEE, carga, utilización, paradas acumuladas y cuellos de botella se calculan bajo demanda y no se persisten. |
+| **Exportación** | PDF y Excel generados localmente con los datos mock; sin servicios externos ni backend. |
+| **Rendimiento** | Interacciones < 100 ms con 500 órdenes y BOM de 4 niveles. |
+| **Plataforma** | Navegador de escritorio moderno; usable hasta ancho de tablet. |
+| **Dependencias** | US-06/US-07 (paradas y turnos), US-03 (órdenes), US-02 (centros, rutas y tiempos estándar). |
+
+Incógnitas pendientes: ninguna. Decisiones registradas en [research.md](research.md) §5–§7 (D-17…D-27).
+
+## 10.3 Flujo de datos
+
+```text
+US-06/US-07 ──► production_shifts, operation_delays, maintenance_tickets
+                        │
+US-08 ◄─────────────────┴──► computeOee / computeLoadByWorkCenter
+  ├─ umbrales ──► threshold_settings (persistido en v2)
+  ├─ permisos ──► role_permissions (persistido en v2)
+  ├─ acciones ──► production_orders.priority / status = cancelled
+  └─ reporte ──► exportador local PDF/Excel (derivado, no persistido)
+
+US-10 ◄── production_orders.planned_start_date / planned_end_date (persistido en v2)
+
+US-11 ◄── work_centers.capacity_per_day_minutes + efficiency_factor
+       ◄── routing_operations.setup_time_minutes / run_time_per_unit_minutes
+       ◄── production_orders.quantity_planned / planned_end_date
+       └──► utilización y cuello de botella (derivados, no persistidos)
+```
+
+## 10.4 Modelo de datos y reglas
+
+Entidades nuevas o ampliadas en [data-model.md](data-model.md):
+
+- **`threshold_settings`** (§3.21): umbral crítico por indicador (`load`, `oee`, `downtime`, `fulfillment`) con comparación (`lt`, `gt`) y marca de actualización. Se persiste en `v2`.
+- **`role_permissions`** (§3.22): matriz local rol×acción (`plant_manager`, `planner`, `operator`) usada por la UI para ocultar o bloquear acciones. Se persiste en `v2`.
+- **`production_orders.planned_start_date` / `planned_end_date`** (ya definidos en §3.11): se editan en US-10; `planned_end_date ≥ planned_start_date`.
+- **`production_orders.priority`** (ya definido): se modifica desde US-08 solo para órdenes `planned`.
+- **`production_orders.status`**: la cancelación desde US-08 usa la transición existente a `cancelled` y conserva los registros de ejecución.
+
+**Indicadores derivados (no persistidos)**
+- `availability = (planned_time_minutes − downtime_minutes) / planned_time_minutes`.
+- `performance = quantity_completed / (run_time_per_unit_minutes × quantity_planned)` acotado a [0, 1].
+- `quality = quantity_completed / (quantity_completed + scrap_quantity)`.
+- `oee = availability × performance × quality`.
+- `load = Σ planned_time_minutes / (capacity_per_day_minutes × efficiency_factor)`.
+- `utilization = Σ planned_time_minutes / capacity_per_day_minutes`.
+- `bottleneck = work_center con mayor utilización proyectada` (empate: mayor carga absoluta).
+
+## 10.5 Contratos de dominio, store y UI
+
+Contratos completos en [contracts/plant-performance.md](contracts/plant-performance.md), [contracts/order-scheduling.md](contracts/order-scheduling.md) y [contracts/line-balance.md](contracts/line-balance.md).
+
+**Funciones puras** (`src/domain/plant-performance.js`, nuevo)
+- `computeOee(workCenter, operations, delays, period)`.
+- `computeLoadByWorkCenter(workCenters, operations, period)`.
+- `accumulateDowntimesByReason(delays, maintenanceTickets, period)`.
+- `evaluateThresholds(indicators, thresholdSettings)`.
+- `canPerformAction(role, action, rolePermissions)`.
+- `buildConsolidatedReport(period, data)`.
+
+**Funciones puras** (`src/domain/order-scheduling.js`, nuevo)
+- `validatePlannedDates({ planned_start_date, planned_end_date })`.
+- `canRescheduleOrder(order)`.
+
+**Funciones puras** (`src/domain/line-balance.js`, nuevo)
+- `computeStandardTimes(routingOperations)`.
+- `computeProjectedLoad(orders, routingOperations, period)`.
+- `computeUtilization(load, workCenter)`.
+- `detectBottlenecks(utilizationByWorkCenter)`.
+
+**Consultas del store**
+- `plantPerformanceFor(period)`, `loadByWorkCenterFor(period)`, `downtimesByReasonFor(period)`, `rolePermissionsFor(role)`.
+- `ordersForScheduling({ status, dateFrom, dateTo })`.
+- `lineBalanceFor(period)`.
+
+**Acciones del store** (aditivas, validan antes de mutar y emiten un único `change`)
+- `setIndicatorThreshold({ indicator, threshold, comparison })`.
+- `changeOrderPriority(orderId, priority)`.
+- `cancelOrderFromPanel(orderId, { reason })`.
+- `updatePlannedDates(orderId, { planned_start_date, planned_end_date })`.
+
+**Contratos de UI**
+- `src/components/PlantPerformancePanel.js`: KPIs de carga/OEE/paradas/cumplimiento, alarmas de umbral, acciones de orden con confirmación, selector de rol y exportación.
+- `src/components/ProductionSchedulingPanel.js`: listado filtrable de órdenes, edición de fechas planificadas con validación inline y confirmación de guardado.
+- `src/components/LineBalancePanel.js`: tabla por centro con utilización vs. capacidad nominal, carga proyectada y cuello de botella resaltado.
+- `src/data/exporters/plant-report.js`: generación local de PDF y Excel a partir del reporte consolidado.
+
+## 10.6 Persistencia y migración
+
+- **Snapshot**: `erp.manufacturing.v2`, introducido en esta fase.
+- **Migración**: al hidratar, si existe `erp.manufacturing.v1` válido se copia su contenido y se inicializan `thresholdSettings` y `rolePermissions` con los valores por defecto de fixtures; se reescribe como `v2`. Si `v2` falta, está corrupto o es inválido, se cargan fixtures con advertencia visible.
+- **Extensiones posteriores**: US-09 añade `maintenanceTickets` y `preventiveMaintenanceOrders` a `v2`; US-10 no añade colecciones (usa campos existentes de `production_orders`); US-11 no persiste nada nuevo.
+- **Escritura**: write-through tras cada mutación del panel y de la planificación, sin bloquear la UI.
+- **Reset de demo**: elimina `v2` (y opcionalmente `v1`) y recarga fixtures.
+- Las colecciones nuevas son opcionales y tolerantes a ausencia; no se altera la forma de las colecciones existentes.
+
+## 10.7 Estrategia de pruebas
+
+**Unidad — dominio**
+- `tests/unit/plant-performance.test.js`: OEE, carga, paradas por motivo, umbrales y permisos.
+- `tests/unit/order-scheduling.test.js`: validación de fechas y órdenes no reprogramables.
+- `tests/unit/line-balance.test.js`: tiempos estándar, carga proyectada, utilización y cuello de botella.
+
+**Unidad — store** (`tests/unit/manufacturing-store.test.js`, bloques aditivos)
+- Acciones de umbrales, prioridad, cancelación y fechas planificadas.
+- Migración `v1 → v2`, colecciones ausentes y no mutación ante error.
+
+**Integración jsdom**
+- `tests/integration/plant-performance-panel.test.js`: KPIs, alarmas, acciones y exportación simulada.
+- `tests/integration/order-scheduling.test.js`: edición de fechas, validación inline y recarga.
+- `tests/integration/line-balance-panel.test.js`: tabla por centro y cuello de botella.
+
+**Regresión**
+- Ejecutar las suites existentes de US-01…US-09 para confirmar que las extensiones aditivas no alteran su comportamiento.
+
+## 10.8 Constitution Check (post-diseño US-08 / US-10 / US-11)
+
+- **I. Calidad y mantenibilidad**: lógica pura en `src/domain/plant-performance.js`, `src/domain/order-scheduling.js` y `src/domain/line-balance.js`; el store solo orquesta y los contratos están documentados.
+- **II. Pruebas primero**: cada cálculo derivado, umbral, permiso y validación de fechas tiene prueba unitaria; cada panel tiene prueba de integración jsdom.
+- **III. Consistencia de UX**: se reutilizan patrones de tarjetas, tablas, validación inline, diálogos con foco atrapado y estados vacíos del módulo; los roles deshabilitan acciones de forma visible y accesible.
+- **IV. Rendimiento y confiabilidad**: cálculos O(n) sobre operaciones del período; snapshot versionado con migración y fallback a fixtures; sin temporizadores ni recálculos en bucle.
+
+No hay violaciones que requieran justificación adicional.
+
+## 10.9 Riesgos y mitigaciones
+
+| ID | Riesgo | Mitigación |
+|---|---|---|
+| R-16 | OEE inconsistente por doble fuente de paradas | Una sola fuente: `operation_delays` + `maintenance_tickets.downtime_minutes`, calculada en `plant-performance.js`. |
+| R-17 | Umbrales o permisos perdidos al migrar | Migración `v1 → v2` con valores por defecto y validación de forma; prueba de round-trip. |
+| R-18 | Exportación PDF/Excel lenta o dependiente de servicios | Generación local con datos mock y límite de período; prueba de rendimiento. |
+| R-19 | Fechas planificadas inválidas por edición concurrente | Validación en dominio + store antes de mutar; mensaje inline y conservación del último valor válido. |
+| R-20 | Cuello de botella mal señalado por capacidad desactualizada | Recalcular con `capacity_per_day_minutes × efficiency_factor` en cada render; prueba con escenario sembrado. |
+| R-21 | Permisos simulados tratados como seguridad real | Etiquetar el selector como simulación y no exponer datos sensibles; documentar que no hay autenticación. |
+
+## 10.10 Fases de implementación (entrada para `/speckit.tasks`)
+
+1. **Fundacional US-08**: tipos `ThresholdSetting`, `PlantRole`, `PlantIndicator` y mapa de permisos; fixtures de umbrales/permisos; snapshot `v2` con migración.
+2. **Dominio US-08**: `src/domain/plant-performance.js` con pruebas unitarias.
+3. **Store US-08**: consultas, acciones de umbral/prioridad/cancelación y exportación del reporte.
+4. **UI US-08**: `PlantPerformancePanel.js`, ruta en el shell y estilos.
+5. **US-10**: validación de fechas, acción de store, `ProductionSchedulingPanel.js` y ruta.
+6. **US-11**: cálculos de balance, `LineBalancePanel.js`, escenario de cuello de botella y ruta.
+7. **Verificación**: pruebas de integración de los tres paneles, regresión de US-01…US-09, rendimiento y guion de demo.
+
+**Criterio de salida**: AC-04…AC-07 y AC-20 verificados; AC-28…AC-33 verificados; suites de regresión verdes; snapshot migra sin pérdida; `npm run build` exitoso.
+
+## 10.11 Trazabilidad de criterios de aceptación
+
+| AC | Cubierto por |
+|---|---|
+| AC-04 Carga/OEE/paradas por período | `computeOee`, `computeLoadByWorkCenter`, `accumulateDowntimesByReason` + `PlantPerformancePanel` |
+| AC-05 Umbrales configurables y alarmas | `threshold_settings` + `evaluateThresholds` + `setIndicatorThreshold` |
+| AC-06 Reprogramación/cancelación con confirmación | `changeOrderPriority`, `cancelOrderFromPanel` + UI con confirmación |
+| AC-07 Exportación PDF/Excel y permisos por rol | `src/data/exporters/plant-report.js` + `role_permissions` + `canPerformAction` |
+| AC-20 Carga sobre capacidad y centros desactivados | `computeLoadByWorkCenter` + validación de `work_centers.status` |
+| AC-28..AC-33 Planificación de fechas | `validatePlannedDates`, `updatePlannedDates`, `ProductionSchedulingPanel` |
+| FR-12 Balance de líneas | `computeStandardTimes`, `computeProjectedLoad`, `computeUtilization`, `detectBottlenecks` + `LineBalancePanel` |
+
+## 10.12 Complexity Tracking (US-08 / US-10 / US-11)
+
+| Decisión | Por qué | Alternativa rechazada |
+|---|---|---|
+| Extensión aditiva del store único | Mantiene una sola fuente de verdad y la arquitectura actual. | Stores separados duplicarían estado y complicarían la integración con US-06/US-07/US-09. |
+| Snapshot `v2` introducido en US-08 | Agrupa umbrales y permisos con la migración ya prevista para mantenimiento. | Introducir dos migraciones consecutivas complica la rehidratación. |
+| Permisos por rol persistidos en `v2` | Permite que la simulación de roles sobreviva recargas. | Solo en memoria perdería la configuración al recargar. |
+| Indicadores derivados (OEE, carga, utilización) | Evita datos obsoletos y mantiene una única fuente de cálculo. | Persistir métricas añade mantenimiento y riesgo de deriva. |
+| Exportación local | Cumple el alcance frontend-only sin backend ni servicios externos. | Depender de un servicio de reportes rompe el prototipo. |
