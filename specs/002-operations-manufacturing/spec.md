@@ -164,6 +164,19 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 
 </details>
 
+### FR-11: Planificación y Calendarización de Órdenes de Producción (US-10)
+
+**US-10 (Planificador):** Como Planificador de Producción, quiero consultar las órdenes de producción y asignar o modificar sus fechas planificadas de inicio y término, para organizar las actividades de fabricación y facilitar el cumplimiento de los plazos de entrega.
+
+**Funcionalidades:**
+- Consultar las órdenes de producción existentes.
+- Visualizar información de cada orden, incluyendo producto, cantidad, prioridad y estado.
+- Asignar fechas planificadas de inicio y término.
+- Modificar las fechas planificadas cuando existan atrasos o cambios en la programación.
+- Validar que la fecha de término no sea anterior a la fecha de inicio.
+- Consultar las órdenes según su programación y estado.
+- Conservar los cambios realizados en la programación.
+
 ## 5. Criterios de Aceptación
 
 | ID | Criterio | Estado |
@@ -195,6 +208,17 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 | AC-25 | Ticket resuelto sin reapertura; nueva incidencia genera un ticket vinculado al evento correspondiente | Planificado |
 | AC-26 | Tickets, intervenciones, tiempos de parada y órdenes preventivas conservados en el snapshot tras recargar | Planificado |
 | AC-27 | Tiempos de mantenimiento agregados por centro, sin rankings ni evaluación de desempeño de técnicos | Planificado |
+| AC-28 | El sistema permite consultar las órdenes de producción existentes y visualizar sus datos principales.
+
+| AC-29 | El planificador puede asignar fechas planificadas de inicio y término a una orden de producción.
+
+| AC-30 | El planificador puede modificar las fechas planificadas de una orden existente.
+
+| AC-31 | El sistema impide asignar una fecha de término anterior a la fecha de inicio.
+
+| AC-32 | El sistema permite visualizar las órdenes según sus fechas planificadas y estados.
+
+| AC-33 | Las fechas asignadas y sus modificaciones permanecen guardadas al volver a abrir el sistema.
 
 ## 6. Entidades Clave
 
