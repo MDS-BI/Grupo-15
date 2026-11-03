@@ -98,7 +98,7 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 <details open>
 <summary><strong>FR-09: Supervisión de Desempeño de Planta, OEE, Alarmas, Reportes y Permisos (US-08)</strong></summary>
 
-**US-08 (Jefa de Planta)**: Como Jefa de Planta, quiero consultar en un solo lugar la carga de cada centro de trabajo, el OEE, las paradas acumuladas y el cumplimiento de órdenes (por día, semana o mes), recibir alertas cuando un indicador cae bajo su umbral crítico y reprogramar o cancelar órdenes desde la misma vista, para mantener una visión global del desempeño de la planta y decidir en minutos.
+**US-01 (Jefa de Planta)**: Como Jefa de Planta, quiero consultar en un solo lugar la carga de cada centro de trabajo, el OEE, las paradas acumuladas y el cumplimiento de órdenes (por día, semana o mes), recibir alertas cuando un indicador cae bajo su umbral crítico y reprogramar o cancelar órdenes desde la misma vista, para mantener una visión global del desempeño de la planta y decidir en minutos.
 
 - Mostrar la carga por centro de trabajo contra `capacity_per_day_minutes` ajustada por `efficiency_factor`, destacando los centros sobre el 100%.
 - Calcular el OEE (Disponibilidad × Rendimiento × Calidad) por centro y período (diario, semanal, mensual), derivado de `planned_time_minutes`, `actual_time_minutes`, `operation_delays`, `quantity_completed` y `scrap_quantity`; no se persiste.
