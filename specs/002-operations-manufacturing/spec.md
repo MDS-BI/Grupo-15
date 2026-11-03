@@ -50,7 +50,8 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 
 | Persona | Descripción |
 |---|---|
-| **Planificador de Producción / Jefe de Planta** | Gestiona BOM y rutas, define capacidad, programa y prioriza órdenes, monitorea carga. |
+| **Planificador de Producción** | Gestiona BOM y rutas, define capacidad, programa y prioriza órdenes, monitorea carga. |
+| **Jefa de Planta (`@Lia-dl`)** | Supervisa el desempeño global de la planta: consulta carga por centro, OEE, paradas acumuladas y cumplimiento de órdenes, configura alarmas de umbral, reprograma o cancela órdenes, exporta reportes consolidados y define permisos por rol. Analiza por centro de trabajo y operación, sin ranking de operadores. |
 | **Supervisor de Operaciones / Línea (`@carlos-277`)** | Monitorea el semáforo de líneas/máquinas en tiempo real, asigna operarios por turno (`ext_hr_employee_id`), revisa y aprueba cierres de turno (`supervisor_validated`) y escala incidentes críticos a mantenimiento. |
 | **Operador de Máquina (`@maximilianMC`)** | Ejecuta operaciones en pantalla táctil/piso, inicia/finaliza turno, justifica atrasos, registra conteo de piezas, consumo, salida y merma. |
 | **Ingeniero de Producción (`@JualTrupe`)** | Configura rutas de fabricación y tiempos estándar, analiza el balance de líneas y evalúa informes de materiales para optimizar tiempos, reducir mermas y encontrar rutas óptimas. |
@@ -62,7 +63,23 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 <details>
 <summary><strong>FR-01 a FR-06: Base Implementada (US-01 a US-05 y Panel)</strong></summary>
 
-### FR-01: Gestión de BOM (US-01)
+### FR-01:<details open>
+<summary><strong>FR-09: Supervisión del Desempeño de Planta, OEE, Alarmas, Reportes y Permisos (US-08)</strong></summary>
+
+**US-01 (Jefa de Planta)**: Como Jefa de Planta, quiero consultar en un solo lugar la carga de cada centro de trabajo, el OEE, las paradas acumuladas y el cumplimiento de órdenes (por día, semana o mes), recibir alertas cuando un indicador cae bajo su umbral crítico y reprogramar o cancelar órdenes desde la misma vista, para mantener una visión global del desempeño de la planta y decidir en minutos.
+
+- **Carga y capacidad**: Mostrar la carga por centro de trabajo contra `capacity_per_day_minutes` ajustada por `efficiency_factor`, destacando los centros sobre el 100%.
+- **OEE derivado**: Calcular el OEE (Disponibilidad × Rendimiento × Calidad) por centro y período (diario, semanal, mensual), derivado de `planned_time_minutes`, `actual_time_minutes`, `operation_delays`, `quantity_completed` y `scrap_quantity`; no se persiste.
+- **Paradas acumuladas**: Resumir las paradas acumuladas por centro y motivo (`delay_reasons`), ordenadas de mayor a menor, sin atribuirlas a personas.
+- **Umbrales y alarmas**: Configurar umbrales críticos por indicador (ej. rendimiento < 75%), mostrar alarmas visibles y conservar los umbrales en el snapshot `erp.manufacturing.v1`.
+- **Gestión de órdenes**: Filtrar órdenes por `status` y `priority`, cambiar la prioridad de órdenes `planned` y cancelar órdenes con confirmación explícita, conservando los registros de ejecución.
+- **Centros desactivados**: Bloquear la programación de órdenes nuevas sobre centros de trabajo desactivados.
+- **Exportación**: Exportar el reporte consolidado del período (OEE, paradas, cumplimiento y alarmas activas) en PDF y Excel, generado localmente con datos mock.
+- **Permisos por rol**: Definir permisos por rol (Jefa de Planta, Planificador, Operador) con un selector de rol simulado, sin autenticación real; la interfaz oculta o bloquea las acciones no permitidas.
+- **Ética de datos**: Agregar siempre por centro de trabajo y operación, sin ranking entre operadores; todo detalle por persona lleva la etiqueta *solo contexto operativo — no evaluación de desempeño*.
+- **Rendimiento**: Responder en menos de 100 ms con el dataset de volumen (500 órdenes, BOM de 4 niveles).
+
+</details>
 - Crear/ver BOM por producto terminado con `base_quantity > 0`, `version`, `effective_from`.
 - Añadir componentes con `quantity_per_unit > 0`, unidad y merma. Rechazar duplicados (`UNIQUE (bom_id, component_product_id)`).
 - Visualizar árbol multi-nivel (≥4 niveles), distinguir sub-ensamble vs. material.
@@ -128,23 +145,6 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 
 </details>
 
-<details open>
-<summary><strong>FR-09: Supervisión del Desempeño de Planta, OEE, Alarmas, Reportes y Permisos (US-08)</strong></summary>
-
-**US-08 (Jefa de Planta)**: Como Jefa de Planta, quiero consultar en un solo lugar la carga de cada centro de trabajo, el OEE, las paradas acumuladas y el cumplimiento de órdenes (por día, semana o mes), recibir alertas cuando un indicador cae bajo su umbral crítico y reprogramar o cancelar órdenes desde la misma vista, para mantener una visión global del desempeño de la planta y decidir en minutos.
-
-- **Carga y capacidad**: Mostrar la carga por centro de trabajo contra `capacity_per_day_minutes` ajustada por `efficiency_factor`, destacando los centros sobre el 100%.
-- **OEE derivado**: Calcular el OEE (Disponibilidad × Rendimiento × Calidad) por centro y período (diario, semanal, mensual), derivado de `planned_time_minutes`, `actual_time_minutes`, `operation_delays`, `quantity_completed` y `scrap_quantity`; no se persiste.
-- **Paradas acumuladas**: Resumir las paradas acumuladas por centro y motivo (`delay_reasons`), ordenadas de mayor a menor, sin atribuirlas a personas.
-- **Umbrales y alarmas**: Configurar umbrales críticos por indicador (ej. rendimiento < 75%), mostrar alarmas visibles y conservar los umbrales en el snapshot `erp.manufacturing.v1`.
-- **Gestión de órdenes**: Filtrar órdenes por `status` y `priority`, cambiar la prioridad de órdenes `planned` y cancelar órdenes con confirmación explícita, conservando los registros de ejecución.
-- **Centros desactivados**: Bloquear la programación de órdenes nuevas sobre centros de trabajo desactivados.
-- **Exportación**: Exportar el reporte consolidado del período (OEE, paradas, cumplimiento y alarmas activas) en PDF y Excel, generado localmente con datos mock.
-- **Permisos por rol**: Definir permisos por rol (Jefa de Planta, Planificador, Operador) con un selector de rol simulado, sin autenticación real; la interfaz oculta o bloquea las acciones no permitidas.
-- **Ética de datos**: Agregar siempre por centro de trabajo y operación, sin ranking entre operadores; todo detalle por persona lleva la etiqueta *solo contexto operativo — no evaluación de desempeño*.
-- **Rendimiento**: Responder en menos de 100 ms con el dataset de volumen (500 órdenes, BOM de 4 niveles).
-
-</details>
 
 <details open>
 <summary><strong>FR-10: Gestión de Mantenimiento y Disponibilidad de Máquinas (US-09 / HU-06)</strong></summary>
@@ -172,22 +172,22 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 | AC-01 | Árbol BOM multi-nivel con ≥4 niveles y ciclo detectado | Implementado |
 | AC-02 | Ruta con secuencia estrictamente creciente y tiempo estándar calculado | Implementado |
 | AC-03 | Liberación congela BOM/ruta y genera operaciones; MTO/stock soportado | Implementado |
-| AC-04 | Máquinas de estados validadas; rechazo de transiciones inversas | Implementado |
-| AC-05 | Ejecución con tiempos reales; avance automático del estado de orden | Implementado |
-| AC-06 | Consumo teórico vs. real con flags de discrepancia; uso no planificado permitido | Implementado |
-| AC-07 | Salida con merma, salidas parciales, inventario simulado actualizado | Implementado |
-| AC-08 | Panel con KPIs y utilización por centro de trabajo | Implementado |
-| AC-09 | Calidad derivada desde `quality_inspections` (solo lectura) | Implementado |
-| AC-10 | Pruebas unitarias del dominio y del store pasan; build exitoso | Verificado |
-| AC-11 | Inicio/fin de la operación activa con un único botón alterno y confirmación, tiempo real registrado y sin doble cierre | Planificado |
-| AC-12 | Atrasos justificados con motivos predefinidos o personalizados; tiempo efectivo pausado y cierre permitido con atraso abierto para corrección posterior | Planificado |
-| AC-13 | Dos contadores de piezas (turno y acumulado) incrementables, ajustables y validados; totales conservados al finalizar y recargar | Planificado |
-| AC-14 | Semáforo en vivo por línea/máquina (*En operación, En pausa, En fallo, Cambio de formato*) y registro de asignación de operario (`ext_hr_employee_id`) en `shift_assignments` (`tblSHIFT_ASSIGNMENTS`) | Planificado |
-| AC-15 | Aprobación de cierre de turno (`supervisor_validated = true`) tras verificar atrasos cerrados, y disparo de ticket urgente (`escalated_to_maint = true`) hacia `maintenance_tickets` (`tblMAINTENANCE_TICKETS`) pasando la máquina a *En fallo* | Planificado |
-| AC-16 | Tablero de carga por centro con OEE (Disponibilidad × Rendimiento × Calidad) y paradas acumuladas por período, derivados y no persistidos | Planificado |
-| AC-17 | Umbrales de alarma configurables, persistidos en el snapshot y evaluados de inmediato | Planificado |
-| AC-18 | Reprogramación de prioridad y cancelación con confirmación, conservando registros de ejecución | Planificado |
-| AC-19 | Exportación del reporte consolidado a PDF y Excel, y permisos por rol simulados | Planificado |
+| AC-04 | Tablero de carga por centro con OEE (Disponibilidad × Rendimiento × Calidad) y paradas acumuladas por período, derivados y no persistidos | Planificado |
+| AC-05 | Umbrales de alarma configurables, persistidos en el snapshot y evaluados de inmediato | Planificado |
+| AC-06 | Reprogramación de prioridad y cancelación con confirmación, conservando registros de ejecución | Planificado |
+| AC-07 | Exportación del reporte consolidado a PDF y Excel, y permisos por rol simulados | Planificado |
+| AC-08 | Máquinas de estados validadas; rechazo de transiciones inversas | Implementado |
+| AC-09 | Ejecución con tiempos reales; avance automático del estado de orden | Implementado |
+| AC-10 | Consumo teórico vs. real con flags de discrepancia; uso no planificado permitido | Implementado |
+| AC-11 | Salida con merma, salidas parciales, inventario simulado actualizado | Implementado |
+| AC-12 | Panel con KPIs y utilización por centro de trabajo | Implementado |
+| AC-13 | Calidad derivada desde `quality_inspections` (solo lectura) | Implementado |
+| AC-14 | Pruebas unitarias del dominio y del store pasan; build exitoso | Verificado |
+| AC-15 | Inicio/fin de la operación activa con un único botón alterno y confirmación, tiempo real registrado y sin doble cierre | Planificado |
+| AC-16 | Atrasos justificados con motivos predefinidos o personalizados; tiempo efectivo pausado y cierre permitido con atraso abierto para corrección posterior | Planificado |
+| AC-17 | Dos contadores de piezas (turno y acumulado) incrementables, ajustables y validados; totales conservados al finalizar y recargar | Planificado |
+| AC-18 | Semáforo en vivo por línea/máquina (*En operación, En pausa, En fallo, Cambio de formato*) y registro de asignación de operario (`ext_hr_employee_id`) en `shift_assignments` (`tblSHIFT_ASSIGNMENTS`) | Planificado |
+| AC-19 | Aprobación de cierre de turno (`supervisor_validated = true`) tras verificar atrasos cerrados, y disparo de ticket urgente (`escalated_to_maint = true`) hacia `maintenance_tickets` (`tblMAINTENANCE_TICKETS`) pasando la máquina a *En fallo* | Planificado |
 | AC-20 | Carga por centro destacada sobre la capacidad efectiva y bloqueo de programación en centros desactivados | Planificado |
 | AC-21 | Bandeja de tickets escalados con prioridad, estado, centro y evento de parada vinculado, ordenada por prioridad y antigüedad | Planificado |
 | AC-22 | Toma de intervención con técnico asignado y bloqueo de dos intervenciones simultáneas sobre el mismo centro de trabajo | Planificado |
