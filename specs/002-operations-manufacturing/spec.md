@@ -95,7 +95,23 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 - Trazabilidad por orden: operaciones, consumo plan-vs-real, salida, calidad derivada.
 
 </details>
+<details open>
+<summary><strong>FR-09: Supervisión de Desempeño de Planta, OEE, Alarmas, Reportes y Permisos (US-08)</strong></summary>
 
+**US-08 (Jefa de Planta)**: Como Jefa de Planta, quiero consultar en un solo lugar la carga de cada centro de trabajo, el OEE, las paradas acumuladas y el cumplimiento de órdenes (por día, semana o mes), recibir alertas cuando un indicador cae bajo su umbral crítico y reprogramar o cancelar órdenes desde la misma vista, para mantener una visión global del desempeño de la planta y decidir en minutos.
+
+- Mostrar la carga por centro de trabajo contra `capacity_per_day_minutes` ajustada por `efficiency_factor`, destacando los centros sobre el 100%.
+- Calcular el OEE (Disponibilidad × Rendimiento × Calidad) por centro y período (diario, semanal, mensual), derivado de `planned_time_minutes`, `actual_time_minutes`, `operation_delays`, `quantity_completed` y `scrap_quantity`; no se persiste.
+- Resumir las paradas acumuladas por centro y motivo (`delay_reasons`), ordenadas de mayor a menor, sin atribuirlas a personas.
+- Configurar umbrales críticos por indicador (ej. rendimiento < 75%), mostrar alarmas visibles y conservar los umbrales en el snapshot `erp.manufacturing.v1`.
+- Filtrar órdenes por `status` y `priority`, cambiar la prioridad de órdenes `planned` y cancelar órdenes con confirmación explícita, conservando los registros de ejecución.
+- Bloquear la programación de órdenes nuevas sobre centros de trabajo desactivados.
+- Exportar el reporte consolidado del período (OEE, paradas, cumplimiento y alarmas activas) en PDF y Excel, generado localmente con datos mock.
+- Definir permisos por rol (Jefa de Planta, Planificador, Operador) con un selector de rol simulado, sin autenticación real; la interfaz oculta o bloquea las acciones no permitidas.
+- Agregar siempre por centro de trabajo y operación, sin ranking entre operadores; todo detalle por persona lleva la etiqueta *solo contexto operativo — no evaluación de desempeño*.
+- Responder en menos de 100 ms con el dataset de volumen (500 órdenes, BOM de 4 niveles).
+
+</details>
 <details open>
 <summary><strong>FR-07: Registro de Turno del Operador (US-06 / HU-05)</strong></summary>
 
