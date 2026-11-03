@@ -2,6 +2,14 @@
 
 # ERP Software Base Module (Vite + Vanilla JS)
 
+Integrantes del grupo: 
+  Trujillo Peñaloza Julián Alberto (@JualTrupe)
+  Rivas Merino Sebastián Matías (@SebastianRivasprg)
+  Espinoza Sepúlveda Carlos Gonzalo (@carlos-277)
+  Concha Barra Maite Valentina (@maiteval)
+  Mogster Carrasco Maximiliano (@maximilianMC)
+  Durán Lara Liang Giuliana Martina (@Lia-dl)
+
 Minimal single-page app serving as an Enterprise Resource Planning (ERP) software base module. It provides the common foundation for building custom ERP modules: master data management (Entities) and linked transactional documents (Documents) with create/edit/delete/search, validation, and browser localStorage persistence — using Vite and vanilla HTML, CSS, and JavaScript.
 
 The user interface is fully in **Spanish** (default terms: Entidad / Documento; module name: Módulo Base ERP), including labels, validation messages, empty states, and dialogs.
