@@ -164,6 +164,18 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 
 </details>
 
+
+<details open>
+<summary><strong>FR-11: Balance de líneas (US-10)</strong></summary>
+
+**US-10**: Como Ingeniero de Producción, quiero consultar la utilización y la carga proyectada de cada centro de trabajo frente a su capacidad nominal, para identificar cuellos de botella, balancear la línea de producción, maximizar la eficiencia global de la línea y diseñar y optimizar las rutas de trabajo.
+
+- Analizar los tiempos estándar: Medir y determinar los tiempos teóricos de cada preparación para cada paso de la fabricación
+- Identificar cuellos de botella: Evaluar que estaciones o que máquinas tardan más tiempo en procesar un lote, detectando el punto crítico que limita la velocidad de la planta.
+- Optimizar las rutas de trabajo: Reorganiza la secuencia de las tareas y reasigna actividades entre los centros de trabajo para nivelar la carga de trabajo.
+- Calcular y monitorear la capacidad nominal: Compara la demanda planificada frente a capacidad máxima diaria y el factor de eficiencia de cada centro de trabajo.
+- Maximizar la eficiencia: Ajusta la asignación de recursos y personal para reducir los tiempos muertos, reducir costos operativos y maximizar la tasa de salida de productos terminados.
+
 ## 5. Criterios de Aceptación
 
 | ID | Criterio | Estado |
