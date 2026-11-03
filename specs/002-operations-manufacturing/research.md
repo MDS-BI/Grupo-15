@@ -85,3 +85,66 @@ La spec incorporó US-06: el operador inicia y finaliza la operación activa con
 | ¿Cómo se prueba? | Unitarias de dominio/store + integración jsdom (D-09). |
 
 No quedan incógnitas bloqueantes para la Fase 1.
+
+---
+
+## 4. Investigación US-09 — Mantenimiento (Fase 0 incremental)
+
+**Entrada**: [spec.md](spec.md) (FR-10 / US-09 / AC-21…AC-27), [data-model.md](data-model.md) §3.19–3.20.
+**Restricción**: no modificar el comportamiento de los módulos existentes; solo extensiones aditivas.
+
+### D-10 — Ciclo de vida del ticket correctivo sin reapertura
+
+- **Decisión**: `open → in_progress → resolved`. Un ticket `resolved` es terminal; una nueva incidencia genera un ticket nuevo (con `operation_delay_id` o descripción propia) que puede referenciar al anterior en notas. La bandeja ordena por `priority` (urgent → high → normal) y luego por antigüedad.
+- **Razón**: preserva trazabilidad append-only, evita reescribir historia y hace idempotente el escalamiento.
+- **Alternativas descartadas**: permitir reapertura (borra el histórico de la intervención); reutilizar el mismo ticket para fallos distintos (mezcla causas y tiempos).
+
+### D-11 — Una sola intervención activa por centro de trabajo
+
+- **Decisión**: como máximo un ticket `in_progress` por `work_center_id`. La acción de tomar una intervención valida esta regla dentro de la misma transacción del store.
+- **Razón**: una máquina no puede estar en dos reparaciones simultáneas; evita duplicar tiempos de parada y descuadrar la disponibilidad.
+- **Alternativas descartadas**: permitir varias intervenciones simultáneas (solapa paradas y sesga el OEE); bloquear por técnico (el cuello de botella es la máquina).
+
+### D-12 — Tiempo de parada derivado de marcas de tiempo
+
+- **Decisión**: `downtime_minutes` se calcula al resolver con `downtime_ended_at − downtime_started_at` y se persiste como valor inmutable del ticket. La UI muestra el tiempo transcurrido mientras el ticket está `in_progress`, pero no lo escribe hasta el cierre.
+- **Razón**: una sola fuente de verdad para US-08 (OEE/paradas) y resistencia a recargas; no depende de intervalos en memoria.
+- **Alternativas descartadas**: cronómetro acumulativo en el cliente (se desincroniza al recargar); calcular la parada en US-08 a partir de `operation_delays` (no distingue parada técnica de otros atrasos).
+
+### D-13 — Restablecimiento de la disponibilidad al resolver
+
+- **Decisión**: al resolver, el centro sale de `fault` según el estado real de la operación activa: `in_operation` si hay operación `in_progress`, `paused` si la operación quedó pausada y disponible si no hay operación activa. La transición se deriva, no se fuerza desde la UI.
+- **Razón**: evita dejar máquinas atascadas en `fault` y mantiene coherencia con US-06/US-07.
+- **Alternativas descartadas**: fijar siempre `in_operation` (miente si la operación sigue pausada); dejar que el usuario elija el estado (introduce inconsistencia).
+
+### D-14 — Desgaste y preventivas derivados del historial
+
+- **Decisión**: el indicador de desgaste (frecuencia de fallos y paradas acumuladas por período) se calcula bajo demanda y no se persiste. `createPreventiveMaintenanceOrder` puede partir de ese indicador y de un `source_ticket_id`; la orden nace en `planned`.
+- **Razón**: evita métricas almacenadas que se desactualizan y permite justificar la preventiva con datos reales.
+- **Alternativas descartadas**: persistir un score de desgaste (mantenimiento y deriva); generar preventivas automáticamente sin confirmación (quita control al planificador).
+
+### D-15 — Persistencia: snapshot `v2` con migración desde `v1`
+
+- **Decisión**: las nuevas colecciones (`maintenanceTickets`, `preventiveMaintenanceOrders`) viven en `erp.manufacturing.v2`. Al hidratar, un snapshot `v1` válido se migra inicializando ambas colecciones vacías y se reescribe como `v2`; un snapshot inválido cae a fixtures con advertencia.
+- **Razón**: el estado existente de US-01…US-08 se conserva y el cambio de forma queda explícito y verificable.
+- **Alternativas descartadas**: mantener `v1` con colecciones opcionales (oculta el cambio y complica la validación); clave separada solo para mantenimiento (rompe la unidad del snapshot y la transacción).
+
+### D-16 — Verificación de US-09
+
+- **Decisión**: unitarias de `src/domain/maintenance.js` (transiciones, guard de intervención única, cálculo de parada, desgaste, disponibilidad, idempotencia por `operation_delay_id`), unitarias del store (acciones, migración `v1 → v2`, inmutabilidad ante error) e integración jsdom del panel (bandeja → intervención → cierre → recarga; alta y transición de preventiva). Se ejecutan además las suites de regresión de US-01…US-08.
+- **Razón**: cumple el principio II y demuestra que las extensiones aditivas no alteran los módulos existentes.
+- **Alternativas descartadas**: solo pruebas manuales; pruebas E2E con navegador real (sin infraestructura en el repo).
+
+### Incógnitas resueltas (US-09)
+
+| Incógnita | Resolución |
+|---|---|
+| ¿Se puede reabrir un ticket? | No; nueva incidencia = ticket nuevo (D-10). |
+| ¿Varias reparaciones a la vez en una máquina? | No; máximo un ticket `in_progress` por centro (D-11). |
+| ¿De dónde sale el tiempo de parada? | De marcas de tiempo persistidas al resolver (D-12). |
+| ¿Qué pasa con la máquina al resolver? | La disponibilidad se deriva del estado de la operación activa (D-13). |
+| ¿Se persiste el desgaste? | No; se deriva del historial (D-14). |
+| ¿Cómo se preserva el estado existente? | Snapshot `v2` con migración desde `v1` (D-15). |
+| ¿Cómo se prueba sin tocar US-01…US-08? | Unitarias + integración jsdom + regresión (D-16). |
+
+No quedan incógnitas bloqueantes para la Fase 1 de US-09.

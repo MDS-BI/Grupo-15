@@ -10,7 +10,7 @@
 
 ## 1. Alcance del Módulo
 
-El Módulo de Operaciones / Manufactura modela el ciclo **planificado → ejecutado** de la producción: qué se debe fabricar (`bill_of_materials`, `routings`), cómo y dónde se fabrica (`work_centers`, `routing_operations`), qué se ordena (planned) y qué se ejecuta (actual) en la planta (`production_orders`, `production_order_operations`, `production_shifts`, `operation_delays`, `delay_reasons`, `material_consumption`, `production_output`).
+El Módulo de Operaciones / Manufactura modela el ciclo **planificado → ejecutado → mantenido** de la producción: qué se debe fabricar (`bill_of_materials`, `routings`), cómo y dónde se fabrica (`work_centers`, `routing_operations`), qué se ordena (planned) y qué se ejecuta (actual) en la planta (`production_orders`, `production_order_operations`, `production_shifts`, `operation_delays`, `delay_reasons`, `material_consumption`, `production_output`), incluyendo la gestión de mantenimiento correctivo y preventivo (`maintenance_tickets`, `preventive_maintenance_orders`).
 
 **Tablas de frontera (integración cruzada, no propias del módulo):**
 
@@ -30,6 +30,7 @@ El Módulo de Operaciones / Manufactura modela el ciclo **planificado → ejecut
 | **Maestros de planificación** | `bill_of_materials`, `bom_components`, `work_centers`, `routings`, `routing_operations` | Qué, con qué y dónde *debería* producirse. Definen el estándar/target. |
 | **Ejecución transaccional** | `production_orders`, `production_order_operations`, `production_shifts`, `operation_delays`, `material_consumption`, `production_output` | Qué se *ordenó* y qué *ocurrió realmente* en el piso de planta. |
 | **Catálogo de apoyo** | `delay_reasons` | Motivos reutilizables para justificar atrasos (predefinidos y personalizados). |
+| **Mantenimiento** | `maintenance_tickets`, `preventive_maintenance_orders` | Correctivos escalados desde piso y plan preventivo derivado del historial y desgaste de las máquinas. |
 
 **Pináculo de integración planificado ↔ ejecutado:**
 
@@ -346,6 +347,66 @@ Rol funcional: **atraso justificado** de una operación. Mientras está abierto 
 - Corregir un atraso abierto fija `ended_at`/`duration_minutes`, actualiza `corrected_at`/`corrected_by`/`correction_note`, y recalcula `delay_time_minutes` y `actual_time_minutes` de la operación.
 - Los atrasos son append-only: nunca se eliminan; una corrección deja rastro de auditoría.
 
+### 3.19 `maintenance_tickets` — Manufactura (mantenimiento correctivo, US-09)
+
+Rol funcional: **ticket correctivo** originado por un incidente escalado desde piso (US-07) o registrado manualmente por el Encargado de Mantenimiento. Traza la avería, la intervención y el tiempo real de parada que alimenta el OEE.
+
+| Columna | Tipo | PK/FK | Nullable | Restricciones |
+|---|---|---|---|---|
+| id | uuid | PK | No | — |
+| company_id | uuid | FK → companies.id | No | — |
+| ticket_code | string | — | No | único por empresa |
+| work_center_id | uuid | FK → work_centers.id | No | máquina/línea afectada |
+| po_operation_id | uuid | FK → production_order_operations.id | Sí | operación activa al momento del fallo |
+| operation_delay_id | uuid | FK → operation_delays.id | Sí | evento de parada que originó el ticket; **único cuando existe** (escalamiento idempotente) |
+| reported_by | uuid | FK → (usuarios/operadores) | Sí | **sensible**: quién reportó; ver §7 |
+| description | string | — | No | no vacío; síntoma reportado |
+| priority | enum | — | No | `urgent` \| `high` \| `normal`; el escalamiento de US-07 crea `urgent` |
+| ticket_status | enum | — | No | `open` \| `in_progress` \| `resolved` |
+| escalated_to_maint | boolean | — | No | `default true`; indica que proviene del escalamiento de US-07 |
+| technician_ext_hr_employee_id | string | — | Sí | puente de solo lectura a Recursos Humanos; obligatorio en `in_progress` y `resolved` |
+| intervention_started_at | timestamp | — | Sí | obligatorio en `in_progress` y `resolved` |
+| resolved_at | timestamp | — | Sí | obligatorio en `resolved`; ≥ `intervention_started_at` |
+| downtime_started_at | timestamp | — | Sí | inicio real de la parada técnica |
+| downtime_ended_at | timestamp | — | Sí | fin real de la parada técnica; ≥ `downtime_started_at` |
+| downtime_minutes | numeric(12,2) | — | Sí | ≥ 0; derivado de las marcas de tiempo; alimenta OEE |
+| cause_reason_id | uuid | FK → delay_reasons.id | Sí | causa clasificada del incidente |
+| resolution_notes | string | — | Sí | detalle del cierre de la intervención |
+
+**Reglas**
+- Un `operation_delay_id` genera como máximo un ticket cuando no es `NULL` (idempotencia del escalamiento).
+- `ticket_status = open` ⇒ `technician_ext_hr_employee_id`, `intervention_started_at` y `resolved_at` son `NULL`.
+- `ticket_status = in_progress` ⇒ técnico e `intervention_started_at` no nulos; `resolved_at` nulo. Como máximo un ticket `in_progress` por `work_center_id`.
+- `ticket_status = resolved` ⇒ `resolved_at`, `downtime_started_at`, `downtime_ended_at` y `downtime_minutes` no nulos; `downtime_ended_at ≥ downtime_started_at`.
+- Un ticket resuelto **no se reabre**: una nueva incidencia crea un ticket nuevo vinculado al mismo evento o a uno nuevo.
+- Los tickets son append-only; una corrección se registra como nuevo ticket o nota de auditoría, nunca borrando el original.
+
+### 3.20 `preventive_maintenance_orders` — Manufactura (mantenimiento preventivo, US-09)
+
+Rol funcional: **orden de mantenimiento preventivo** programada a partir del historial de fallos y del indicador derivado de desgaste de una máquina. No reemplaza ni reabre tickets correctivos.
+
+| Columna | Tipo | PK/FK | Nullable | Restricciones |
+|---|---|---|---|---|
+| id | uuid | PK | No | — |
+| company_id | uuid | FK → companies.id | No | — |
+| order_code | string | — | No | único por empresa |
+| work_center_id | uuid | FK → work_centers.id | No | máquina objetivo |
+| source_ticket_id | uuid | FK → maintenance_tickets.id | Sí | ticket de desgaste que sustenta la orden |
+| title | string | — | No | no vacío; descripción breve de la preventiva |
+| planned_date | date | — | No | fecha objetivo de ejecución |
+| status | enum | — | No | `planned` \| `in_progress` \| `completed` \| `cancelled` |
+| technician_ext_hr_employee_id | string | — | Sí | puente de solo lectura a Recursos Humanos |
+| completed_at | timestamp | — | Sí | obligatorio en `completed` |
+| downtime_minutes | numeric(12,2) | — | Sí | ≥ 0; parada técnica real de la preventiva |
+| notes | string | — | Sí | observaciones del planificador/técnico |
+
+**Reglas**
+- Transiciones permitidas: `planned → in_progress → completed`; `cancelled` alcanzable solo desde `planned` o `in_progress`.
+- `status = completed` ⇒ `completed_at` no nulo.
+- Una orden preventiva no reabre ni reemplaza el `source_ticket_id`; este se conserva como trazabilidad.
+- El **indicador de desgaste** que justifica la orden es derivado (frecuencia de fallos, paradas acumuladas por período) y **no se persiste**.
+- Las órdenes preventivas son append-only en su historial: los cambios de estado se registran con marcas de tiempo.
+
 ---
 
 ## 4. Relaciones y Cardinalidades
@@ -376,6 +437,14 @@ Rol funcional: **atraso justificado** de una operación. Mientras está abierto 
 | delay_reasons → operation_delays | 1:N | motivo reutilizable aplicado a muchos atrasos |
 | companies → delay_reasons | 1:N | catálogo de motivos por empresa |
 | production_shifts → delay_reasons (`production_shift_id`) | 1:N (nullable) | motivos personalizados creados en el turno |
+| companies → maintenance_tickets | 1:N | aislamiento multiempresa de tickets correctivos |
+| work_centers → maintenance_tickets (`work_center_id`) | 1:N | tickets correctivos de una máquina/línea |
+| production_order_operations → maintenance_tickets (`po_operation_id`) | 1:N (nullable) | operación activa al escalar el incidente |
+| operation_delays → maintenance_tickets (`operation_delay_id`) | 1:1 (nullable) | un evento de parada escalado genera como máximo un ticket |
+| delay_reasons → maintenance_tickets (`cause_reason_id`) | 1:N (nullable) | causa clasificada del ticket |
+| companies → preventive_maintenance_orders | 1:N | aislamiento multiempresa del plan preventivo |
+| work_centers → preventive_maintenance_orders (`work_center_id`) | 1:N | plan preventivo por máquina |
+| maintenance_tickets → preventive_maintenance_orders (`source_ticket_id`) | 1:N (nullable) | tickets de desgaste que sustentan órdenes preventivas |
 
 `companies`, `units_of_measure` y `warehouses` aparecen como destinos FK (`1:N` cada uno) desde las tablas operativas que los referencian.
 
@@ -428,6 +497,15 @@ erDiagram
 
     production_orders ||--o{ quality_inspections : "inspected_by"
     production_order_operations ||--o{ quality_inspections : "inspected_by"
+
+    companies ||--o{ maintenance_tickets : "owns"
+    work_centers ||--o{ maintenance_tickets : "has_failures"
+    production_order_operations ||--o{ maintenance_tickets : "escalated_from"
+    operation_delays ||--o| maintenance_tickets : "escalates_to"
+    delay_reasons ||--o{ maintenance_tickets : "caused_by"
+    companies ||--o{ preventive_maintenance_orders : "owns"
+    work_centers ||--o{ preventive_maintenance_orders : "plans"
+    maintenance_tickets ||--o{ preventive_maintenance_orders : "justifies"
 
     companies {
         uuid id PK
@@ -574,6 +652,32 @@ erDiagram
         uuid po_operation_id FK
         enum status
     }
+    maintenance_tickets {
+        uuid id PK
+        uuid company_id FK
+        string ticket_code
+        uuid work_center_id FK
+        uuid po_operation_id FK
+        uuid operation_delay_id FK
+        enum priority
+        enum ticket_status
+        boolean escalated_to_maint
+        string technician_ext_hr_employee_id
+        timestamp intervention_started_at
+        timestamp resolved_at
+        numeric downtime_minutes
+    }
+    preventive_maintenance_orders {
+        uuid id PK
+        uuid company_id FK
+        string order_code
+        uuid work_center_id FK
+        uuid source_ticket_id FK
+        date planned_date
+        enum status
+        timestamp completed_at
+        numeric downtime_minutes
+    }
 ```
 
 ---
@@ -610,6 +714,19 @@ erDiagram
 
 **Indicadores derivados (no persistidos, calculados en UI):** *Yield* = `SUM(quantity_produced) / quantity_planned`; *Scrap rate* = `scrap_quantity / (quantity_produced + scrap_quantity)`; *Consumption variance* = (`quantity_consumed` − `quantity_planned × quantity_per_unit`) / teórico.
 
+### 6.4 Mantenimiento y disponibilidad
+
+| Variable | Tabla | Significado en el negocio |
+|---|---|---|
+| `ticket_status` | `maintenance_tickets` | Estado del ciclo correctivo (`open → in_progress → resolved`); gobierna la bandeja y la disponibilidad de la máquina. |
+| `priority` | `maintenance_tickets` | Orden de atención; el escalamiento desde piso entra como `urgent`. |
+| `downtime_minutes` | `maintenance_tickets` | Parada real de la máquina por avería; alimenta OEE y paradas acumuladas de US-08. |
+| `intervention_started_at` / `resolved_at` | `maintenance_tickets` | Marcas de la intervención; permiten calcular el tiempo de respuesta y el tiempo de reparación. |
+| `planned_date` | `preventive_maintenance_orders` | Fecha objetivo de la preventiva; base del calendario de mantenimiento. |
+| `downtime_minutes` | `preventive_maintenance_orders` | Parada real de la preventiva; se distingue de la correctiva en los análisis de disponibilidad. |
+
+**Indicadores derivados (no persistidos):** *Desgaste de la máquina* = frecuencia de fallos y paradas acumuladas por período; *Tiempo medio de reparación (MTTR)* = promedio de `downtime_minutes` de tickets resueltos; *Disponibilidad* = 1 − (paradas de mantenimiento / tiempo planificado). El desgaste es un indicador de contexto operativo, no una evaluación de personas.
+
 ---
 
 ## 7. Ética de Datos, Privacidad y Gestión de Sesgos
@@ -631,6 +748,16 @@ erDiagram
 - **Discrepancias de inventario**: la conciliación `bom_components` (teórico) vs. `material_consumption` (real) vs. movimiento de `warehouses` debe ser visible y trazable; se prohíbe ajustar cantidades silenciosamente. Toda corrección se modela como un nuevo registro con justificación, preservando la historia.
 - **Sesgo de reporte**: si los operadores perciben que reportar merma los penaliza, subreportarán. La política de UX debe desacoplar el reporte de merma del desempeño individual (ver §7.1).
 
+### 7.3 Mantenimiento: contexto de máquina, no vigilancia del técnico
+
+`maintenance_tickets.technician_ext_hr_employee_id`, `intervention_started_at` y `resolved_at` permiten medir tiempos de respuesta y reparación. Riesgos y controles:
+
+- **Riesgo de sesgo:** usar los tiempos del técnico para rankear personas ignora la complejidad de la avería, la disponibilidad de repuestos y la carga simultánea de máquinas.
+- **Control de diseño:** los indicadores de mantenimiento se agregan por **máquina / centro de trabajo**; no se exponen rankings individuales de técnicos. Cualquier vista individual se etiqueta como "solo contexto operacional".
+- **Minimización:** el vínculo con RR.HH. se limita a un identificador de solo lectura; no se duplican datos personales en el módulo.
+- **Transparencia:** el registro de tiempos se presenta como trazabilidad de la intervención y de la disponibilidad de la planta, no como evaluación de desempeño.
+- **Reporte de fallos:** `reported_by` no debe usarse para penalizar a quien reporta; reportar una avería es un acto de seguridad operativa y se desacopla del desempeño individual.
+
 ---
 
 ## 8. Reglas de Validación Consolidadas
@@ -649,3 +776,10 @@ erDiagram
 - `delay_reasons`: `label` no vacío y único por empresa sin distinguir mayúsculas; `predefined ⇒ scope = global`; `custom ⇒ scope = shift` con `production_shift_id` obligatorio.
 - `production_order_operations.quantity_completed` y `production_shifts.quantity_counted` rechazan valores negativos o no numéricos; se conserva el último valor válido.
 - `production_order_operations.actual_time_minutes ≥ 0` y se recalcula al corregir atrasos; `completed_at` se fija una sola vez (sin doble cierre).
+- `maintenance_tickets.operation_delay_id`: único cuando no es `NULL`; un evento de parada no puede originar dos tickets.
+- `maintenance_tickets`: como máximo un ticket `in_progress` por `work_center_id`; `ticket_status = in_progress` ⇒ técnico e `intervention_started_at` no nulos.
+- `maintenance_tickets.ticket_status = resolved` ⇒ `resolved_at`, `downtime_started_at`, `downtime_ended_at` y `downtime_minutes` no nulos; `resolved_at ≥ intervention_started_at`; `downtime_ended_at ≥ downtime_started_at`; `downtime_minutes ≥ 0`.
+- `maintenance_tickets`: un ticket `resolved` no se reabre ni se elimina; una nueva incidencia genera un ticket nuevo.
+- `maintenance_tickets.priority` restringido a `urgent | high | normal`; el escalamiento de US-07 crea `urgent` y `escalated_to_maint = true`.
+- `preventive_maintenance_orders.status`: transiciones permitidas `planned → in_progress → completed`; `cancelled` solo desde `planned` o `in_progress`; `completed` ⇒ `completed_at` no nulo; `downtime_minutes ≥ 0`.
+- `preventive_maintenance_orders` no reabre ni reemplaza su `source_ticket_id`; el ticket de origen se conserva como trazabilidad.

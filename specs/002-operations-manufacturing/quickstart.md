@@ -100,3 +100,45 @@ El módulo es frontend-only: no requiere backend ni variables de entorno. Los da
 - **No aparece el botón `Finalizar`**: la operación no está `in_progress` o ya fue cerrada; recargue y revise el estado persistido.
 - **Los motivos personalizados no aparecen**: solo son visibles dentro del turno que los creó; abra el turno correcto o use un motivo predefinido.
 - **Pruebas lentas o en watch**: use `npm test -- --run` para una pasada única.
+
+---
+
+## 8. Flujo de mantenimiento (US-09)
+
+> El estado de mantenimiento se persiste en `erp.manufacturing.v2`. Un snapshot `v1` existente se migra automáticamente conservando el estado de US-01…US-08.
+
+1. **Entrada del ticket**: desde supervisión (US-07), escale un incidente de máquina. Verifique que aparece en la **bandeja de mantenimiento** con prioridad `urgent`.
+2. **Bandeja**: confirme el orden por prioridad (`urgent` → `high` → `normal`) y, a igual prioridad, por antigüedad. Pruebe los filtros por estado, prioridad y centro.
+3. **Tomar intervención**: abra un ticket `open` y asígnelo a un técnico. El ticket pasa a `in_progress`, se registra `intervention_started_at` y el centro queda en `fault`.
+4. **Bloqueo por centro**: intente tomar otro ticket de la misma máquina mientras hay uno `in_progress`; debe rechazarse sin mutar estado.
+5. **Historial y desgaste**: abra el historial de la máquina y confirme que lista tickets resueltos y muestra un indicador de desgaste agregado, etiquetado *solo contexto operativo*.
+6. **Resolver**: cierre la intervención indicando marcas de parada y causa. Verifique:
+   - `downtime_minutes` calculado y mostrado antes de confirmar;
+   - ticket en `resolved` y sin posibilidad de reapertura;
+   - la máquina sale de `fault` según el estado real de la operación activa.
+7. **Orden preventiva**: programe una preventiva desde el historial con fecha objetivo. Confirme que nace en `planned` y que puede pasar a `in_progress` y `completed`.
+8. **Persistencia**: recargue la página y confirme que tickets, marcas de tiempo y órdenes preventivas se rehidratan.
+
+---
+
+## 9. Mapa de criterios de aceptación (US-09)
+
+| AC | Verificación |
+|---|---|
+| AC-21 | Paso 2: bandeja priorizada y filtrable. |
+| AC-22 | Pasos 3 y 4: toma de intervención y bloqueo por centro. |
+| AC-23 | Paso 5: historial y desgaste agregado. |
+| AC-24 | Paso 6: cierre con tiempo real y disponibilidad restablecida. |
+| AC-25 | Paso 6: ticket resuelto sin reapertura; nueva incidencia crea ticket nuevo. |
+| AC-26 | Paso 8: persistencia y migración `v1 → v2`. |
+| AC-27 | Paso 5: indicadores por máquina, sin rankings de técnicos. |
+
+---
+
+## 10. Solución de problemas (US-09)
+
+- **No aparece el ticket escalado**: confirme que el escalamiento de US-07 fijó `escalated_to_maint = true` y que el `operation_delay_id` no generó ya un ticket.
+- **No se puede tomar la intervención**: el centro ya tiene un ticket `in_progress` o el ticket no está `open`.
+- **La máquina sigue en `fault`**: el ticket aún no está `resolved` o la operación activa quedó en un estado inesperado; revise la operación y vuelva a resolver.
+- **El estado vuelve a fixtures**: el snapshot `v2` puede estar corrupto o tener otra versión; revise la consola y la advertencia de arranque.
+- **Faltan datos tras actualizar**: un snapshot `v1` se migra solo si es válido; si el JSON estaba corrupto, se cargan fixtures intencionalmente.

@@ -465,3 +465,217 @@ tests/
 | Versioned `localStorage` snapshot | US-06 requires state, times, delays and counters to survive reload/lost session. | In-memory only loses the shift on reload; `sessionStorage` loses it on tab close; IndexedDB is overkill for one demo snapshot. |
 
 No other constitution violations.
+
+---
+
+# 9. Plan Técnico Incremental — US-09 (Mantenimiento)
+
+**Alcance**: exclusivamente FR-10 / US-09 / HU-06 y sus criterios AC-21…AC-27. No reabre ni rediseña las historias US-01…US-08.
+
+## 9.1 Alcance y no objetivos
+
+**Incluye**
+- Bandeja de tickets correctivos escalados desde piso (`maintenance_tickets`), ordenados por prioridad y antigüedad.
+- Toma de intervención con técnico asignado y transición `open → in_progress`.
+- Historial operativo por máquina y un indicador **derivado** de desgaste/frecuencia de fallos.
+- Programación de órdenes de mantenimiento preventivo (`preventive_maintenance_orders`).
+- Registro del tiempo real de parada técnica al cerrar la intervención.
+- Resolución del ticket y **restablecimiento de la disponibilidad** del centro de trabajo.
+- Persistencia y rehidratación de todo el estado de mantenimiento.
+
+**No objetivos**
+- No se modifica el comportamiento, los contratos ni la UI de BOM, rutas, órdenes, ejecución, consumo, turno del operador, supervisión ni panel de planta.
+- No hay mantenimiento predictivo con modelos, gestión de repuestos, costos de mantenimiento ni integración con un CMMS real.
+- No hay backend, autenticación real ni firma electrónica del técnico.
+
+**Regla de aislamiento**: los módulos existentes no se editan. El plan solo **añade** archivos nuevos y extensiones aditivas a la infraestructura compartida (typedefs, colecciones del store, snapshot, ruta de la vista y estilos). Las pruebas de regresión de US-01…US-08 deben seguir pasando sin cambios de comportamiento.
+
+## 9.2 Contexto técnico (US-09)
+
+| Aspecto | Decisión |
+|---|---|
+| **Lenguaje / runtime** | JavaScript ES2022, navegador y Node para pruebas. |
+| **Framework / UI** | Vanilla JS con plantillas de string y `EventTarget`; shell reutilizado de `001-erp-base-module`. |
+| **Build / pruebas** | Vite 8 + Vitest 4 con `jsdom`. |
+| **Estado** | Extensión aditiva de `ManufacturingStore` (nuevas colecciones, consultas y acciones); ninguna acción existente cambia de firma ni de efecto. |
+| **Persistencia** | Snapshot versionado en `localStorage`. Se pasa a `erp.manufacturing.v2` con migración desde `v1`; las nuevas colecciones arrancan vacías si no existen. |
+| **Integración de entrada** | US-07 (escalamiento) crea el ticket en `maintenance_tickets`; US-09 lo consume de forma reactiva. Contrato de admisión en [contracts/maintenance.md](contracts/maintenance.md). |
+| **Integración de salida** | US-08 consume los tiempos de parada y los tickets resueltos en modo solo lectura para OEE y paradas acumuladas. |
+| **Puente RR.HH.** | Técnico asignado por `technician_ext_hr_employee_id` (mismo puente que `shift_assignments`). |
+| **Rendimiento** | Interacciones < 100 ms con 500 órdenes y un histórico de tickets acotado por período. |
+| **Plataforma** | Navegador de escritorio moderno; diseño usable hasta ancho de tablet. |
+
+Incógnitas pendientes: ninguna. Las decisiones de diseño se documentan en [research.md](research.md) §4 (D-10…D-16).
+
+## 9.3 Flujo de datos
+
+```text
+US-07 Supervisor
+  └─ escalar incidente → operation_delays.escalated_to_maint = true
+                        → maintenance_tickets { ticket_status: open, priority: urgent }
+
+US-09 Encargado de Mantenimiento
+  ├─ bandeja de tickets (open/in_progress/resolved)
+  ├─ tomar intervención → in_progress + técnico + intervention_started_at
+  ├─ cerrar intervención → resolved + downtime_started_at/ended_at/downtime_minutes
+  │                        → work_center.operational_status fuera de "fault"
+  └─ programar preventiva → preventive_maintenance_orders { status: planned }
+
+US-08 Jefa de Planta (solo lectura)
+  └─ OEE y paradas acumuladas ← downtime_minutes + tickets resueltos
+```
+
+## 9.4 Modelo de datos y máquinas de estado
+
+Las entidades se definen en [data-model.md](data-model.md) §3.19 y §3.20:
+
+- **`maintenance_tickets`**: ticket correctivo con prioridad, estado, centro, evento de parada, técnico, marcas de intervención y tiempo real de parada.
+- **`preventive_maintenance_orders`**: orden preventiva con fecha objetivo, responsable, estado y tiempo real de parada.
+
+**Máquina de estados — ticket correctivo**
+
+```text
+open ──tomar──► in_progress ──resolver──► resolved
+```
+
+- No existe reapertura: una nueva incidencia genera un ticket nuevo vinculado al evento correspondiente.
+- `in_progress` exige técnico y `intervention_started_at`.
+- `resolved` exige `resolved_at`, marcas de parada y `downtime_minutes ≥ 0`.
+- Como máximo un ticket `in_progress` por `work_center_id`.
+- `operation_delay_id` es único cuando existe (escalamiento idempotente).
+
+**Máquina de estados — orden preventiva**
+
+```text
+planned ──iniciar──► in_progress ──completar──► completed
+   └────────cancelar────────► cancelled ◄──cancelar── in_progress
+```
+
+- `completed` exige `completed_at`.
+- Una preventiva no reabre ni reemplaza el ticket que la originó.
+
+**Disponibilidad del centro de trabajo al resolver**
+
+```text
+fault ──resolver ticket──► in_operation   (si existe operación activa in_progress)
+                       └─► paused         (si la operación estuvo pausada)
+                       └─► disponible     (sin operación activa)
+```
+
+La regla se deriva del estado real de la operación activa; nunca se deja el centro en `fault` sin un ticket abierto.
+
+## 9.5 Contratos de dominio, store y UI
+
+Contrato completo en [contracts/maintenance.md](contracts/maintenance.md).
+
+**Funciones puras** (`src/domain/maintenance.js`, nuevo)
+- `canStartIntervention(ticket, activeTicketsForWorkCenter)`.
+- `canResolveTicket(ticket)`.
+- `computeDowntimeMinutes(startedAt, endedAt)`.
+- `deriveWearIndicator(tickets, workCenterId, period)` — derivado, no persistido.
+- `resolveAvailabilityStatus(activeOperation, resolvedTicket)`.
+- `canTransitionPreventiveOrder(order, nextStatus)`.
+- `buildPreventiveOrderFromHistory(tickets, workCenterId, plannedDate)`.
+
+**Consultas del store**
+- `maintenanceTicketsFor({ status, priority, workCenterId })`.
+- `activeInterventionForWorkCenter(workCenterId)`.
+- `maintenanceHistoryForWorkCenter(workCenterId)`.
+- `preventiveOrdersFor({ status, workCenterId })`.
+- `maintenanceIndicatorsForWorkCenter(workCenterId, period)`.
+
+**Acciones del store** (aditivas, validan antes de mutar y emiten un único `change`)
+- `startMaintenanceIntervention(ticketId, { technician_ext_hr_employee_id })`.
+- `resolveMaintenanceTicket(ticketId, { resolvedAt, downtimeStartedAt, downtimeEndedAt, causeReasonId, notes })`.
+- `createPreventiveMaintenanceOrder({ workCenterId, sourceTicketId, plannedDate, title, technician_ext_hr_employee_id })`.
+- `transitionPreventiveMaintenanceOrder(orderId, nextStatus)`.
+- `cancelPreventiveMaintenanceOrder(orderId, { reason })`.
+
+**Contrato de UI** (`src/components/MaintenancePanel.js`, nuevo)
+- Sección 1: bandeja de tickets con filtros por estado/prioridad y orden por prioridad + antigüedad.
+- Sección 2: detalle de intervención (técnico, inicio, causa, notas, cierre).
+- Sección 3: historial y desgaste por máquina (agregado, con etiqueta *solo contexto operativo*).
+- Sección 4: órdenes preventivas (alta, transición de estado, cancelación).
+- Estados vacíos, de error y de carga consistentes con el resto del módulo; foco atrapado en diálogos y cierre con `Esc`.
+
+## 9.6 Persistencia y migración
+
+- **Snapshot**: `erp.manufacturing.v2`.
+- **Migración**: al hidratar, si existe `v1` se copia su contenido y se inicializan `maintenanceTickets = []` y `preventiveMaintenanceOrders = []`; se reescribe como `v2`. Si `v2` falta, está corrupto o es inválido, se cargan fixtures con advertencia visible.
+- **Escritura**: write-through tras cada mutación de mantenimiento, sin bloquear la UI.
+- **Rehidratación**: las marcas de tiempo y los cronómetros de intervención se recalculan desde `intervention_started_at`/`downtime_*`, nunca desde intervalos en memoria.
+- **Reset de demo**: elimina `v2` (y opcionalmente `v1`) y recarga fixtures.
+- No se altera la forma de las colecciones existentes; las nuevas son opcionales y tolerantes a ausencia.
+
+## 9.7 Estrategia de pruebas
+
+**Unidad — dominio** (`tests/unit/maintenance.test.js`)
+- Transiciones válidas e inválidas de ticket y orden preventiva.
+- Bloqueo de doble intervención por centro.
+- Cálculo de `downtime_minutes` y tolerancia de marcas de tiempo.
+- Derivación de desgaste y de disponibilidad al resolver.
+- Idempotencia del escalamiento por `operation_delay_id`.
+
+**Unidad — store** (`tests/unit/manufacturing-store.test.js`, bloque US-09 aditivo)
+- `startMaintenanceIntervention`, `resolveMaintenanceTicket`, órdenes preventivas.
+- Persistencia y migración `v1 → v2`; colecciones ausentes se inicializan vacías.
+- No mutación ante error.
+
+**Integración jsdom** (`tests/integration/maintenance-panel.test.js`)
+- Ticket escalado aparece en la bandeja; tomarlo lo pasa a `in_progress`; resolverlo registra parada y saca la máquina de `fault`; recarga conserva el estado.
+- Creación y transición de una orden preventiva.
+
+**Regresión**
+- Ejecutar las suites existentes de US-01…US-08 para confirmar que las extensiones aditivas no alteran su comportamiento.
+
+## 9.8 Constitution Check (post-diseño US-09)
+
+- **I. Calidad y mantenibilidad**: lógica pura en `src/domain/maintenance.js`; el store solo orquesta; el contrato está documentado y trazable al modelo de datos.
+- **II. Pruebas primero**: cada regla de estado, guarda, cálculo de parada y migración tiene prueba unitaria; el flujo completo tiene prueba de integración jsdom.
+- **III. Consistencia de UX**: se reutilizan patrones de diálogo, validación inline, estados vacíos y etiquetas del módulo; el semáforo reutiliza los colores y etiquetas de US-07.
+- **IV. Rendimiento y confiabilidad**: operaciones O(n) sobre tickets del período; snapshot versionado con migración y fallback a fixtures; sin temporizadores acumulativos.
+
+No hay violaciones que requieran justificación adicional.
+
+## 9.9 Riesgos y mitigaciones
+
+| ID | Riesgo | Mitigación |
+|---|---|---|
+| R-10 | Doble ticket por doble clic en el escalamiento | `operation_delay_id` único + guard de idempotencia en el dominio. |
+| R-11 | Centro atascado en `fault` tras resolver | `resolveAvailabilityStatus` deriva el estado de la operación activa; prueba de integración. |
+| R-12 | Pérdida de datos al migrar `v1 → v2` | Migración copia el snapshot previo, valida forma y conserva `v1` hasta confirmar escritura. |
+| R-13 | OEE inconsistente entre US-08 y US-09 | Una sola fuente de tiempos de parada (`downtime_minutes` derivado de marcas de tiempo). |
+| R-14 | Vigilancia del técnico | Reporte agregado por máquina; sin ranking individual; etiqueta de contexto operativo. |
+| R-15 | Crecimiento del snapshot por histórico | Filtrar por período y limitar el histórico mostrado; la persistencia guarda solo registros reales. |
+
+## 9.10 Fases de implementación (entrada para `/speckit.tasks`)
+
+1. **Fundacional aditivo**: typedefs de `MaintenanceTicket`/`PreventiveMaintenanceOrder`, fixtures, migración `v1 → v2`, colecciones y consultas del store.
+2. **Dominio**: `src/domain/maintenance.js` con pruebas unitarias.
+3. **Acciones del store**: intervención, resolución, órdenes preventivas y persistencia.
+4. **UI**: `MaintenancePanel.js`, ruta en el shell y estilos; accesibilidad y estados vacíos.
+5. **Integraciones**: consumo de escalamiento de US-07 y exposición de solo lectura para US-08.
+6. **Verificación**: pruebas de integración, regresión de US-01…US-08, rendimiento y guion de demo.
+
+**Criterio de salida**: AC-21…AC-27 verificados; suites de regresión verdes; snapshot migra sin pérdida; `npm run build` exitoso.
+
+## 9.11 Trazabilidad de criterios de aceptación
+
+| AC | Cubierto por |
+|---|---|
+| AC-21 Bandeja de tickets priorizada | Bandeja + consulta `maintenanceTicketsFor` |
+| AC-22 Toma de intervención y bloqueo de doble intervención | `startMaintenanceIntervention` + `canStartIntervention` |
+| AC-23 Historial y desgaste por máquina | `maintenanceHistoryForWorkCenter` + `deriveWearIndicator` |
+| AC-24 Cierre con tiempo real y disponibilidad restablecida | `resolveMaintenanceTicket` + `resolveAvailabilityStatus` |
+| AC-25 Ticket resuelto sin reapertura y ticket vinculado | Máquina de estados + validación de unicidad |
+| AC-26 Persistencia de tickets, intervenciones y preventivas | Snapshot `v2` + migración |
+| AC-27 Agregación sin rankings de técnicos | Contrato de UI y reglas de ética |
+
+## 9.12 Complexity Tracking (US-09)
+
+| Decisión | Por qué | Alternativa rechazada |
+|---|---|---|
+| Extensión aditiva del store único | Mantiene una sola fuente de verdad y la arquitectura actual. | Un `MaintenanceStore` separado duplicaría estado y complicaría la integración con US-07/US-08. |
+| Snapshot `v2` con migración | El nuevo estado debe persistir sin romper sesiones `v1`. | Reutilizar `v1` con colecciones opcionales oculta el cambio de forma y dificulta la validación. |
+| Indicador de desgaste derivado | Evita persistir métricas que pueden recalcularse y sesgar decisiones. | Persistir un score de desgaste añade complejidad de mantenimiento y posible deriva. |
+| Técnico vía `ext_hr_employee_id` | Coherente con el puente de RR.HH. de US-07. | Duplicar un catálogo de técnicos rompe la integración. |

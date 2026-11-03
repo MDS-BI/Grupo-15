@@ -189,6 +189,50 @@
 
 ---
 
+<details open>
+<summary><strong>Fase 11: Historia de Usuario US-09 - Mantenimiento (Prioridad: P2) 🎯 MVP Mantenimiento</strong></summary>
+
+**Objetivo**: Recibir los tickets correctivos escalados desde supervisión, priorizarlos en una bandeja, tomar la intervención con un técnico, cerrarla registrando el tiempo real de parada y restablecer la disponibilidad de la máquina, además de programar órdenes preventivas a partir del historial y desgaste. Todo de forma **aditiva**: no altera tareas, contratos ni comportamiento de US-01…US-08.
+
+**Prueba Independiente**: un ticket escalado aparece en la bandeja con prioridad `urgent`; se toma la intervención (máquina en `fault`), se resuelve con marcas de parada y la máquina sale de `fault`; se programa una preventiva; tras recargar, tickets, tiempos y órdenes se conservan y la migración `v1 → v2` no pierde el estado previo.
+
+### Pruebas para US-09 (escribir primero) ⚠️
+
+- [ ] T044 [P] [US9] Añadir pruebas unitarias de `src/domain/maintenance.js` (transiciones de ticket y preventiva, guard de una intervención por centro, cálculo de `downtime_minutes`, desgaste derivado, disponibilidad al resolver e idempotencia por `operation_delay_id`) en `tests/unit/maintenance.test.js`
+- [ ] T045 [P] [US9] Añadir un bloque aditivo de pruebas del store para `startMaintenanceIntervention`, `resolveMaintenanceTicket`, órdenes preventivas, inmutabilidad ante error y migración `v1 → v2` en `tests/unit/manufacturing-store.test.js`
+- [ ] T046 [P] [US9] Añadir prueba de integración jsdom del panel de mantenimiento (bandeja priorizada → toma de intervención → resolución y disponibilidad → recarga) y del ciclo de una orden preventiva en `tests/integration/maintenance-panel.test.js`
+
+### Implementación para US-09
+
+- [ ] T047 [P] [US9] Extender `src/domain/types.js` con los enums `MaintenancePriority` (`urgent`/`high`/`normal`), `PreventiveMaintenanceOrderStatus` (`planned`/`in_progress`/`completed`/`cancelled`) y el typedef `PreventiveMaintenanceOrder`; ampliar `MaintenanceTicket` con `technician_ext_hr_employee_id`, `intervention_started_at`, `resolved_at`, `downtime_started_at`, `downtime_ended_at`, `downtime_minutes`, `cause_reason_id`, `resolution_notes`, `escalated_to_maint` y `ticket_code`
+- [ ] T048 [P] [US9] Crear `src/data/fixtures/preventive-maintenance-orders.js` y ampliar `src/data/fixtures/maintenance-tickets.js` con escenarios sembrados de ticket `open`, `in_progress` y `resolved` (técnico, marcas de parada y `downtime_minutes`)
+- [ ] T049 [US9] Implementar en `src/data/persistence.js` el snapshot `erp.manufacturing.v2` con migración desde `v1` (inicializa `maintenanceTickets` y `preventiveMaintenanceOrders` vacías, conserva el resto del estado y cae a fixtures con advertencia si es inválido) (depende de T005)
+- [ ] T050 [US9] Extender `src/data/ManufacturingStore.js` con la colección `preventiveMaintenanceOrders`, su hidratación desde el snapshot `v2` y la escritura write-through de mantenimiento (depende de T008, T047, T049)
+- [ ] T051 [P] [US9] Implementar `src/domain/maintenance.js` con funciones puras `canStartIntervention`, `canResolveTicket`, `computeDowntimeMinutes`, `deriveWearIndicator`, `resolveAvailabilityStatus`, `canTransitionPreventiveOrder` y `buildPreventiveOrderFromHistory` (depende de T047)
+- [ ] T052 [US9] Implementar en `src/data/ManufacturingStore.js` las consultas `maintenanceTicketsFor`, `activeInterventionForWorkCenter`, `maintenanceHistoryForWorkCenter`, `preventiveOrdersFor` y `maintenanceIndicatorsForWorkCenter` (depende de T050, T051)
+- [ ] T053 [US9] Implementar en `src/data/ManufacturingStore.js` `startMaintenanceIntervention` y `resolveMaintenanceTicket` con validación previa, una sola intervención activa por centro, cálculo de parada y restablecimiento derivado de la disponibilidad (depende de T052)
+- [ ] T054 [US9] Implementar en `src/data/ManufacturingStore.js` `createPreventiveMaintenanceOrder`, `transitionPreventiveMaintenanceOrder` y `cancelPreventiveMaintenanceOrder` con las transiciones válidas y sin reabrir el ticket de origen (depende de T052)
+- [ ] T055 [US9] Crear `src/components/MaintenancePanel.js` con bandeja priorizada y filtrable, diálogo de toma de intervención, detalle y cierre con marcas de parada, historial/desgaste por máquina y alta/transición de órdenes preventivas
+- [ ] T056 [US9] Integrar `MaintenancePanel` en una vista/ruta de `src/manufacturing-main.js` sin modificar las vistas existentes (depende de T055)
+- [ ] T057 [US9] Añadir estilos de bandeja, semáforo de máquina, insignias de prioridad, aviso de máquina detenida y diálogos accesibles (foco atrapado, cierre con `Esc`) en `src/styles/manufacturing.css` (depende de T055)
+- [ ] T058 [US9] Verificar el consumo de tickets escalados por US-07 y crear el adaptador de solo lectura `src/data/ports/maintenance.js` con tiempos de parada y tickets resueltos para US-08, sin mutar colecciones existentes (depende de T053, T054)
+- [ ] T059 [US9] Ejecutar `tests/unit/maintenance.test.js`, el bloque US-09 de `tests/unit/manufacturing-store.test.js`, `tests/integration/maintenance-panel.test.js` y las suites de regresión de US-01…US-08; corregir fallos sin cambiar comportamiento existente
+- [ ] T060 [US9] Actualizar `spec.md` AC-21…AC-27 a `Implementado`/`Verificado` y añadir el guion de demo de mantenimiento (escalamiento → ticket → intervención → cierre → preventiva → recarga) en `quickstart.md` cuando T059 pase
+
+**Punto de control**: US-09 completamente funcional y comprobable de forma independiente; AC-21…AC-27 verificados; US-01…US-08 sin regresiones.
+
+**Dependencias y ejecución de US-09**
+
+- `T044`, `T045`, `T046`, `T047` y `T048` pueden ejecutarse en paralelo (archivos distintos).
+- `T049` depende de `T005`; `T050` depende de `T008`, `T047` y `T049`; `T051` solo depende de `T047`.
+- `T052`–`T054` dependen de `T050` y `T051`; `T055` depende de `T052`–`T054`; `T056` y `T057` dependen de `T055`.
+- `T058` depende de `T053` y `T054`; `T059` depende de todo lo anterior; `T060` depende de `T059`.
+- Ejemplo paralelo: `T044` + `T045` + `T046` (pruebas) mientras avanzan `T047` + `T048` (tipos y fixtures).
+
+</details>
+
+---
+
 ## Dependencias y Orden de Ejecución
 
 - **Configuración (Fase 1)**: sin dependencias.
@@ -196,6 +240,7 @@
 - **US-01, US-02, US-03 (Fases 3–5)**: dependen de Fase 2; son verificaciones de la base ya implementada.
 - **US-06 (Fase 6)**: depende de Fase 2 y de las operaciones generadas por US-03; usa la ejecución existente de US-04.
 - **US-07 / HU-04 (Fase 7)**: depende de Fase 2 y se integra con los turnos y atrasos de US-06 (`productionShifts`, `operationDelays`) para validar cierres y escalar paradas a mantenimiento. El semáforo y la asignación de personal (`T028`, `T030` parcial) pueden avanzar en paralelo con US-06.
+- **US-09 (Fase 11)**: depende de Fase 2 y consume los tickets escalados por US-07; expone tiempos de parada y tickets resueltos de solo lectura para US-08. Se añade al final del listado para no alterar los IDs existentes (T001–T043); su ejecución puede iniciar tras US-07 y debe completarse antes de cerrar la verificación global (T041/T059).
 - **US-04 (Fase 8)**: depende de US-06 y US-07 para comprobar la convivencia con `finishOperation` y el semáforo.
 - **US-05 (Fase 9)**: depende de Fase 2; no depende de US-06 ni US-07.
 - **Pulido (Fase 10)**: depende de todas las historias deseadas.
@@ -207,4 +252,6 @@
 - Cada historia debe ser completable y comprobable de forma independiente.
 - Verificar que las pruebas fallan antes de implementar (constitución, principio II).
 - El snapshot usa `erp.manufacturing.v1`; cualquier cambio de forma exige incrementar la versión.
+- US-09 introduce `erp.manufacturing.v2` con migración automática desde `v1`; el estado de US-01…US-08 debe conservarse y las colecciones de mantenimiento inicializarse vacías cuando no existan.
 - No introducir rankings por operador; los tiempos, asignaciones y atrasos son contexto operacional.
+- Los indicadores de mantenimiento se agregan por máquina/centro; no se exponen rankings de técnicos (ver `data-model.md` §7.3).
