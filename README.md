@@ -2,6 +2,8 @@
 
 # ERP Software Base Module (Vite + Vanilla JS)
 
+Módulo: Manufactura y producción
+
 Integrantes del grupo: 
   Trujillo Peñaloza Julián Alberto (@JualTrupe)
   Rivas Merino Sebastián Matías (@SebastianRivasprg)
