@@ -159,7 +159,10 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 | AC-13 | Dos contadores de piezas (turno y acumulado) incrementables, ajustables y validados; totales conservados al finalizar y recargar | Planificado |
 | AC-14 | Semáforo en vivo por línea/máquina (*En operación, En pausa, En fallo, Cambio de formato*) y registro de asignación de operario (`ext_hr_employee_id`) en `shift_assignments` (`tblSHIFT_ASSIGNMENTS`) | Planificado |
 | AC-15 | Aprobación de cierre de turno (`supervisor_validated = true`) tras verificar atrasos cerrados, y disparo de ticket urgente (`escalated_to_maint = true`) hacia `maintenance_tickets` (`tblMAINTENANCE_TICKETS`) pasando la máquina a *En fallo* | Planificado |
-
+| AC-16 | Tablero de carga por centro con OEE (Disponibilidad × Rendimiento × Calidad) y paradas acumuladas por período, derivados y no persistidos | Planificado |
+| AC-17 | Umbrales de alarma configurables, persistidos en el snapshot y evaluados de inmediato | Planificado |
+| AC-18 | Reprogramación de prioridad y cancelación con confirmación, conservando registros de ejecución | Planificado |
+| AC-19 | Exportación del reporte consolidado a PDF y Excel, y permisos por rol simulados | Planificado |
 ## 6. Artefactos Spec-Kit
 
 | Artefacto | Ruta | Propósito |
