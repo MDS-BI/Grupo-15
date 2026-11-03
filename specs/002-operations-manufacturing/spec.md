@@ -50,7 +50,6 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 
 | Persona | Descripción |
 |---|---|
-
 | **Jefa de Planta (`@Lia-dl`)** | Gestiona BOM y rutas, define capacidad, programa y prioriza órdenes, monitorea carga. Supervisa el desempeño global de la planta: consulta carga por centro, OEE, paradas acumuladas y cumplimiento de órdenes, configura alarmas de umbral, reprograma o cancela órdenes, exporta reportes consolidados y define permisos por rol. Analiza por centro de trabajo y operación, sin ranking de operadores. |
 | **Supervisor de Operaciones / Línea (`@carlos-277`)** | Monitorea el semáforo de líneas/máquinas en tiempo real, asigna operarios por turno (`ext_hr_employee_id`), revisa y aprueba cierres de turno (`supervisor_validated`) y escala incidentes críticos a mantenimiento. |
 | **Operador de Máquina (`@maximilianMC`)** | Ejecuta operaciones en pantalla táctil/piso, inicia/finaliza turno, justifica atrasos, registra conteo de piezas, consumo, salida y merma. |
