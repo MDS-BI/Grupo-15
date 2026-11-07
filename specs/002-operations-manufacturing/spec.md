@@ -220,13 +220,13 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 | AC-18 | Semáforo en vivo por línea/máquina (*En operación, En pausa, En fallo, Cambio de formato*) y registro de asignación de operario (`ext_hr_employee_id`) en `shift_assignments` (`tblSHIFT_ASSIGNMENTS`) | Planificado |
 | AC-19 | Aprobación de cierre de turno (`supervisor_validated = true`) tras verificar atrasos cerrados, y disparo de ticket urgente (`escalated_to_maint = true`) hacia `maintenance_tickets` (`tblMAINTENANCE_TICKETS`) pasando la máquina a *En fallo* | Planificado |
 | AC-20 | Carga por centro destacada sobre la capacidad efectiva y bloqueo de programación en centros desactivados | Planificado |
-| AC-21 | Bandeja de tickets escalados con prioridad, estado, centro y evento de parada vinculado, ordenada por prioridad y antigüedad | Planificado |
-| AC-22 | Toma de intervención con técnico asignado y bloqueo de dos intervenciones simultáneas sobre el mismo centro de trabajo | Planificado |
-| AC-23 | Historial por máquina con paradas acumuladas e indicador derivado de desgaste que sustenta la orden preventiva | Planificado |
-| AC-24 | Cierre de intervención con tiempo real de parada registrado y restablecimiento del semáforo fuera de *En fallo* | Planificado |
-| AC-25 | Ticket resuelto sin reapertura; nueva incidencia genera un ticket vinculado al evento correspondiente | Planificado |
-| AC-26 | Tickets, intervenciones, tiempos de parada y órdenes preventivas conservados en el snapshot tras recargar | Planificado |
-| AC-27 | Tiempos de mantenimiento agregados por centro, sin rankings ni evaluación de desempeño de técnicos | Planificado |
+| AC-21 | Bandeja de tickets escalados con prioridad, estado, centro y evento de parada vinculado, ordenada por prioridad y antigüedad | Verificado |
+| AC-22 | Toma de intervención con técnico asignado y bloqueo de dos intervenciones simultáneas sobre el mismo centro de trabajo | Verificado |
+| AC-23 | Historial por máquina con paradas acumuladas e indicador derivado de desgaste que sustenta la orden preventiva | Verificado |
+| AC-24 | Cierre de intervención con tiempo real de parada registrado y restablecimiento del semáforo fuera de *En fallo* | Verificado |
+| AC-25 | Ticket resuelto sin reapertura; nueva incidencia genera un ticket vinculado al evento correspondiente | Verificado |
+| AC-26 | Tickets, intervenciones, tiempos de parada y órdenes preventivas conservados en el snapshot tras recargar | Verificado |
+| AC-27 | Tiempos de mantenimiento agregados por centro, sin rankings ni evaluación de desempeño de técnicos | Verificado |
 | AC-28 | El sistema permite consultar las órdenes de producción existentes y visualizar sus datos principales | Planificado |
 | AC-29 | El planificador puede asignar fechas planificadas de inicio y término a una orden de producción | Planificado |
 | AC-30 | El planificador puede modificar las fechas planificadas de una orden existente | Planificado |

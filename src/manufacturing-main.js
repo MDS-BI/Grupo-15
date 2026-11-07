@@ -9,11 +9,13 @@ import { store } from './data/ManufacturingStore.js';
 import { DashboardOverview } from './components/DashboardOverview.js';
 import { BomExplorer } from './components/BomExplorer.js';
 import { ProductionOrders } from './components/ProductionOrders.js';
+import { MaintenancePanel } from './components/MaintenancePanel.js';
 
 const MODULES = [
   { id: 'dashboard', label: 'Panel', render: () => DashboardOverview(store) },
   { id: 'bom', label: 'BOM', render: () => BomExplorer(store) },
   { id: 'orders', label: 'Órdenes', render: () => ProductionOrders(store) },
+  { id: 'maintenance', label: 'Mantenimiento', render: () => MaintenancePanel(store) },
 ];
 
 const MODULE_NAME = 'Manufactura';

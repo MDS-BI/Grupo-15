@@ -9,11 +9,23 @@ import * as bomsFx from './fixtures/boms.js';
 import * as wcFx from './fixtures/work-centers.js';
 import * as rtFx from './fixtures/routings.js';
 import * as poFx from './fixtures/production-orders.js';
+import * as mtFx from './fixtures/maintenance-tickets.js';
+import * as pmoFx from './fixtures/preventive-maintenance-orders.js';
 import { InventoryPort, QualityPort } from './ports/index.js';
+import { loadSnapshot, saveSnapshot } from './persistence.js';
 import { assertTransition, deriveOrderStatus } from '../domain/order-state-machine.js';
 import { plannedTimeMinutes } from '../domain/operation-planning.js';
 import { buildBomTree, flattenBom } from '../domain/bom-explosion.js';
 import { reconcileConsumption, requiresReview } from '../domain/reconciliation.js';
+import {
+  canResolveTicket,
+  canStartIntervention,
+  canTransitionPreventiveOrder,
+  computeDowntimeMinutes,
+  deriveWearIndicator,
+  resolveAvailabilityStatus,
+  sortTicketsByPriorityAndAge,
+} from '../domain/maintenance.js';
 import { makeId } from '../domain/types.js';
 
 function clone(value) {
@@ -21,8 +33,16 @@ function clone(value) {
 }
 
 export class ManufacturingStore extends EventTarget {
-  constructor() {
+  constructor({ storage, hydrate = true } = {}) {
     super();
+    this.storage =
+      storage === undefined
+        ? typeof localStorage !== 'undefined'
+          ? localStorage
+          : null
+        : storage;
+    this.persistenceWarning = null;
+
     this.companies = clone(master.companies);
     this.unitsOfMeasure = clone(master.unitsOfMeasure);
     this.warehouses = clone(master.warehouses);
@@ -41,6 +61,48 @@ export class ManufacturingStore extends EventTarget {
     this.materialConsumption = clone(poFx.materialConsumption);
     this.productionOutput = clone(poFx.productionOutput);
 
+    this.maintenanceTickets = clone(mtFx.maintenanceTickets);
+    this.preventiveMaintenanceOrders = clone(pmoFx.preventiveMaintenanceOrders);
+    this.technicians = clone(mtFx.technicians);
+    this.maintenanceCauses = clone(mtFx.maintenanceCauses);
+
+    if (hydrate && this.storage) this.#hydrate();
+    this.#resetInventory();
+  }
+
+  #hydrate() {
+    const snapshot = loadSnapshot(this.storage, {
+      onWarning: (message) => {
+        this.persistenceWarning = message;
+      },
+    });
+    if (!snapshot) return;
+
+    const assignments = {
+      companies: 'companies',
+      unitsOfMeasure: 'unitsOfMeasure',
+      warehouses: 'warehouses',
+      products: 'products',
+      salesOrders: 'salesOrders',
+      qualityInspections: 'qualityInspections',
+      billOfMaterials: 'billOfMaterials',
+      bomComponents: 'bomComponents',
+      workCenters: 'workCenters',
+      routings: 'routings',
+      routingOperations: 'routingOperations',
+      productionOrders: 'productionOrders',
+      productionOrderOperations: 'productionOrderOperations',
+      materialConsumption: 'materialConsumption',
+      productionOutput: 'productionOutput',
+      maintenanceTickets: 'maintenanceTickets',
+      preventiveMaintenanceOrders: 'preventiveMaintenanceOrders',
+    };
+    for (const [key, dataKey] of Object.entries(assignments)) {
+      if (Array.isArray(snapshot.data[dataKey])) this[key] = clone(snapshot.data[dataKey]);
+    }
+  }
+
+  #resetInventory() {
     this.inventory = new InventoryPort([
       { warehouse_id: 'wh_mp', product_id: 'comp_tubo', quantity: 5000 },
       { warehouse_id: 'wh_mp', product_id: 'comp_llanta', quantity: 1000 },
@@ -52,13 +114,39 @@ export class ManufacturingStore extends EventTarget {
     ]);
     this.quality = new QualityPort(this.qualityInspections);
 
-    // Aplica el estado real del inventario a partir de los registros existentes.
     for (const c of this.materialConsumption) {
       this.inventory.debit(c.warehouse_id, c.component_product_id, c.quantity_consumed);
     }
     for (const o of this.productionOutput) {
       this.inventory.credit(o.warehouse_id, o.product_id, o.quantity_produced);
     }
+  }
+
+  #snapshotData() {
+    return {
+      companies: this.companies,
+      unitsOfMeasure: this.unitsOfMeasure,
+      warehouses: this.warehouses,
+      products: this.products,
+      salesOrders: this.salesOrders,
+      qualityInspections: this.qualityInspections,
+      billOfMaterials: this.billOfMaterials,
+      bomComponents: this.bomComponents,
+      workCenters: this.workCenters,
+      routings: this.routings,
+      routingOperations: this.routingOperations,
+      productionOrders: this.productionOrders,
+      productionOrderOperations: this.productionOrderOperations,
+      materialConsumption: this.materialConsumption,
+      productionOutput: this.productionOutput,
+      maintenanceTickets: this.maintenanceTickets,
+      preventiveMaintenanceOrders: this.preventiveMaintenanceOrders,
+    };
+  }
+
+  #persist() {
+    if (!this.storage) return;
+    saveSnapshot(this.#snapshotData(), this.storage);
   }
 
   #emit() {
@@ -344,6 +432,243 @@ export class ManufacturingStore extends EventTarget {
       const load = ops.reduce((s, o) => s + o.planned_time_minutes, 0);
       return { workCenter: wc, loadMinutes: load, pendingOperations: ops.length };
     });
+  }
+
+  /* -------------------- Mantenimiento (US-09) -------------------- */
+
+  maintenanceTicketsFor({ status, priority, workCenterId } = {}) {
+    const filtered = this.maintenanceTickets.filter((ticket) => {
+      if (status && ticket.ticket_status !== status) return false;
+      if (priority && ticket.priority !== priority) return false;
+      if (workCenterId && ticket.work_center_id !== workCenterId) return false;
+      return true;
+    });
+    return sortTicketsByPriorityAndAge(filtered);
+  }
+
+  activeInterventionForWorkCenter(workCenterId) {
+    return (
+      this.maintenanceTickets.find(
+        (ticket) =>
+          ticket.work_center_id === workCenterId && ticket.ticket_status === 'in_progress'
+      ) || null
+    );
+  }
+
+  maintenanceHistoryForWorkCenter(workCenterId) {
+    return this.maintenanceTickets
+      .filter(
+        (ticket) => ticket.work_center_id === workCenterId && ticket.ticket_status === 'resolved'
+      )
+      .sort(
+        (a, b) => new Date(b.resolved_at || 0).getTime() - new Date(a.resolved_at || 0).getTime()
+      );
+  }
+
+  preventiveOrdersFor({ status, workCenterId } = {}) {
+    return this.preventiveMaintenanceOrders
+      .filter((order) => {
+        if (status && order.status !== status) return false;
+        if (workCenterId && order.work_center_id !== workCenterId) return false;
+        return true;
+      })
+      .sort((a, b) => String(a.planned_date).localeCompare(String(b.planned_date)));
+  }
+
+  maintenanceIndicatorsForWorkCenter(workCenterId, period) {
+    return deriveWearIndicator(this.maintenanceTickets, workCenterId, period);
+  }
+
+  startMaintenanceIntervention(ticketId, { technician_ext_hr_employee_id } = {}) {
+    const ticket = this.maintenanceTickets.find((t) => t.id === ticketId);
+    if (!ticket) throw new Error(`Ticket no encontrado: ${ticketId}`);
+    if (ticket.ticket_status === 'resolved') {
+      throw new Error('Un ticket resuelto no se puede reabrir.');
+    }
+    if (ticket.ticket_status !== 'open') {
+      throw new Error('Solo se puede tomar un ticket abierto.');
+    }
+    const technician = String(technician_ext_hr_employee_id || '').trim();
+    if (!technician) {
+      throw new Error('Debe asignar un técnico para iniciar la intervención.');
+    }
+    const active = this.activeInterventionForWorkCenter(ticket.work_center_id);
+    if (!canStartIntervention(ticket, active ? [active] : [], technician)) {
+      throw new Error('El centro de trabajo ya tiene una intervención activa.');
+    }
+    const workCenter = this.workCenterById(ticket.work_center_id);
+    if (!workCenter) {
+      throw new Error(`Centro de trabajo no encontrado: ${ticket.work_center_id}`);
+    }
+
+    const now = new Date().toISOString();
+    ticket.ticket_status = 'in_progress';
+    ticket.technician_ext_hr_employee_id = technician;
+    ticket.intervention_started_at = now;
+    ticket.downtime_started_at = ticket.downtime_started_at || now;
+    workCenter.operational_status = 'fault';
+
+    this.#persist();
+    this.#emit();
+    return { ticket, workCenter };
+  }
+
+  resolveMaintenanceTicket(
+    ticketId,
+    {
+      resolvedAt,
+      downtimeStartedAt,
+      downtimeEndedAt,
+      causeReasonId = null,
+      notes = '',
+    } = {}
+  ) {
+    const ticket = this.maintenanceTickets.find((t) => t.id === ticketId);
+    if (!ticket) throw new Error(`Ticket no encontrado: ${ticketId}`);
+    if (!canResolveTicket(ticket)) {
+      throw new Error('Solo se puede resolver un ticket en intervención.');
+    }
+    if (!resolvedAt || !downtimeStartedAt || !downtimeEndedAt) {
+      throw new Error('Debe registrar la resolución y las marcas de parada.');
+    }
+
+    const startedMs = new Date(ticket.intervention_started_at).getTime();
+    const resolvedMs = new Date(resolvedAt).getTime();
+    if (!Number.isFinite(startedMs) || !Number.isFinite(resolvedMs)) {
+      throw new Error('Las marcas de la intervención no son fechas válidas.');
+    }
+    if (resolvedMs < startedMs) {
+      throw new Error('resolved_at no puede ser anterior a intervention_started_at.');
+    }
+
+    const downtimeMinutes = computeDowntimeMinutes(downtimeStartedAt, downtimeEndedAt);
+    const downtimeStartMs = new Date(downtimeStartedAt).getTime();
+    const downtimeEndMs = new Date(downtimeEndedAt).getTime();
+
+    const workCenter = this.workCenterById(ticket.work_center_id);
+    if (!workCenter) {
+      throw new Error(`Centro de trabajo no encontrado: ${ticket.work_center_id}`);
+    }
+
+    ticket.ticket_status = 'resolved';
+    ticket.resolved_at = new Date(resolvedMs).toISOString();
+    ticket.downtime_started_at = new Date(downtimeStartMs).toISOString();
+    ticket.downtime_ended_at = new Date(downtimeEndMs).toISOString();
+    ticket.downtime_minutes = downtimeMinutes;
+    ticket.cause_reason_id = causeReasonId || null;
+    ticket.resolution_notes = String(notes || '').trim() || null;
+
+    const activeOperation =
+      this.productionOrderOperations
+        .filter(
+          (op) =>
+            op.work_center_id === ticket.work_center_id &&
+            (op.status === 'in_progress' || op.status === 'paused')
+        )
+        .sort(
+          (a, b) =>
+            new Date(b.started_at || 0).getTime() - new Date(a.started_at || 0).getTime()
+        )[0] || null;
+
+    workCenter.operational_status = resolveAvailabilityStatus(activeOperation, ticket);
+
+    this.#persist();
+    this.#emit();
+    return { ticket, workCenter };
+  }
+
+  createPreventiveMaintenanceOrder({
+    workCenterId,
+    sourceTicketId,
+    plannedDate,
+    title,
+    technician_ext_hr_employee_id,
+  } = {}) {
+    if (!workCenterId) throw new Error('Debe indicar el centro de trabajo.');
+    const workCenter = this.workCenterById(workCenterId);
+    if (!workCenter) throw new Error(`Centro de trabajo no encontrado: ${workCenterId}`);
+
+    const cleanTitle = String(title || '').trim();
+    if (!cleanTitle) throw new Error('El título de la orden preventiva es obligatorio.');
+    if (!plannedDate) throw new Error('La fecha objetivo es obligatoria.');
+
+    let source = null;
+    if (sourceTicketId) {
+      source = this.maintenanceTickets.find((t) => t.id === sourceTicketId);
+      if (!source) throw new Error(`Ticket de origen no encontrado: ${sourceTicketId}`);
+      if (source.work_center_id !== workCenterId) {
+        throw new Error('El ticket de origen pertenece a otro centro de trabajo.');
+      }
+    }
+
+    const order = {
+      id: makeId('pmo'),
+      company_id: 'cmp_1',
+      order_code: this.#nextPreventiveCode(),
+      work_center_id: workCenterId,
+      source_ticket_id: source ? source.id : null,
+      title: cleanTitle,
+      planned_date: plannedDate,
+      status: 'planned',
+      technician_ext_hr_employee_id: String(technician_ext_hr_employee_id || '').trim() || null,
+      completed_at: null,
+      downtime_minutes: null,
+      notes: '',
+    };
+
+    this.preventiveMaintenanceOrders.push(order);
+    this.#persist();
+    this.#emit();
+    return order;
+  }
+
+  transitionPreventiveMaintenanceOrder(orderId, nextStatus) {
+    const order = this.preventiveMaintenanceOrders.find((o) => o.id === orderId);
+    if (!order) throw new Error(`Orden preventiva no encontrada: ${orderId}`);
+    if (!canTransitionPreventiveOrder(order, nextStatus)) {
+      throw new Error(`Transición inválida de "${order.status}" a "${nextStatus}".`);
+    }
+    if (
+      nextStatus === 'completed' &&
+      order.downtime_minutes !== null &&
+      order.downtime_minutes !== undefined &&
+      (!Number.isFinite(Number(order.downtime_minutes)) || Number(order.downtime_minutes) < 0)
+    ) {
+      throw new Error('downtime_minutes debe ser mayor o igual que 0.');
+    }
+
+    order.status = nextStatus;
+    if (nextStatus === 'completed') order.completed_at = new Date().toISOString();
+
+    this.#persist();
+    this.#emit();
+    return order;
+  }
+
+  cancelPreventiveMaintenanceOrder(orderId, { reason } = {}) {
+    const order = this.preventiveMaintenanceOrders.find((o) => o.id === orderId);
+    if (!order) throw new Error(`Orden preventiva no encontrada: ${orderId}`);
+    if (!canTransitionPreventiveOrder(order, 'cancelled')) {
+      throw new Error(`No se puede cancelar una orden en estado "${order.status}".`);
+    }
+
+    order.status = 'cancelled';
+    const cleanReason = String(reason || '').trim();
+    if (cleanReason) {
+      order.notes = order.notes ? `${order.notes} Cancelada: ${cleanReason}` : `Cancelada: ${cleanReason}`;
+    }
+
+    this.#persist();
+    this.#emit();
+    return order;
+  }
+
+  #nextPreventiveCode() {
+    const numbers = this.preventiveMaintenanceOrders
+      .map((order) => Number(String(order.order_code).replace(/\D/g, '')))
+      .filter((value) => !Number.isNaN(value));
+    const next = (numbers.length ? Math.max(...numbers) : 2000) + 1;
+    return `PM-${next}`;
   }
 
   #countBy(list, key) {

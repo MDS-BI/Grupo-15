@@ -72,6 +72,37 @@ export const InspectionStatus = Object.freeze({
   FAILED: 'failed',
 });
 
+/** Semáforo operativo del centro de trabajo (US-07 / US-09). */
+export const WorkCenterOperationalStatus = Object.freeze({
+  IN_OPERATION: 'in_operation',
+  PAUSED: 'paused',
+  FAULT: 'fault',
+  CHANGEOVER: 'changeover',
+  AVAILABLE: 'available',
+});
+
+/** Ciclo de vida del ticket correctivo (US-09). */
+export const MaintenanceTicketStatus = Object.freeze({
+  OPEN: 'open',
+  IN_PROGRESS: 'in_progress',
+  RESOLVED: 'resolved',
+});
+
+/** Prioridad de atención del ticket correctivo (US-09). */
+export const MaintenancePriority = Object.freeze({
+  URGENT: 'urgent',
+  HIGH: 'high',
+  NORMAL: 'normal',
+});
+
+/** Estado de una orden de mantenimiento preventivo (US-09). */
+export const PreventiveMaintenanceOrderStatus = Object.freeze({
+  PLANNED: 'planned',
+  IN_PROGRESS: 'in_progress',
+  COMPLETED: 'completed',
+  CANCELLED: 'cancelled',
+});
+
 /* ------------------------------------------------------------------ *
  * Entidades de frontera (Core / Logística / Ventas / Calidad) — solo lectura
  * ------------------------------------------------------------------ */
@@ -176,6 +207,7 @@ export const InspectionStatus = Object.freeze({
  * @property {number} efficiency_factor
  * @property {number} [cost_per_hour]
  * @property {string} status
+ * @property {'in_operation'|'paused'|'fault'|'changeover'|'available'} [operational_status]
  */
 
 /**
@@ -263,6 +295,52 @@ export const InspectionStatus = Object.freeze({
  * @property {UUID} uom_id
  * @property {ISOTimestamp} produced_at
  * @property {UUID|null} [recorded_by]
+ */
+
+/* ------------------------------------------------------------------ *
+ * Entidades de Mantenimiento (US-09)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Ticket correctivo originado por un incidente escalado desde piso.
+ * @typedef {Object} MaintenanceTicket
+ * @property {UUID} id
+ * @property {UUID} company_id
+ * @property {string} ticket_code Código único por empresa.
+ * @property {UUID} work_center_id
+ * @property {UUID|null} po_operation_id
+ * @property {UUID|null} operation_delay_id Evento de parada de origen (único cuando existe).
+ * @property {UUID|null} reported_by
+ * @property {string} description
+ * @property {'urgent'|'high'|'normal'} priority
+ * @property {'open'|'in_progress'|'resolved'} ticket_status
+ * @property {boolean} escalated_to_maint
+ * @property {string|null} technician_ext_hr_employee_id
+ * @property {ISOTimestamp|null} intervention_started_at
+ * @property {ISOTimestamp|null} resolved_at
+ * @property {ISOTimestamp|null} downtime_started_at
+ * @property {ISOTimestamp|null} downtime_ended_at
+ * @property {number|null} downtime_minutes
+ * @property {UUID|null} cause_reason_id
+ * @property {string|null} resolution_notes
+ * @property {ISOTimestamp} created_at
+ */
+
+/**
+ * Orden de mantenimiento preventivo programada desde el historial de fallos.
+ * @typedef {Object} PreventiveMaintenanceOrder
+ * @property {UUID} id
+ * @property {UUID} company_id
+ * @property {string} order_code Código único por empresa.
+ * @property {UUID} work_center_id
+ * @property {UUID|null} source_ticket_id
+ * @property {string} title
+ * @property {ISODate} planned_date
+ * @property {'planned'|'in_progress'|'completed'|'cancelled'} status
+ * @property {string|null} technician_ext_hr_employee_id
+ * @property {ISOTimestamp|null} completed_at
+ * @property {number|null} downtime_minutes
+ * @property {string} [notes]
  */
 
 /* ------------------------------------------------------------------ *

@@ -1,0 +1,89 @@
+/**
+ * @file Fixtures de mantenimiento correctivo (US-09): tickets, técnicos y
+ * causas. Ver data-model.md §3.19 y contracts/maintenance.md §2.
+ */
+
+export const technicians = [
+  { ext_hr_employee_id: 'ext_hr_tec_01', name: 'Ana Soto', specialty: 'Mecánica' },
+  { ext_hr_employee_id: 'ext_hr_tec_02', name: 'Bruno Díaz', specialty: 'Electromecánica' },
+  { ext_hr_employee_id: 'ext_hr_tec_03', name: 'Carla Méndez', specialty: 'Instrumentación' },
+];
+
+export const maintenanceCauses = [
+  { id: 'dr_mecanico', label: 'Falla mecánica' },
+  { id: 'dr_electrico', label: 'Falla eléctrica' },
+  { id: 'dr_calibracion', label: 'Calibración' },
+  { id: 'dr_operacion', label: 'Error de operación' },
+];
+
+export const maintenanceTickets = [
+  {
+    id: 'mt_1001', company_id: 'cmp_1', ticket_code: 'MTO-1001', work_center_id: 'wc_solda',
+    po_operation_id: 'poo_3003_2', operation_delay_id: 'od_1001', reported_by: 'emp_op_03',
+    description: 'Sobrecalentamiento del cabezal de soldadura.', priority: 'urgent',
+    ticket_status: 'open', escalated_to_maint: true, technician_ext_hr_employee_id: null,
+    intervention_started_at: null, resolved_at: null, downtime_started_at: null,
+    downtime_ended_at: null, downtime_minutes: null, cause_reason_id: null,
+    resolution_notes: null, created_at: '2026-11-01T07:45:00Z',
+  },
+  {
+    id: 'mt_1002', company_id: 'cmp_1', ticket_code: 'MTO-1002', work_center_id: 'wc_corte',
+    po_operation_id: 'poo_3005_1', operation_delay_id: 'od_1002', reported_by: 'emp_op_01',
+    description: 'Vibración anómala en la sierra de corte.', priority: 'high',
+    ticket_status: 'in_progress', escalated_to_maint: true,
+    technician_ext_hr_employee_id: 'ext_hr_tec_02',
+    intervention_started_at: '2026-11-02T08:40:00Z', resolved_at: null,
+    downtime_started_at: '2026-11-02T08:40:00Z', downtime_ended_at: null,
+    downtime_minutes: null, cause_reason_id: null, resolution_notes: null,
+    created_at: '2026-11-02T08:10:00Z',
+  },
+  {
+    id: 'mt_1003', company_id: 'cmp_1', ticket_code: 'MTO-1003', work_center_id: 'wc_pintura',
+    po_operation_id: null, operation_delay_id: null, reported_by: null,
+    description: 'Obstrucción menor en la boquilla de pintura.', priority: 'normal',
+    ticket_status: 'open', escalated_to_maint: false, technician_ext_hr_employee_id: null,
+    intervention_started_at: null, resolved_at: null, downtime_started_at: null,
+    downtime_ended_at: null, downtime_minutes: null, cause_reason_id: null,
+    resolution_notes: null, created_at: '2026-11-02T10:15:00Z',
+  },
+  {
+    id: 'mt_1004', company_id: 'cmp_1', ticket_code: 'MTO-1004', work_center_id: 'wc_armado',
+    po_operation_id: 'poo_3001_2', operation_delay_id: 'od_1004', reported_by: 'emp_op_02',
+    description: 'Falla de rodamiento en la línea de armado.', priority: 'normal',
+    ticket_status: 'resolved', escalated_to_maint: true,
+    technician_ext_hr_employee_id: 'ext_hr_tec_01',
+    intervention_started_at: '2026-10-20T09:30:00Z', resolved_at: '2026-10-20T11:00:00Z',
+    downtime_started_at: '2026-10-20T09:30:00Z', downtime_ended_at: '2026-10-20T11:00:00Z',
+    downtime_minutes: 90, cause_reason_id: 'dr_mecanico',
+    resolution_notes: 'Reemplazo de rodamiento y lubricación.', created_at: '2026-10-20T09:00:00Z',
+  },
+  {
+    id: 'mt_1005', company_id: 'cmp_1', ticket_code: 'MTO-1005', work_center_id: 'wc_calidad',
+    po_operation_id: null, operation_delay_id: 'od_1005', reported_by: 'emp_op_04',
+    description: 'Detector de defectos fuera de servicio.', priority: 'urgent',
+    ticket_status: 'open', escalated_to_maint: true, technician_ext_hr_employee_id: null,
+    intervention_started_at: null, resolved_at: null, downtime_started_at: null,
+    downtime_ended_at: null, downtime_minutes: null, cause_reason_id: null,
+    resolution_notes: null, created_at: '2026-11-02T11:30:00Z',
+  },
+  {
+    id: 'mt_1006', company_id: 'cmp_1', ticket_code: 'MTO-1006', work_center_id: 'wc_corte',
+    po_operation_id: null, operation_delay_id: 'od_1006', reported_by: 'emp_op_01',
+    description: 'Guarda de seguridad desalineada.', priority: 'high',
+    ticket_status: 'open', escalated_to_maint: true, technician_ext_hr_employee_id: null,
+    intervention_started_at: null, resolved_at: null, downtime_started_at: null,
+    downtime_ended_at: null, downtime_minutes: null, cause_reason_id: null,
+    resolution_notes: null, created_at: '2026-11-02T12:00:00Z',
+  },
+  {
+    id: 'mt_1007', company_id: 'cmp_1', ticket_code: 'MTO-1007', work_center_id: 'wc_pintura',
+    po_operation_id: null, operation_delay_id: 'od_1007', reported_by: 'emp_op_05',
+    description: 'Sensor de temperatura descalibrado.', priority: 'high',
+    ticket_status: 'resolved', escalated_to_maint: true,
+    technician_ext_hr_employee_id: 'ext_hr_tec_03',
+    intervention_started_at: '2026-10-25T13:00:00Z', resolved_at: '2026-10-25T13:30:00Z',
+    downtime_started_at: '2026-10-25T13:00:00Z', downtime_ended_at: '2026-10-25T13:30:00Z',
+    downtime_minutes: 30, cause_reason_id: 'dr_calibracion',
+    resolution_notes: 'Recalibración del sensor.', created_at: '2026-10-25T12:45:00Z',
+  },
+];
