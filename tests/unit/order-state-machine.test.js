@@ -5,6 +5,7 @@ import {
   nextStatuses,
   deriveOrderStatus,
   isTerminal,
+  canScheduleOnWorkCenter,
 } from '../../src/domain/order-state-machine.js';
 import { ProductionOrderStatus as S } from '../../src/domain/types.js';
 
@@ -48,5 +49,22 @@ describe('order-state-machine', () => {
       S.IN_PROGRESS,
     );
     expect(deriveOrderStatus([{ status: 'completed' }, { status: 'completed' }])).toBe(S.COMPLETED);
+  });
+
+  it('bloquea la programación cuando la ruta usa un centro desactivado', () => {
+    const workCenters = [
+      { id: 'wc_corte', status: 'active' },
+      { id: 'wc_solda', status: 'inactive' },
+    ];
+    expect(canScheduleOnWorkCenter(workCenters, [{ work_center_id: 'wc_corte' }])).toEqual({
+      allowed: true,
+      blocked_work_center_ids: [],
+    });
+    expect(
+      canScheduleOnWorkCenter(workCenters, [
+        { work_center_id: 'wc_corte' },
+        { work_center_id: 'wc_solda' },
+      ]),
+    ).toEqual({ allowed: false, blocked_work_center_ids: ['wc_solda'] });
   });
 });

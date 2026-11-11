@@ -103,6 +103,60 @@ export const PreventiveMaintenanceOrderStatus = Object.freeze({
   CANCELLED: 'cancelled',
 });
 
+/** Origen de un motivo de atraso (US-06). */
+export const DelayReasonOrigin = Object.freeze({
+  PREDEFINED: 'predefined',
+  CUSTOM: 'custom',
+});
+
+/** Alcance de un motivo de atraso (US-06). */
+export const DelayReasonScope = Object.freeze({
+  GLOBAL: 'global',
+  SHIFT: 'shift',
+});
+
+/** Estado del turno del operador (US-06). */
+export const ShiftStatus = Object.freeze({
+  IN_PROGRESS: 'in_progress',
+  COMPLETED: 'completed',
+});
+
+/** Estado de un atraso justificado (US-06). */
+export const OperationDelayStatus = Object.freeze({
+  OPEN: 'open',
+  CLOSED: 'closed',
+});
+
+/** Rol simulado del panel de planta (US-08). */
+export const PlantRole = Object.freeze({
+  PLANT_MANAGER: 'plant_manager',
+  PLANNER: 'planner',
+  OPERATOR: 'operator',
+});
+
+/** Indicador configurable del panel de planta (US-08). */
+export const PlantIndicator = Object.freeze({
+  LOAD: 'load',
+  OEE: 'oee',
+  DOWNTIME: 'downtime',
+  FULFILLMENT: 'fulfillment',
+});
+
+/** Acciones controladas por la matriz rol×acción simulada (US-08). */
+export const PlantAction = Object.freeze({
+  VIEW_PLANT_PANEL: 'view_plant_panel',
+  SET_THRESHOLD: 'set_threshold',
+  CHANGE_PRIORITY: 'change_priority',
+  CANCEL_ORDER: 'cancel_order',
+  EXPORT_REPORT: 'export_report',
+});
+
+/** Comparación de umbral (US-08). */
+export const ThresholdComparison = Object.freeze({
+  LT: 'lt',
+  GT: 'gt',
+});
+
 /* ------------------------------------------------------------------ *
  * Entidades de frontera (Core / Logística / Ventas / Calidad) — solo lectura
  * ------------------------------------------------------------------ */
@@ -261,6 +315,7 @@ export const PreventiveMaintenanceOrderStatus = Object.freeze({
  * @property {string} status
  * @property {number} planned_time_minutes
  * @property {number|null} actual_time_minutes
+ * @property {number} [delay_time_minutes] Tiempo justificado por atrasos cerrados.
  * @property {number} quantity_completed
  * @property {number} scrap_quantity
  * @property {UUID|null} [operator_id]
@@ -341,6 +396,91 @@ export const PreventiveMaintenanceOrderStatus = Object.freeze({
  * @property {ISOTimestamp|null} completed_at
  * @property {number|null} downtime_minutes
  * @property {string} [notes]
+ */
+
+/* ------------------------------------------------------------------ *
+ * Entidades de turno y supervisión (US-06 / US-07)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Turno de trabajo del operador sobre una operación concreta.
+ * @typedef {Object} ProductionShift
+ * @property {UUID} id
+ * @property {UUID} po_operation_id
+ * @property {UUID|null} operator_id
+ * @property {number} shift_number
+ * @property {'in_progress'|'completed'} status
+ * @property {ISOTimestamp} started_at
+ * @property {ISOTimestamp|null} ended_at
+ * @property {number} quantity_counted
+ * @property {boolean} [supervisor_validated]
+ * @property {ISOTimestamp|null} [validated_at]
+ * @property {string|null} [supervisor_notes]
+ */
+
+/**
+ * Atraso justificado de una operación.
+ * @typedef {Object} OperationDelay
+ * @property {UUID} id
+ * @property {UUID} po_operation_id
+ * @property {UUID} production_shift_id
+ * @property {UUID} delay_reason_id
+ * @property {ISOTimestamp} started_at
+ * @property {ISOTimestamp|null} ended_at
+ * @property {number|null} duration_minutes
+ * @property {'open'|'closed'} status
+ * @property {string|null} note
+ * @property {boolean} [escalated_to_maint]
+ * @property {ISOTimestamp|null} [corrected_at]
+ * @property {UUID|null} [corrected_by]
+ * @property {string|null} [correction_note]
+ */
+
+/**
+ * Motivo de atraso predefinido o personalizado del turno.
+ * @typedef {Object} DelayReason
+ * @property {UUID} id
+ * @property {UUID} company_id
+ * @property {string} label
+ * @property {'predefined'|'custom'} origin
+ * @property {'global'|'shift'} scope
+ * @property {UUID|null} production_shift_id
+ * @property {boolean} active
+ * @property {UUID|null} [created_by]
+ */
+
+/**
+ * Asignación de un operario a un centro de trabajo en una franja.
+ * @typedef {Object} ShiftAssignment
+ * @property {UUID} id
+ * @property {UUID} shift_assignment_id
+ * @property {UUID} work_center_id
+ * @property {string} ext_hr_employee_id
+ * @property {string} shift_band
+ * @property {ISOTimestamp} assigned_at
+ * @property {boolean} active
+ */
+
+/**
+ * Umbral crítico por indicador de planta.
+ * @typedef {Object} ThresholdSetting
+ * @property {UUID} id
+ * @property {UUID} company_id
+ * @property {'load'|'oee'|'downtime'|'fulfillment'} indicator
+ * @property {number} threshold
+ * @property {'lt'|'gt'} comparison
+ * @property {ISOTimestamp} updated_at
+ */
+
+/**
+ * Fila de la matriz rol×acción simulada.
+ * @typedef {Object} RolePermission
+ * @property {UUID} id
+ * @property {UUID} company_id
+ * @property {'plant_manager'|'planner'|'operator'} role
+ * @property {string} action
+ * @property {boolean} allowed
+ * @property {ISOTimestamp} updated_at
  */
 
 /* ------------------------------------------------------------------ *

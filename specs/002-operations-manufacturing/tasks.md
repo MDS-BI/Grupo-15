@@ -21,9 +21,9 @@
 
 **Propósito**: Confirmar que el entorno de ejecución y pruebas del módulo está listo.
 
-- [ ] T001 [P] Verificar dependencias y scripts de manufactura en `package.json` y `package-lock.json`; ejecutar `npm ci` si `node_modules` no existe
+- [X] T001 [P] Verificar dependencias y scripts de manufactura en `package.json` y `package-lock.json`; ejecutar `npm ci` si `node_modules` no existe
 - [ ] T002 [P] Configurar el entorno jsdom para las pruebas de integración de manufactura en `vitest.config.mjs`
-- [ ] T003 [P] Confirmar la estructura real del proyecto (`src/domain/`, `src/data/`, `src/data/fixtures/`, `src/data/ports/`, `src/components/`, `src/styles/`, `tests/unit/`, `tests/integration/`) contra `plan.md` §6
+- [X] T003 [P] Confirmar la estructura real del proyecto (`src/domain/`, `src/data/`, `src/data/fixtures/`, `src/data/ports/`, `src/components/`, `src/styles/`, `tests/unit/`, `tests/integration/`) contra `plan.md` §6
 
 **Punto de control**: entorno y estructura verificados.
 
@@ -35,11 +35,11 @@
 
 **⚠️ CRÍTICO**: ninguna historia puede cerrarse sin completar esta fase.
 
-- [ ] T004 [P] Añadir a `src/domain/types.js` los enums `DelayReasonOrigin` (`predefined`/`custom`), `ShiftStatus` (`in_progress`/`completed`), `WorkCenterOperationalStatus` (`in_operation`/`paused`/`fault`/`changeover`) y `MaintenanceTicketStatus` (`open`/`in_progress`/`resolved`); definir los typedefs `ProductionShift` (con `supervisor_validated`, `validated_at`, `supervisor_notes`), `OperationDelay` (con `escalated_to_maint`), `DelayReason`, `ShiftAssignment` (`shift_assignment_id`, `work_center_id`, `ext_hr_employee_id`, `shift_band`, `assigned_at`, `active`) y `MaintenanceTicket` (`ticket_id`, `work_center_id`, `operation_delay_id`, `priority`, `ticket_status`, `reported_by`, `created_at`); ampliar `ProductionOrderOperation` con `delay_time_minutes` y `WorkCenter` con `operational_status`
-- [ ] T005 [P] Implementar el adaptador de snapshot versionado `erp.manufacturing.v1` en `src/data/persistence.js` (`loadSnapshot`, `saveSnapshot`, `clearSnapshot`, validación de `version` y forma mínima incluyendo colecciones de turno y supervisión) según `contracts/operator-shift.md` §6
-- [ ] T006 [P] Añadir pruebas unitarias de persistencia (round-trip, snapshot ausente, JSON corrupto, versión distinta) en `tests/unit/persistence.test.js`
-- [ ] T007 [P] Crear fixtures de motivos y turnos en `src/data/fixtures/delay-reasons.js` y `src/data/fixtures/production-shifts.js`; crear fixtures de supervisión en `src/data/fixtures/shift-assignments.js`, `src/data/fixtures/hr-employees.js` (puente `ext_hr_employee_id`) y `src/data/fixtures/maintenance-tickets.js`; ampliar `src/data/fixtures/production-orders.js` y `src/data/fixtures/work-centers.js` con estados iniciales de semáforo y escenario sembrado de turno y atraso
-- [ ] T008 Extender `src/data/ManufacturingStore.js` con las colecciones `productionShifts`, `operationDelays`, `delayReasons`, `shiftAssignments`, `hrEmployees` y `maintenanceTickets`, hidratación desde `src/data/persistence.js` y escritura del snapshot tras cada mutación (depende de T005, T007)
+- [X] T004 [P] Añadir a `src/domain/types.js` los enums `DelayReasonOrigin` (`predefined`/`custom`), `ShiftStatus` (`in_progress`/`completed`), `WorkCenterOperationalStatus` (`in_operation`/`paused`/`fault`/`changeover`) y `MaintenanceTicketStatus` (`open`/`in_progress`/`resolved`); definir los typedefs `ProductionShift` (con `supervisor_validated`, `validated_at`, `supervisor_notes`), `OperationDelay` (con `escalated_to_maint`), `DelayReason`, `ShiftAssignment` (`shift_assignment_id`, `work_center_id`, `ext_hr_employee_id`, `shift_band`, `assigned_at`, `active`) y `MaintenanceTicket` (`ticket_id`, `work_center_id`, `operation_delay_id`, `priority`, `ticket_status`, `reported_by`, `created_at`); ampliar `ProductionOrderOperation` con `delay_time_minutes` y `WorkCenter` con `operational_status`
+- [X] T005 [P] Implementar el adaptador de snapshot versionado `erp.manufacturing.v1` en `src/data/persistence.js` (`loadSnapshot`, `saveSnapshot`, `clearSnapshot`, validación de `version` y forma mínima incluyendo colecciones de turno y supervisión) según `contracts/operator-shift.md` §6
+- [X] T006 [P] Añadir pruebas unitarias de persistencia (round-trip, snapshot ausente, JSON corrupto, versión distinta) en `tests/unit/persistence.test.js`
+- [X] T007 [P] Crear fixtures de motivos y turnos en `src/data/fixtures/delay-reasons.js` y `src/data/fixtures/production-shifts.js`; crear fixtures de supervisión en `src/data/fixtures/shift-assignments.js`, `src/data/fixtures/hr-employees.js` (puente `ext_hr_employee_id`) y `src/data/fixtures/maintenance-tickets.js`; ampliar `src/data/fixtures/production-orders.js` y `src/data/fixtures/work-centers.js` con estados iniciales de semáforo y escenario sembrado de turno y atraso
+- [X] T008 Extender `src/data/ManufacturingStore.js` con las colecciones `productionShifts`, `operationDelays`, `delayReasons`, `shiftAssignments`, `hrEmployees` y `maintenanceTickets`, hidratación desde `src/data/persistence.js` y escritura del snapshot tras cada mutación (depende de T005, T007)
 
 **Punto de control**: tipos, fixtures, persistencia y store listos; las historias pueden validarse sin romper el estado existente.
 
@@ -51,7 +51,7 @@
 
 **Prueba Independiente**: un planificador abre una BOM de bien terminado, ve el árbol anidado (≥4 niveles) con consumo teórico total y un ciclo se detecta sin recursión infinita.
 
-- [ ] T009 [P] [US1] Verificar AC-01 ejecutando `tests/unit/bom-explosion.test.js` y revisando el árbol y la detección de ciclos en `src/components/BomExplorer.js`
+- [X] T009 [P] [US1] Verificar AC-01 ejecutando `tests/unit/bom-explosion.test.js` y revisando el árbol y la detección de ciclos en `src/components/BomExplorer.js`
 
 **Punto de control**: US-01 verificada; cualquier regresión debe corregirse antes de avanzar.
 
@@ -63,7 +63,7 @@
 
 **Prueba Independiente**: una ruta conserva secuencia estrictamente creciente y `planned_time_minutes` se calcula como `setup + run × quantity`.
 
-- [ ] T010 [P] [US2] Verificar AC-02 ejecutando `tests/unit/operation-planning.test.js` y revisando `src/domain/operation-planning.js` y `src/data/fixtures/routings.js`
+- [X] T010 [P] [US2] Verificar AC-02 ejecutando `tests/unit/operation-planning.test.js` y revisando `src/domain/operation-planning.js` y `src/data/fixtures/routings.js`
 
 **Punto de control**: US-02 verificada sin mutar operaciones ya congeladas.
 
@@ -75,7 +75,7 @@
 
 **Prueba Independiente**: una orden creada desde stock o MTO se libera, genera una operación por paso de ruta y respeta la máquina de estados.
 
-- [ ] T011 [P] [US3] Verificar AC-03 ejecutando `tests/unit/order-state-machine.test.js` y revisando `src/data/ManufacturingStore.js` (`createOrder`, `transitionOrder`, `#generateOperations`); no mezclar con AC-04, que pertenece a US-08
+- [X] T011 [P] [US3] Verificar AC-03 ejecutando `tests/unit/order-state-machine.test.js` y revisando `src/data/ManufacturingStore.js` (`createOrder`, `transitionOrder`, `#generateOperations`); no mezclar con AC-04, que pertenece a US-08
 
 **Punto de control**: US-03 verificada; las operaciones generadas son la base de US-06 y US-07.
 
@@ -89,22 +89,22 @@
 
 ### Pruebas para US-06 (escribir primero) ⚠️
 
-- [ ] T012 [P] [US6] Añadir pruebas unitarias de tiempo efectivo, descuento de atrasos cerrados, atrasos abiertos y tolerancia de 1 s en `tests/unit/shift-tracking.test.js`
-- [ ] T013 [P] [US6] Añadir pruebas unitarias de guardas y contadores del store (un turno activo, doble cierre, motivo obligatorio, atrasos simultáneos, valores negativos/no numéricos) en `tests/unit/manufacturing-store.test.js`
-- [ ] T014 [P] [US6] Añadir prueba de integración jsdom del botón alterno, confirmación, atraso y contadores en `tests/integration/operator-shift.test.js`
-- [ ] T015 [P] [US6] Añadir prueba de integración de cierre con atraso abierto y corrección posterior en `tests/integration/delay-correction.test.js`
+- [X] T012 [P] [US6] Añadir pruebas unitarias de tiempo efectivo, descuento de atrasos cerrados, atrasos abiertos y tolerancia de 1 s en `tests/unit/shift-tracking.test.js`
+- [X] T013 [P] [US6] Añadir pruebas unitarias de guardas y contadores del store (un turno activo, doble cierre, motivo obligatorio, atrasos simultáneos, valores negativos/no numéricos) en `tests/unit/manufacturing-store.test.js`
+- [X] T014 [P] [US6] Añadir prueba de integración jsdom del botón alterno, confirmación, atraso y contadores en `tests/integration/operator-shift.test.js`
+- [X] T015 [P] [US6] Añadir prueba de integración de cierre con atraso abierto y corrección posterior en `tests/integration/delay-correction.test.js`
 
 ### Implementación para US-06
 
-- [ ] T016 [P] [US6] Implementar `src/domain/shift-tracking.js` con funciones puras `elapsedMinutes`, `computeEffectiveMinutes`, `sumClosedDelayMinutes`, `hasOpenDelay`, `validateCounter` y guardas de un solo turno/atraso
-- [ ] T017 [US6] Implementar en `src/data/ManufacturingStore.js` las consultas `activeShiftFor`, `openDelayFor`, `delaysForOperation`, `reasonsForShift` y las acciones `startShift`, `finishOperation`, `closeDelay`, `correctOpenDelay`
-- [ ] T018 [US6] Implementar en `src/data/ManufacturingStore.js` `startDelay` con motivo predefinido o personalizado reutilizable, y `adjustShiftCounter`/`setShiftCounter` con delta único hacia `quantity_completed` (depende de T017)
-- [ ] T019 [US6] Crear `src/components/OperatorWorkstationPanel.js` con tarjeta de orden/operación activa, botón alterno `Iniciar`/`Finalizar`, confirmación, cronómetro, lista de atrasos y ambos contadores
-- [ ] T020 [US6] Crear `src/components/DelayCorrectionDialog.js` para listar atrasos abiertos tras el cierre y corregirlos con nota de auditoría
-- [ ] T021 [US6] Integrar `OperatorWorkstationPanel` en `src/components/ProductionOrders.js` y añadir su vista/ruta en `src/manufacturing-main.js`
-- [ ] T022 [US6] Añadir estilos de botón alterno, cronómetro, aviso de atraso abierto y contadores en `src/styles/manufacturing.css`, incluyendo `aria-pressed`, foco del diálogo y cierre con `Esc`
-- [ ] T023 [US6] Asegurar la escritura del snapshot tras cada acción de US-06 y la rehidratación de cronómetros desde `started_at`/`ended_at` en `src/data/ManufacturingStore.js` y `src/data/persistence.js` (depende de T008, T017)
-- [ ] T024 [US6] Ejecutar las pruebas de US-06 (`tests/unit/shift-tracking.test.js`, `tests/unit/manufacturing-store.test.js`, `tests/integration/operator-shift.test.js`, `tests/integration/delay-correction.test.js`), corregir fallos y actualizar AC-15..AC-17 a `Implementado`/`Verificado` en `spec.md`
+- [X] T016 [P] [US6] Implementar `src/domain/shift-tracking.js` con funciones puras `elapsedMinutes`, `computeEffectiveMinutes`, `sumClosedDelayMinutes`, `hasOpenDelay`, `validateCounter` y guardas de un solo turno/atraso
+- [X] T017 [US6] Implementar en `src/data/ManufacturingStore.js` las consultas `activeShiftFor`, `openDelayFor`, `delaysForOperation`, `reasonsForShift` y las acciones `startShift`, `finishOperation`, `closeDelay`, `correctOpenDelay`
+- [X] T018 [US6] Implementar en `src/data/ManufacturingStore.js` `startDelay` con motivo predefinido o personalizado reutilizable, y `adjustShiftCounter`/`setShiftCounter` con delta único hacia `quantity_completed` (depende de T017)
+- [X] T019 [US6] Crear `src/components/OperatorWorkstationPanel.js` con tarjeta de orden/operación activa, botón alterno `Iniciar`/`Finalizar`, confirmación, cronómetro, lista de atrasos y ambos contadores
+- [X] T020 [US6] Crear `src/components/DelayCorrectionDialog.js` para listar atrasos abiertos tras el cierre y corregirlos con nota de auditoría
+- [X] T021 [US6] Integrar `OperatorWorkstationPanel` en `src/components/ProductionOrders.js` y añadir su vista/ruta en `src/manufacturing-main.js`
+- [X] T022 [US6] Añadir estilos de botón alterno, cronómetro, aviso de atraso abierto y contadores en `src/styles/manufacturing.css`, incluyendo `aria-pressed`, foco del diálogo y cierre con `Esc`
+- [X] T023 [US6] Asegurar la escritura del snapshot tras cada acción de US-06 y la rehidratación de cronómetros desde `started_at`/`ended_at` en `src/data/ManufacturingStore.js` y `src/data/persistence.js` (depende de T008, T017)
+- [X] T024 [US6] Ejecutar las pruebas de US-06 (`tests/unit/shift-tracking.test.js`, `tests/unit/manufacturing-store.test.js`, `tests/integration/operator-shift.test.js`, `tests/integration/delay-correction.test.js`), corregir fallos y actualizar AC-15..AC-17 a `Implementado`/`Verificado` en `spec.md`
 
 **Punto de control**: US-06 completamente funcional y comprobable de forma independiente; AC-15..AC-17 verificados.
 
@@ -118,18 +118,18 @@
 
 ### Pruebas para US-07 (escribir primero) ⚠️
 
-- [ ] T025 [P] [US7] Añadir pruebas unitarias de derivación del semáforo (`in_operation`, `paused`, `fault`, `changeover`), asignación única de operario por franja (`ext_hr_employee_id`) y reglas de aprobación de cierre en `tests/unit/line-supervision.test.js`
-- [ ] T026 [P] [US7] Añadir pruebas unitarias en `tests/unit/manufacturing-store.test.js` para `assignOperatorToWorkCenter`, `setWorkCenterOperationalStatus`, `validateShiftClosure` y `escalateIncidentToMaintenance` (`escalated_to_maint = true` + ticket + `fault`)
-- [ ] T027 [P] [US7] Añadir prueba de integración jsdom del panel de supervisor (semáforo, asignación, aprobación y botón de escalamiento) en `tests/integration/supervisor-line-panel.test.js`
+- [X] T025 [P] [US7] Añadir pruebas unitarias de derivación del semáforo (`in_operation`, `paused`, `fault`, `changeover`), asignación única de operario por franja (`ext_hr_employee_id`) y reglas de aprobación de cierre en `tests/unit/line-supervision.test.js`
+- [X] T026 [P] [US7] Añadir pruebas unitarias en `tests/unit/manufacturing-store.test.js` para `assignOperatorToWorkCenter`, `setWorkCenterOperationalStatus`, `validateShiftClosure` y `escalateIncidentToMaintenance` (`escalated_to_maint = true` + ticket + `fault`)
+- [X] T027 [P] [US7] Añadir prueba de integración jsdom del panel de supervisor (semáforo, asignación, aprobación y botón de escalamiento) en `tests/integration/supervisor-line-panel.test.js`
 
 ### Implementación para US-07
 
-- [ ] T028 [P] [US7] Implementar `src/domain/line-supervision.js` con funciones puras `deriveWorkCenterTrafficLight`, `canAssignOperator`, `canValidateShiftClosure` y `buildUrgentMaintenanceTicket`
-- [ ] T029 [US7] Implementar en `src/data/ManufacturingStore.js` las consultas `trafficLightForWorkCenters`, `activeAssignmentForWorkCenter`, `shiftsPendingValidation`, `openMaintenanceTicketsFor` y las mutaciones `assignOperatorToWorkCenter`, `setWorkCenterOperationalStatus`, `validateShiftClosure` y `escalateIncidentToMaintenance` (depende de T008, T017, T028)
-- [ ] T030 [US7] Crear `src/components/SupervisorLinePanel.js` con semáforo en vivo, asignación de personal, bandeja de cierres con aprobación y botón de alerta de escalamiento
-- [ ] T031 [US7] Integrar `SupervisorLinePanel` en `src/manufacturing-main.js` y vincular alertas rápidas desde `src/components/ProductionOrders.js` (depende de T030)
-- [ ] T032 [US7] Añadir estilos de semáforo industrial accesible, insignias de validación y botón de emergencia en `src/styles/manufacturing.css`
-- [ ] T033 [US7] Ejecutar las suites de US-07 (`tests/unit/line-supervision.test.js`, `tests/unit/manufacturing-store.test.js`, `tests/integration/supervisor-line-panel.test.js`), verificar persistencia tras recarga y actualizar AC-18..AC-19 a `Implementado`/`Verificado` en `spec.md`
+- [X] T028 [P] [US7] Implementar `src/domain/line-supervision.js` con funciones puras `deriveWorkCenterTrafficLight`, `canAssignOperator`, `canValidateShiftClosure` y `buildUrgentMaintenanceTicket`
+- [X] T029 [US7] Implementar en `src/data/ManufacturingStore.js` las consultas `trafficLightForWorkCenters`, `activeAssignmentForWorkCenter`, `shiftsPendingValidation`, `openMaintenanceTicketsFor` y las mutaciones `assignOperatorToWorkCenter`, `setWorkCenterOperationalStatus`, `validateShiftClosure` y `escalateIncidentToMaintenance` (depende de T008, T017, T028)
+- [X] T030 [US7] Crear `src/components/SupervisorLinePanel.js` con semáforo en vivo, asignación de personal, bandeja de cierres con aprobación y botón de alerta de escalamiento
+- [X] T031 [US7] Integrar `SupervisorLinePanel` en `src/manufacturing-main.js` y vincular alertas rápidas desde `src/components/ProductionOrders.js` (depende de T030)
+- [X] T032 [US7] Añadir estilos de semáforo industrial accesible, insignias de validación y botón de emergencia en `src/styles/manufacturing.css`
+- [X] T033 [US7] Ejecutar las suites de US-07 (`tests/unit/line-supervision.test.js`, `tests/unit/manufacturing-store.test.js`, `tests/integration/supervisor-line-panel.test.js`), verificar persistencia tras recarga y actualizar AC-18..AC-19 a `Implementado`/`Verificado` en `spec.md`
 
 **Punto de control**: US-07 (HU-04) completamente funcional; AC-18..AC-19 verificados.
 
@@ -141,8 +141,8 @@
 
 **Prueba Independiente**: iniciar la primera operación mueve la orden a `in_progress` y el semáforo a `in_operation`; pausar y completar respetan la máquina de estados; completar la última operación mueve la orden a `completed`.
 
-- [ ] T034 [P] [US4] Verificar AC-08 y AC-09 ejecutando `tests/unit/manufacturing-store.test.js` y revisando `startOperation`, `pauseOperation` y `completeOperation` en `src/data/ManufacturingStore.js`
-- [ ] T035 [US4] Asegurar que `finishOperation` reutiliza la lógica de `completeOperation` sin romper pausas ni el cálculo previo de `actual_time_minutes`, y actualiza el estado del semáforo en `src/data/ManufacturingStore.js`
+- [X] T034 [P] [US4] Verificar AC-08 y AC-09 ejecutando `tests/unit/manufacturing-store.test.js` y revisando `startOperation`, `pauseOperation` y `completeOperation` en `src/data/ManufacturingStore.js`
+- [X] T035 [US4] Asegurar que `finishOperation` reutiliza la lógica de `completeOperation` sin romper pausas ni el cálculo previo de `actual_time_minutes`, y actualiza el estado del semáforo en `src/data/ManufacturingStore.js`
 
 **Punto de control**: US-04, US-06 y US-07 conviven sin dobles cierres ni estados inconsistentes.
 
@@ -154,7 +154,7 @@
 
 **Prueba Independiente**: registrar consumo debita inventario, registrar salida lo acredita y la reconciliación plan-vs-real sigue calculando varianza y flags.
 
-- [ ] T036 [P] [US5] Verificar AC-10 y AC-11 ejecutando `tests/unit/reconciliation.test.js` y `tests/unit/manufacturing-store.test.js` y revisando `src/data/ports/index.js`
+- [X] T036 [P] [US5] Verificar AC-10 y AC-11 ejecutando `tests/unit/reconciliation.test.js` y `tests/unit/manufacturing-store.test.js` y revisando `src/data/ports/index.js`
 
 **Punto de control**: US-01 a US-07 verificadas en conjunto.
 
@@ -168,23 +168,23 @@
 
 ### Pruebas para US-08 (escribir primero) ⚠️
 
-- [ ] T037 [P] [US8] Añadir pruebas unitarias de OEE (Disponibilidad × Rendimiento × Calidad), carga vs. capacidad efectiva, paradas acumuladas por motivo y evaluación de umbrales en `tests/unit/plant-performance.test.js`
-- [ ] T038 [P] [US8] Añadir un bloque aditivo de pruebas del store para `setIndicatorThreshold`, `changeOrderPriority`, `cancelOrderFromPanel`, `rolePermissions` y la delegación del store a la función pura `buildConsolidatedReport` en `tests/unit/manufacturing-store.test.js`
-- [ ] T039 [P] [US8] Añadir prueba de integración jsdom del panel de planta (KPIs, alarmas, acciones de orden, selector de rol y exportación simulada) en `tests/integration/plant-performance-panel.test.js`
+- [X] T037 [P] [US8] Añadir pruebas unitarias de OEE (Disponibilidad × Rendimiento × Calidad), carga vs. capacidad efectiva, paradas acumuladas por motivo y evaluación de umbrales en `tests/unit/plant-performance.test.js`
+- [X] T038 [P] [US8] Añadir un bloque aditivo de pruebas del store para `setIndicatorThreshold`, `changeOrderPriority`, `cancelOrderFromPanel`, `rolePermissions` y la delegación del store a la función pura `buildConsolidatedReport` en `tests/unit/manufacturing-store.test.js`
+- [X] T039 [P] [US8] Añadir prueba de integración jsdom del panel de planta (KPIs, alarmas, acciones de orden, selector de rol y exportación simulada) en `tests/integration/plant-performance-panel.test.js`
 
 ### Implementación para US-08
 
-- [ ] T040 [P] [US8] Extender `src/domain/types.js` con los enums `PlantRole` (`plant_manager`/`planner`/`operator`), `PlantIndicator` (`load`/`oee`/`downtime`/`fulfillment`) y el typedef `ThresholdSetting` (`indicator`, `threshold`, `comparison`, `updated_at`); añadir el mapa de permisos rol×acción
-- [ ] T041 [P] [US8] Implementar `src/domain/plant-performance.js` con funciones puras `computeOee`, `computeLoadByWorkCenter`, `accumulateDowntimesByReason`, `evaluateThresholds`, `canPerformAction` y `buildConsolidatedReport`
-- [ ] T042 [P] [US8] Crear fixtures deterministas de umbrales y permisos en `src/data/fixtures/plant-performance.js`, incluyendo un escenario con centro sobre capacidad y una alarma activa
-- [ ] T043 [US8] Implementar el snapshot `erp.manufacturing.v2` en `src/data/persistence.js` con migración desde `v1` (inicializa `thresholdSettings` y `rolePermissions` y conserva el resto del estado; cae a fixtures con advertencia si es inválido) (depende de T005, T040)
-- [ ] T044 [US8] Extender `src/data/ManufacturingStore.js` con la colección `thresholdSettings`, las consultas `plantPerformanceFor(period)`, `loadByWorkCenterFor(period)`, `downtimesByReasonFor(period)` y `rolePermissionsFor(role)`, y las acciones `setIndicatorThreshold`, `changeOrderPriority` y `cancelOrderFromPanel`; el store delega el reporte consolidado a la función pura `buildConsolidatedReport` (depende de T008, T041, T043)
-- [ ] T045 [US8] Implementar la exportación local del reporte consolidado sin dependencias externas (Excel vía descarga CSV/SpreadsheetML y PDF vía vista imprimible con `window.print()`, con datos mock) en `src/data/exporters/plant-report.js`
-- [ ] T046 [US8] Crear `src/components/PlantPerformancePanel.js` con tarjetas de carga y OEE, tabla de paradas por motivo, alarmas de umbral, acciones de reprogramación/cancelación con confirmación, selector de rol y botones de exportación
-- [ ] T047 [US8] Integrar `PlantPerformancePanel` en una vista/ruta de `src/manufacturing-main.js` (depende de T046)
-- [ ] T048 [US8] Añadir estilos de tarjetas KPI, barras de carga, alarmas, insignias de rol y estados deshabilitados por permisos en `src/styles/manufacturing.css` (depende de T046)
-- [ ] T049 [US8] Ejecutar `tests/unit/plant-performance.test.js`, el bloque US-08 de `tests/unit/manufacturing-store.test.js` y `tests/integration/plant-performance-panel.test.js`; corregir fallos
-- [ ] T050 [US8] Actualizar `spec.md` AC-04..AC-07 y AC-20 a `Implementado`/`Verificado` y añadir el guion de demo del panel en `quickstart.md` cuando T049 pase
+- [X] T040 [P] [US8] Extender `src/domain/types.js` con los enums `PlantRole` (`plant_manager`/`planner`/`operator`), `PlantIndicator` (`load`/`oee`/`downtime`/`fulfillment`) y el typedef `ThresholdSetting` (`indicator`, `threshold`, `comparison`, `updated_at`); añadir el mapa de permisos rol×acción
+- [X] T041 [P] [US8] Implementar `src/domain/plant-performance.js` con funciones puras `computeOee`, `computeLoadByWorkCenter`, `accumulateDowntimesByReason`, `evaluateThresholds`, `canPerformAction` y `buildConsolidatedReport`
+- [X] T042 [P] [US8] Crear fixtures deterministas de umbrales y permisos en `src/data/fixtures/plant-performance.js`, incluyendo un escenario con centro sobre capacidad y una alarma activa
+- [X] T043 [US8] Implementar el snapshot `erp.manufacturing.v2` en `src/data/persistence.js` con migración desde `v1` (inicializa `thresholdSettings` y `rolePermissions` y conserva el resto del estado; cae a fixtures con advertencia si es inválido) (depende de T005, T040)
+- [X] T044 [US8] Extender `src/data/ManufacturingStore.js` con la colección `thresholdSettings`, las consultas `plantPerformanceFor(period)`, `loadByWorkCenterFor(period)`, `downtimesByReasonFor(period)` y `rolePermissionsFor(role)`, y las acciones `setIndicatorThreshold`, `changeOrderPriority` y `cancelOrderFromPanel`; el store delega el reporte consolidado a la función pura `buildConsolidatedReport` (depende de T008, T041, T043)
+- [X] T045 [US8] Implementar la exportación local del reporte consolidado sin dependencias externas (Excel vía descarga CSV/SpreadsheetML y PDF vía vista imprimible con `window.print()`, con datos mock) en `src/data/exporters/plant-report.js`
+- [X] T046 [US8] Crear `src/components/PlantPerformancePanel.js` con tarjetas de carga y OEE, tabla de paradas por motivo, alarmas de umbral, acciones de reprogramación/cancelación con confirmación, selector de rol y botones de exportación
+- [X] T047 [US8] Integrar `PlantPerformancePanel` en una vista/ruta de `src/manufacturing-main.js` (depende de T046)
+- [X] T048 [US8] Añadir estilos de tarjetas KPI, barras de carga, alarmas, insignias de rol y estados deshabilitados por permisos en `src/styles/manufacturing.css` (depende de T046)
+- [X] T049 [US8] Ejecutar `tests/unit/plant-performance.test.js`, el bloque US-08 de `tests/unit/manufacturing-store.test.js` y `tests/integration/plant-performance-panel.test.js`; corregir fallos
+- [X] T050 [US8] Actualizar `spec.md` AC-04..AC-07 y AC-20 a `Implementado`/`Verificado` y añadir el guion de demo del panel en `quickstart.md` cuando T049 pase
 
 **Punto de control**: US-08 completamente funcional; AC-04..AC-07 y AC-20 verificados; snapshot `v2` operativo.
 
@@ -231,18 +231,18 @@
 
 ### Pruebas para US-10 (escribir primero) ⚠️
 
-- [ ] T068 [P] [US10] Añadir pruebas unitarias de validación de fechas planificadas (término ≥ inicio, valores nulos, órdenes terminales) en `tests/unit/order-scheduling.test.js`
-- [ ] T069 [P] [US10] Añadir un bloque aditivo de pruebas del store para `ordersForScheduling`, `updatePlannedDates` y persistencia de fechas en `tests/unit/manufacturing-store.test.js`
-- [ ] T070 [P] [US10] Añadir prueba de integración jsdom de la vista de planificación (listado, edición de fechas, validación inline y recarga) en `tests/integration/order-scheduling.test.js`
+- [X] T068 [P] [US10] Añadir pruebas unitarias de validación de fechas planificadas (término ≥ inicio, valores nulos, órdenes terminales) en `tests/unit/order-scheduling.test.js`
+- [X] T069 [P] [US10] Añadir un bloque aditivo de pruebas del store para `ordersForScheduling`, `updatePlannedDates` y persistencia de fechas en `tests/unit/manufacturing-store.test.js`
+- [X] T070 [P] [US10] Añadir prueba de integración jsdom de la vista de planificación (listado, edición de fechas, validación inline y recarga) en `tests/integration/order-scheduling.test.js`
 
 ### Implementación para US-10
 
-- [ ] T071 [P] [US10] Extender `src/domain/types.js` con `planned_start_date` y `planned_end_date` (nullable) en `ProductionOrder`
-- [ ] T072 [P] [US10] Implementar `src/domain/order-scheduling.js` con las funciones puras `isValidIsoDate`, `validatePlannedDates`, `canRescheduleOrder` y `sortOrdersForScheduling`
-- [ ] T073 [US10] Extender `src/data/ManufacturingStore.js` con las consultas `ordersForScheduling({ status, dateFrom, dateTo })` y la acción `updatePlannedDates(orderId, { planned_start_date, planned_end_date })` con validación previa y write-through al snapshot `v2` (depende de T071, T072, T008)
-- [ ] T074 [US10] Crear `src/components/ProductionSchedulingPanel.js` con filtros por estado y fechas, edición de fechas planificadas, validación inline y confirmación de guardado
-- [ ] T075 [US10] Integrar `ProductionSchedulingPanel` en una vista/ruta de `src/manufacturing-main.js` y añadir sus estilos en `src/styles/manufacturing.css` (depende de T074)
-- [ ] T076 [US10] Ejecutar `tests/unit/order-scheduling.test.js`, el bloque US-10 de `tests/unit/manufacturing-store.test.js` y `tests/integration/order-scheduling.test.js`; actualizar AC-28..AC-33 a `Implementado`/`Verificado`
+- [X] T071 [P] [US10] Extender `src/domain/types.js` con `planned_start_date` y `planned_end_date` (nullable) en `ProductionOrder`
+- [X] T072 [P] [US10] Implementar `src/domain/order-scheduling.js` con las funciones puras `isValidIsoDate`, `validatePlannedDates`, `canRescheduleOrder` y `sortOrdersForScheduling`
+- [X] T073 [US10] Extender `src/data/ManufacturingStore.js` con las consultas `ordersForScheduling({ status, dateFrom, dateTo })` y la acción `updatePlannedDates(orderId, { planned_start_date, planned_end_date })` con validación previa y write-through al snapshot `v2` (depende de T071, T072, T008)
+- [X] T074 [US10] Crear `src/components/ProductionSchedulingPanel.js` con filtros por estado y fechas, edición de fechas planificadas, validación inline y confirmación de guardado
+- [X] T075 [US10] Integrar `ProductionSchedulingPanel` en una vista/ruta de `src/manufacturing-main.js` y añadir sus estilos en `src/styles/manufacturing.css` (depende de T074)
+- [X] T076 [US10] Ejecutar `tests/unit/order-scheduling.test.js`, el bloque US-10 de `tests/unit/manufacturing-store.test.js` y `tests/integration/order-scheduling.test.js`; actualizar AC-28..AC-33 a `Implementado`/`Verificado`
 
 **Punto de control**: US-10 completamente funcional; AC-28..AC-33 verificados.
 
@@ -256,16 +256,16 @@
 
 ### Pruebas para US-11 (escribir primero) ⚠️
 
-- [ ] T077 [P] [US11] Añadir pruebas unitarias de tiempos estándar, carga proyectada, utilización vs. capacidad nominal y detección de cuello de botella en `tests/unit/line-balance.test.js`
-- [ ] T078 [P] [US11] Añadir prueba de integración jsdom del panel de balance de líneas (tabla por centro, cuello de botella destacado y escenario vacío) en `tests/integration/line-balance-panel.test.js`
+- [X] T077 [P] [US11] Añadir pruebas unitarias de tiempos estándar, carga proyectada, utilización vs. capacidad nominal y detección de cuello de botella en `tests/unit/line-balance.test.js`
+- [X] T078 [P] [US11] Añadir prueba de integración jsdom del panel de balance de líneas (tabla por centro, cuello de botella destacado y escenario vacío) en `tests/integration/line-balance-panel.test.js`
 
 ### Implementación para US-11
 
-- [ ] T079 [P] [US11] Implementar `src/domain/line-balance.js` con las funciones puras `computeStandardTimes`, `computeProjectedLoad`, `computeUtilization` y `detectBottlenecks`
-- [ ] T080 [US11] Crear `src/components/LineBalancePanel.js` con tabla por centro de trabajo, utilización vs. capacidad nominal, carga proyectada y resaltado de cuellos de botella
-- [ ] T081 [US11] Añadir un escenario determinista de cuello de botella en `src/data/fixtures/routings.js` y `src/data/fixtures/work-centers.js`
-- [ ] T082 [US11] Integrar `LineBalancePanel` en una vista/ruta de `src/manufacturing-main.js` y añadir estilos de barras de utilización y cuello de botella en `src/styles/manufacturing.css` (depende de T080)
-- [ ] T083 [US11] Ejecutar `tests/unit/line-balance.test.js` y `tests/integration/line-balance-panel.test.js`; documentar en `quickstart.md` el flujo de balance de líneas
+- [X] T079 [P] [US11] Implementar `src/domain/line-balance.js` con las funciones puras `computeStandardTimes`, `computeProjectedLoad`, `computeUtilization` y `detectBottlenecks`
+- [X] T080 [US11] Crear `src/components/LineBalancePanel.js` con tabla por centro de trabajo, utilización vs. capacidad nominal, carga proyectada y resaltado de cuellos de botella
+- [X] T081 [US11] Añadir un escenario determinista de cuello de botella en `src/data/fixtures/routings.js` y `src/data/fixtures/work-centers.js`
+- [X] T082 [US11] Integrar `LineBalancePanel` en una vista/ruta de `src/manufacturing-main.js` y añadir estilos de barras de utilización y cuello de botella en `src/styles/manufacturing.css` (depende de T080)
+- [X] T083 [US11] Ejecutar `tests/unit/line-balance.test.js` y `tests/integration/line-balance-panel.test.js`; documentar en `quickstart.md` el flujo de balance de líneas
 
 **Punto de control**: US-11 completamente funcional y comprobable de forma independiente.
 
@@ -276,12 +276,14 @@
 **Propósito**: Calidad, accesibilidad, rendimiento, documentación y cierre de AC.
 
 - [ ] T084 [P] Reparar o aislar las 12 suites legadas de `001-erp-base-module` que importan `src/storage.js` y `src/module-config.js` inexistentes, ajustando `vitest.config.mjs` o `tests/` según corresponda
-- [ ] T085 [P] Revisar accesibilidad y consistencia de `src/components/OperatorWorkstationPanel.js`, `src/components/DelayCorrectionDialog.js`, `src/components/SupervisorLinePanel.js`, `src/components/PlantPerformancePanel.js`, `src/components/MaintenancePanel.js`, `src/components/ProductionSchedulingPanel.js` y `src/components/LineBalancePanel.js` (ARIA, foco, `Esc`, mensajes inline)
-- [ ] T086 [P] Actualizar `quickstart.md` y `contracts/operator-shift.md` con selectores, etiquetas y pasos finales de todas las historias implementadas
-- [ ] T087 [P] Validar el rendimiento con 500 órdenes, semáforo de supervisión, panel de planta, balance de líneas y cronómetro activo (<100 ms por interacción) usando `src/data/ManufacturingStore.js` y las vistas en `src/components/`
-- [ ] T088 Ejecutar `npm run lint`, `npm run format:check`, `npm test -- --run` y `npm run build`; documentar en `tasks.md` cualquier fallo preexistente no relacionado con las historias nuevas
-- [ ] T089 Actualizar `spec.md` para fijar la versión de snapshot en `erp.manufacturing.v2` de forma consistente y marcar todos los AC implementados como `Implementado`/`Verificado`
-- [ ] T090 Preparar el guion de demo de 5 minutos (pedido → orden → fechas planificadas → asignación de operario → turno operador → atraso → escalamiento → mantenimiento → validación de cierre → panel de planta → balance de líneas → recarga) en `quickstart.md`
+- [X] T085 [P] Revisar accesibilidad y consistencia de `src/components/OperatorWorkstationPanel.js`, `src/components/DelayCorrectionDialog.js`, `src/components/SupervisorLinePanel.js`, `src/components/PlantPerformancePanel.js`, `src/components/MaintenancePanel.js`, `src/components/ProductionSchedulingPanel.js` y `src/components/LineBalancePanel.js` (ARIA, foco, `Esc`, mensajes inline)
+- [X] T086 [P] Actualizar `quickstart.md` y `contracts/operator-shift.md` con selectores, etiquetas y pasos finales de todas las historias implementadas
+- [X] T087 [P] Validar el rendimiento con 500 órdenes, semáforo de supervisión, panel de planta, balance de líneas y cronómetro activo (<100 ms por interacción) usando `src/data/ManufacturingStore.js` y las vistas en `src/components/`
+- [X] T088 Ejecutar `npm run lint`, `npm run format:check`, `npm test -- --run` y `npm run build`; documentar en `tasks.md` cualquier fallo preexistente no relacionado con las historias nuevas
+
+> **Nota de gate (2026-11-11)**: `npm run lint`, `npm run format:check` y `npm run build` pasan. `npm test -- --run` deja 107 pruebas verdes y 12 suites legadas de `001-erp-base-module` que no cargan por imports inexistentes (`src/storage.js`, `src/module-config.js`); es el fallo preexistente cubierto por T084, ajeno a las historias US-06…US-11. T002 tampoco se marca porque el entorno jsdom se configura por prueba con `JSDOM` en lugar de `vitest.config.mjs`.
+- [X] T089 Actualizar `spec.md` para fijar la versión de snapshot en `erp.manufacturing.v2` de forma consistente y marcar todos los AC implementados como `Implementado`/`Verificado`
+- [X] T090 Preparar el guion de demo de 5 minutos (pedido → orden → fechas planificadas → asignación de operario → turno operador → atraso → escalamiento → mantenimiento → validación de cierre → panel de planta → balance de líneas → recarga) en `quickstart.md`
 
 ---
 
@@ -289,12 +291,12 @@
 
 **Propósito**: Cerrar los hallazgos del análisis de consistencia entre `spec.md`, `plan.md` y `tasks.md`.
 
-- [ ] T091 [P] [US8] Implementar y probar el bloqueo de programación de órdenes nuevas sobre centros de trabajo desactivados (`canScheduleOnWorkCenter`) en `src/domain/order-state-machine.js` y `src/data/ManufacturingStore.js`, con pruebas en `tests/unit/order-state-machine.test.js` y `tests/unit/manufacturing-store.test.js` (AC-20)
-- [ ] T092 [P] [US11] Implementar las consultas de store `lineBalanceFor(period)`, `lineBalanceForOrder(orderId)` y `capacityForPeriod(period)` en `src/data/ManufacturingStore.js`, con pruebas en `tests/unit/line-balance.test.js` y `tests/unit/manufacturing-store.test.js`
-- [ ] T093 [P] [US8] Añadir pruebas de verificación de FR-06 (KPIs del panel y utilización por centro, AC-12) y de la calidad derivada desde `quality_inspections` (AC-13) en `tests/unit/` y `tests/integration/`
-- [ ] T094 [P] [US8] [US9] Añadir pruebas de tiempo para SC-03 (exportación PDF/Excel en menos de 10 s) y SC-04 (toma del ticket urgente más antiguo en menos de 30 s)
-- [ ] T095 [P] [US8] [US9] Añadir verificación de SC-08: ninguna vista expone rankings individuales y todo detalle por persona lleva la etiqueta *solo contexto operativo — no evaluación de desempeño*
-- [ ] T096 [P] Configurar ESLint + Prettier (`eslint.config.js`, `.prettierrc.json`) y los scripts `lint`, `format` y `format:check` en `package.json` (Principio I / Quality Standards)
+- [X] T091 [P] [US8] Implementar y probar el bloqueo de programación de órdenes nuevas sobre centros de trabajo desactivados (`canScheduleOnWorkCenter`) en `src/domain/order-state-machine.js` y `src/data/ManufacturingStore.js`, con pruebas en `tests/unit/order-state-machine.test.js` y `tests/unit/manufacturing-store.test.js` (AC-20)
+- [X] T092 [P] [US11] Implementar las consultas de store `lineBalanceFor(period)`, `lineBalanceForOrder(orderId)` y `capacityForPeriod(period)` en `src/data/ManufacturingStore.js`, con pruebas en `tests/unit/line-balance.test.js` y `tests/unit/manufacturing-store.test.js`
+- [X] T093 [P] [US8] Añadir pruebas de verificación de FR-06 (KPIs del panel y utilización por centro, AC-12) y de la calidad derivada desde `quality_inspections` (AC-13) en `tests/unit/` y `tests/integration/`
+- [X] T094 [P] [US8] [US9] Añadir pruebas de tiempo para SC-03 (exportación PDF/Excel en menos de 10 s) y SC-04 (toma del ticket urgente más antiguo en menos de 30 s)
+- [X] T095 [P] [US8] [US9] Añadir verificación de SC-08: ninguna vista expone rankings individuales y todo detalle por persona lleva la etiqueta *solo contexto operativo — no evaluación de desempeño*
+- [X] T096 [P] Configurar ESLint + Prettier (`eslint.config.js`, `.prettierrc.json`) y los scripts `lint`, `format` y `format:check` en `package.json` (Principio I / Quality Standards)
 
 **Punto de control**: hallazgos CRITICAL/HIGH/MEDIUM del análisis cerrados; AC-12/AC-13/AC-20 con cobertura; gate de calidad (lint/format) operativo.
 

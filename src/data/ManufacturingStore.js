@@ -11,9 +11,18 @@ import * as rtFx from './fixtures/routings.js';
 import * as poFx from './fixtures/production-orders.js';
 import * as mtFx from './fixtures/maintenance-tickets.js';
 import * as pmoFx from './fixtures/preventive-maintenance-orders.js';
+import * as shiftFx from './fixtures/production-shifts.js';
+import * as reasonFx from './fixtures/delay-reasons.js';
+import * as assignmentFx from './fixtures/shift-assignments.js';
+import * as hrFx from './fixtures/hr-employees.js';
+import * as plantFx from './fixtures/plant-performance.js';
 import { InventoryPort, QualityPort } from './ports/index.js';
 import { loadSnapshot, saveSnapshot } from './persistence.js';
-import { assertTransition, deriveOrderStatus } from '../domain/order-state-machine.js';
+import {
+  assertTransition,
+  canScheduleOnWorkCenter,
+  deriveOrderStatus,
+} from '../domain/order-state-machine.js';
 import { plannedTimeMinutes } from '../domain/operation-planning.js';
 import { buildBomTree, flattenBom } from '../domain/bom-explosion.js';
 import { reconcileConsumption, requiresReview } from '../domain/reconciliation.js';
@@ -26,6 +35,44 @@ import {
   resolveAvailabilityStatus,
   sortTicketsByPriorityAndAge,
 } from '../domain/maintenance.js';
+import {
+  activeShiftOf,
+  canStartDelay,
+  canStartShift,
+  computeEffectiveMinutes,
+  elapsedMinutes,
+  hasOpenDelay,
+  openDelayOf,
+  round2,
+  sumClosedDelayMinutes,
+  validateCounter,
+} from '../domain/shift-tracking.js';
+import {
+  buildUrgentMaintenanceTicket,
+  canAssignOperator,
+  canValidateShiftClosure,
+  deriveWorkCenterTrafficLight,
+} from '../domain/line-supervision.js';
+import {
+  accumulateDowntimesByReason,
+  buildConsolidatedReport,
+  canPerformAction,
+  computeLoadByWorkCenter,
+  computeOee,
+  daysInPeriod,
+  evaluateThresholds,
+} from '../domain/plant-performance.js';
+import {
+  canRescheduleOrder,
+  sortOrdersForScheduling,
+  validatePlannedDates,
+} from '../domain/order-scheduling.js';
+import {
+  computeProjectedLoad,
+  computeStandardTimes,
+  computeUtilization,
+  detectBottlenecks,
+} from '../domain/line-balance.js';
 import { makeId } from '../domain/types.js';
 
 function clone(value) {
@@ -62,6 +109,14 @@ export class ManufacturingStore extends EventTarget {
     this.technicians = clone(mtFx.technicians);
     this.maintenanceCauses = clone(mtFx.maintenanceCauses);
 
+    this.productionShifts = clone(shiftFx.productionShifts);
+    this.operationDelays = clone(shiftFx.operationDelays);
+    this.delayReasons = clone(reasonFx.delayReasons);
+    this.shiftAssignments = clone(assignmentFx.shiftAssignments);
+    this.hrEmployees = clone(hrFx.hrEmployees);
+    this.thresholdSettings = clone(plantFx.thresholdSettings);
+    this.rolePermissions = clone(plantFx.rolePermissions);
+
     if (hydrate && this.storage) this.#hydrate();
     this.#resetInventory();
   }
@@ -92,6 +147,13 @@ export class ManufacturingStore extends EventTarget {
       productionOutput: 'productionOutput',
       maintenanceTickets: 'maintenanceTickets',
       preventiveMaintenanceOrders: 'preventiveMaintenanceOrders',
+      productionShifts: 'productionShifts',
+      operationDelays: 'operationDelays',
+      delayReasons: 'delayReasons',
+      shiftAssignments: 'shiftAssignments',
+      hrEmployees: 'hrEmployees',
+      thresholdSettings: 'thresholdSettings',
+      rolePermissions: 'rolePermissions',
     };
     for (const [key, dataKey] of Object.entries(assignments)) {
       if (Array.isArray(snapshot.data[dataKey])) this[key] = clone(snapshot.data[dataKey]);
@@ -137,6 +199,13 @@ export class ManufacturingStore extends EventTarget {
       productionOutput: this.productionOutput,
       maintenanceTickets: this.maintenanceTickets,
       preventiveMaintenanceOrders: this.preventiveMaintenanceOrders,
+      productionShifts: this.productionShifts,
+      operationDelays: this.operationDelays,
+      delayReasons: this.delayReasons,
+      shiftAssignments: this.shiftAssignments,
+      hrEmployees: this.hrEmployees,
+      thresholdSettings: this.thresholdSettings,
+      rolePermissions: this.rolePermissions,
     };
   }
 
@@ -204,6 +273,15 @@ export class ManufacturingStore extends EventTarget {
 
   /** Crea una orden (planned) y genera sus operaciones congeladas. */
   createOrder(input) {
+    const routeOps = input.routing_id
+      ? this.routingOperations.filter((ro) => ro.routing_id === input.routing_id)
+      : [];
+    const scheduleCheck = canScheduleOnWorkCenter(this.workCenters, routeOps);
+    if (!scheduleCheck.allowed) {
+      throw new Error(
+        `No se puede programar la orden: centro(s) desactivado(s) ${scheduleCheck.blocked_work_center_ids.join(', ')}.`,
+      );
+    }
     const order = {
       id: makeId('po'),
       company_id: 'cmp_1',
@@ -224,6 +302,7 @@ export class ManufacturingStore extends EventTarget {
     };
     this.productionOrders.push(order);
     this.#generateOperations(order);
+    this.#persist();
     this.#emit();
     return order;
   }
@@ -238,6 +317,7 @@ export class ManufacturingStore extends EventTarget {
     if (to === 'in_progress' && !order.actual_start_date)
       order.actual_start_date = now.slice(0, 10);
     if (to === 'completed' && !order.actual_end_date) order.actual_end_date = now.slice(0, 10);
+    this.#persist();
     this.#emit();
     return order;
   }
@@ -252,6 +332,7 @@ export class ManufacturingStore extends EventTarget {
     if (derived === 'completed') {
       order.actual_end_date = order.actual_end_date || new Date().toISOString().slice(0, 10);
     }
+    this.#persist();
     this.#emit();
     return order;
   }
@@ -271,6 +352,7 @@ export class ManufacturingStore extends EventTarget {
         status: 'pending',
         planned_time_minutes: plannedTimeMinutes(ro, order.quantity_planned),
         actual_time_minutes: null,
+        delay_time_minutes: 0,
         quantity_completed: 0,
         scrap_quantity: 0,
         operator_id: null,
@@ -304,6 +386,7 @@ export class ManufacturingStore extends EventTarget {
       order.status = 'in_progress';
       order.actual_start_date = order.actual_start_date || new Date().toISOString().slice(0, 10);
     }
+    this.#persist();
     this.#emit();
     return op;
   }
@@ -314,6 +397,7 @@ export class ManufacturingStore extends EventTarget {
       throw new Error('Solo se puede pausar una operación en progreso.');
     }
     op.status = 'paused';
+    this.#persist();
     this.#emit();
     return op;
   }
@@ -334,6 +418,7 @@ export class ManufacturingStore extends EventTarget {
     op.scrap_quantity = Number(scrap_quantity) || 0;
     op.completed_at = new Date().toISOString();
     this.recomputeOrderStatus(op.production_order_id);
+    this.#persist();
     this.#emit();
     return op;
   }
@@ -360,6 +445,7 @@ export class ManufacturingStore extends EventTarget {
       record.component_product_id,
       record.quantity_consumed,
     );
+    this.#persist();
     this.#emit();
     return record;
   }
@@ -379,6 +465,7 @@ export class ManufacturingStore extends EventTarget {
     };
     this.productionOutput.push(record);
     this.inventory.credit(record.warehouse_id, record.product_id, record.quantity_produced);
+    this.#persist();
     this.#emit();
     return record;
   }
@@ -668,6 +755,710 @@ export class ManufacturingStore extends EventTarget {
       .filter((value) => !Number.isNaN(value));
     const next = (numbers.length ? Math.max(...numbers) : 2000) + 1;
     return `PM-${next}`;
+  }
+
+  /* -------------------- US-06 Turnos y atrasos -------------------- */
+
+  #operationFor(operationId) {
+    return this.productionOrderOperations.find((o) => o.id === operationId) || null;
+  }
+
+  #shiftFor(shiftId) {
+    return this.productionShifts.find((s) => s.id === shiftId) || null;
+  }
+
+  #delayFor(delayId) {
+    return this.operationDelays.find((d) => d.id === delayId) || null;
+  }
+
+  activeShiftFor(operationId) {
+    return activeShiftOf(this.productionShifts, operationId);
+  }
+
+  delaysForOperation(operationId) {
+    return this.operationDelays
+      .filter((delay) => delay.po_operation_id === operationId)
+      .sort((a, b) => String(a.started_at).localeCompare(String(b.started_at)));
+  }
+
+  openDelayFor(operationId) {
+    return openDelayOf(this.delaysForOperation(operationId));
+  }
+
+  reasonsForShift(shiftId) {
+    const shift = this.#shiftFor(shiftId);
+    if (!shift) return [];
+    return this.delayReasons.filter(
+      (reason) =>
+        reason.active &&
+        (reason.scope === 'global' ||
+          (reason.scope === 'shift' && reason.production_shift_id === shiftId)),
+    );
+  }
+
+  startShift(operationId, { operator_id = null, now } = {}) {
+    const operation = this.#operationFor(operationId);
+    if (!operation) throw new Error(`Operación no encontrada: ${operationId}`);
+    const active = this.activeShiftFor(operationId);
+    const operatorId = String(operator_id || '').trim() || null;
+    const activeOperatorShift = operatorId
+      ? this.productionShifts.find(
+          (shift) =>
+            shift.status === 'in_progress' &&
+            shift.operator_id === operatorId &&
+            shift.po_operation_id !== operationId,
+        )
+      : null;
+    if (!canStartShift(operation, active, { operator_id: operatorId, activeOperatorShift })) {
+      if (operation.status === 'completed') {
+        throw new Error('No se puede iniciar un turno sobre una operación finalizada.');
+      }
+      if (active) throw new Error('La operación ya tiene un turno en progreso.');
+      throw new Error('El operador ya tiene otro turno en progreso.');
+    }
+
+    const startedAt = now || new Date().toISOString();
+    const numbers = this.productionShifts
+      .filter((shift) => shift.po_operation_id === operationId)
+      .map((shift) => shift.shift_number);
+    const shift = {
+      id: makeId('sh'),
+      po_operation_id: operationId,
+      operator_id: operatorId,
+      shift_number: (numbers.length ? Math.max(...numbers) : 0) + 1,
+      status: 'in_progress',
+      started_at: startedAt,
+      ended_at: null,
+      quantity_counted: 0,
+      supervisor_validated: false,
+      validated_at: null,
+      supervisor_notes: null,
+    };
+    this.productionShifts.push(shift);
+
+    operation.status = 'in_progress';
+    operation.operator_id = operatorId || operation.operator_id || null;
+    operation.started_at = operation.started_at || startedAt;
+    const order = this.orderById(operation.production_order_id);
+    if (order && order.status === 'released') {
+      assertTransition(order.status, 'in_progress');
+      order.status = 'in_progress';
+      order.actual_start_date = order.actual_start_date || startedAt.slice(0, 10);
+    }
+
+    this.#persist();
+    this.#emit();
+    return { shift, operation, order };
+  }
+
+  #recalcOperationTime(operation) {
+    const delays = this.delaysForOperation(operation.id);
+    operation.delay_time_minutes = sumClosedDelayMinutes(delays);
+    if (operation.status === 'completed' && operation.started_at && operation.completed_at) {
+      operation.actual_time_minutes = computeEffectiveMinutes(
+        operation.started_at,
+        operation.completed_at,
+        delays,
+      );
+    }
+    return operation;
+  }
+
+  finishOperation(operationId, { now } = {}) {
+    const operation = this.#operationFor(operationId);
+    if (!operation) throw new Error(`Operación no encontrada: ${operationId}`);
+    if (operation.status !== 'in_progress') {
+      throw new Error('Solo se puede finalizar una operación en progreso.');
+    }
+    const completedAt = now || new Date().toISOString();
+    const shift = this.activeShiftFor(operationId);
+    if (shift) {
+      shift.status = 'completed';
+      shift.ended_at = completedAt;
+    }
+    operation.completed_at = completedAt;
+    operation.status = 'completed';
+    this.#recalcOperationTime(operation);
+    const order = this.recomputeOrderStatus(operation.production_order_id);
+    const openDelays = this.delaysForOperation(operationId).filter(
+      (delay) => delay.status === 'open',
+    );
+    this.#persist();
+    this.#emit();
+    return { operation, order, openDelays };
+  }
+
+  startDelay(operationId, { reasonId = null, customLabel = null, note = '', now } = {}) {
+    const operation = this.#operationFor(operationId);
+    if (!operation) throw new Error(`Operación no encontrada: ${operationId}`);
+    const open = this.openDelayFor(operationId);
+    if (!canStartDelay(operation, open)) {
+      if (open) throw new Error('Ya existe un atraso abierto para esta operación.');
+      throw new Error('Solo se puede registrar un atraso en una operación en progreso.');
+    }
+    const shift = this.activeShiftFor(operationId);
+    if (!shift) throw new Error('No hay un turno activo para la operación.');
+
+    let resolvedReasonId = reasonId;
+    if (String(customLabel || '').trim()) {
+      const label = String(customLabel).trim();
+      const duplicate = this.delayReasons.some(
+        (reason) =>
+          reason.company_id === 'cmp_1' && reason.label.toLowerCase() === label.toLowerCase(),
+      );
+      if (duplicate) throw new Error('Ya existe un motivo de atraso con esa etiqueta.');
+      const custom = {
+        id: makeId('dr'),
+        company_id: 'cmp_1',
+        label,
+        origin: 'custom',
+        scope: 'shift',
+        production_shift_id: shift.id,
+        active: true,
+        created_by: shift.operator_id || null,
+      };
+      this.delayReasons.push(custom);
+      resolvedReasonId = custom.id;
+    }
+
+    if (!resolvedReasonId) throw new Error('Debe seleccionar un motivo de atraso.');
+    const reason = this.delayReasons.find((row) => row.id === resolvedReasonId && row.active);
+    if (!reason) throw new Error('El motivo de atraso no existe o está inactivo.');
+    if (reason.scope === 'shift' && reason.production_shift_id !== shift.id) {
+      throw new Error('El motivo de atraso pertenece a otro turno.');
+    }
+
+    const delay = {
+      id: makeId('od'),
+      po_operation_id: operationId,
+      production_shift_id: shift.id,
+      delay_reason_id: reason.id,
+      started_at: now || new Date().toISOString(),
+      ended_at: null,
+      duration_minutes: null,
+      status: 'open',
+      note: String(note || '').trim() || null,
+      escalated_to_maint: false,
+      corrected_at: null,
+      corrected_by: null,
+      correction_note: null,
+    };
+    this.operationDelays.push(delay);
+    this.#persist();
+    this.#emit();
+    return delay;
+  }
+
+  closeDelay(delayId, { endedAt, now } = {}) {
+    const delay = this.#delayFor(delayId);
+    if (!delay) throw new Error(`Atraso no encontrado: ${delayId}`);
+    if (delay.status !== 'open') throw new Error('El atraso ya está cerrado.');
+    const end = endedAt || now || new Date().toISOString();
+    delay.ended_at = new Date(end).toISOString();
+    delay.duration_minutes = elapsedMinutes(delay.started_at, delay.ended_at);
+    delay.status = 'closed';
+    const operation = this.#operationFor(delay.po_operation_id);
+    if (operation) this.#recalcOperationTime(operation);
+    this.#persist();
+    this.#emit();
+    return delay;
+  }
+
+  correctOpenDelay(delayId, { endedAt, note = '', correctedBy = null, now } = {}) {
+    const delay = this.#delayFor(delayId);
+    if (!delay) throw new Error(`Atraso no encontrado: ${delayId}`);
+    if (delay.status !== 'open') throw new Error('Solo se corrigen atrasos abiertos.');
+    const operation = this.#operationFor(delay.po_operation_id);
+    if (!operation || operation.status !== 'completed') {
+      throw new Error('Solo se corrigen atrasos de operaciones finalizadas.');
+    }
+    if (!endedAt) throw new Error('Debe indicar la marca de término del atraso.');
+    const duration = elapsedMinutes(delay.started_at, endedAt);
+    if (
+      operation.completed_at &&
+      new Date(endedAt).getTime() > new Date(operation.completed_at).getTime()
+    ) {
+      throw new Error('ended_at no puede ser posterior a completed_at.');
+    }
+    delay.ended_at = new Date(endedAt).toISOString();
+    delay.duration_minutes = duration;
+    delay.status = 'closed';
+    delay.corrected_at = now || new Date().toISOString();
+    delay.corrected_by = correctedBy;
+    delay.correction_note = String(note || '').trim() || null;
+    this.#recalcOperationTime(operation);
+    this.#persist();
+    this.#emit();
+    return delay;
+  }
+
+  #applyShiftCounter(shift, nextValue) {
+    const operation = this.#operationFor(shift.po_operation_id);
+    if (!operation) throw new Error('Operación del turno no encontrada.');
+    const delta = nextValue - (Number(shift.quantity_counted) || 0);
+    const cumulative = (Number(operation.quantity_completed) || 0) + delta;
+    if (cumulative < 0) throw new Error('El contador acumulado no puede ser negativo.');
+    shift.quantity_counted = nextValue;
+    operation.quantity_completed = cumulative;
+    this.#persist();
+    this.#emit();
+    return { shiftQuantity: nextValue, cumulativeQuantity: cumulative };
+  }
+
+  adjustShiftCounter(operationId, delta) {
+    const shift = this.activeShiftFor(operationId);
+    if (!shift) throw new Error('No hay un turno activo para la operación.');
+    const next = validateCounter((Number(shift.quantity_counted) || 0) + Number(delta));
+    return this.#applyShiftCounter(shift, next);
+  }
+
+  setShiftCounter(operationId, value) {
+    const shift = this.activeShiftFor(operationId);
+    if (!shift) throw new Error('No hay un turno activo para la operación.');
+    return this.#applyShiftCounter(shift, validateCounter(value));
+  }
+
+  /* -------------------- US-07 Supervisión de línea -------------------- */
+
+  activeAssignmentForWorkCenter(workCenterId, shiftBand = null) {
+    return (
+      this.shiftAssignments.find(
+        (assignment) =>
+          assignment.active &&
+          assignment.work_center_id === workCenterId &&
+          (!shiftBand || assignment.shift_band === shiftBand),
+      ) || null
+    );
+  }
+
+  trafficLightForWorkCenters() {
+    return this.workCenters.map((workCenter) => {
+      const operations = this.productionOrderOperations.filter(
+        (op) => op.work_center_id === workCenter.id,
+      );
+      const ticket = this.activeInterventionForWorkCenter(workCenter.id);
+      return {
+        work_center: workCenter,
+        status: deriveWorkCenterTrafficLight(workCenter, operations, ticket),
+        active_operation:
+          operations.find((op) => op.status === 'in_progress' || op.status === 'paused') || null,
+        assignment: this.activeAssignmentForWorkCenter(workCenter.id),
+      };
+    });
+  }
+
+  shiftsPendingValidation() {
+    return this.productionShifts.filter(
+      (shift) =>
+        shift.status === 'completed' &&
+        !shift.supervisor_validated &&
+        !hasOpenDelay(this.delaysForOperation(shift.po_operation_id)),
+    );
+  }
+
+  openMaintenanceTicketsFor(workCenterId) {
+    return this.maintenanceTickets.filter(
+      (ticket) =>
+        ticket.ticket_status === 'open' &&
+        (!workCenterId || ticket.work_center_id === workCenterId),
+    );
+  }
+
+  assignOperatorToWorkCenter(
+    workCenterId,
+    { ext_hr_employee_id, shift_band = 'morning', now } = {},
+  ) {
+    const workCenter = this.workCenterById(workCenterId);
+    if (!workCenter) throw new Error(`Centro de trabajo no encontrado: ${workCenterId}`);
+    const employee = this.hrEmployees.find((row) => row.ext_hr_employee_id === ext_hr_employee_id);
+    if (!employee) throw new Error('El operario no existe en el puente de RR.HH.');
+    const candidate = { work_center_id: workCenterId, ext_hr_employee_id, shift_band };
+    const previous = this.shiftAssignments.find(
+      (assignment) =>
+        assignment.active &&
+        assignment.work_center_id === workCenterId &&
+        assignment.shift_band === shift_band,
+    );
+    const others = this.shiftAssignments.filter((assignment) => assignment !== previous);
+    if (!canAssignOperator(others, candidate)) {
+      throw new Error('El operario ya está asignado a otra franja en el mismo turno.');
+    }
+    if (previous) previous.active = false;
+    const assignment = {
+      id: makeId('sa'),
+      shift_assignment_id: null,
+      work_center_id: workCenterId,
+      ext_hr_employee_id,
+      shift_band,
+      assigned_at: now || new Date().toISOString(),
+      active: true,
+    };
+    assignment.shift_assignment_id = assignment.id;
+    this.shiftAssignments.push(assignment);
+    this.#persist();
+    this.#emit();
+    return assignment;
+  }
+
+  setWorkCenterOperationalStatus(workCenterId, status) {
+    const allowed = ['in_operation', 'paused', 'fault', 'changeover', 'available'];
+    if (!allowed.includes(status)) throw new Error(`Estado operativo inválido: ${status}`);
+    const workCenter = this.workCenterById(workCenterId);
+    if (!workCenter) throw new Error(`Centro de trabajo no encontrado: ${workCenterId}`);
+    workCenter.operational_status = status;
+    this.#persist();
+    this.#emit();
+    return workCenter;
+  }
+
+  validateShiftClosure(shiftId, { supervisor_notes = null, now } = {}) {
+    const shift = this.#shiftFor(shiftId);
+    if (!shift) throw new Error(`Turno no encontrado: ${shiftId}`);
+    const delays = this.delaysForOperation(shift.po_operation_id);
+    if (!canValidateShiftClosure(shift, delays)) {
+      if (shift.supervisor_validated) throw new Error('El cierre del turno ya fue validado.');
+      throw new Error('No se puede validar un cierre con atrasos abiertos.');
+    }
+    shift.supervisor_validated = true;
+    shift.validated_at = now || new Date().toISOString();
+    shift.supervisor_notes = String(supervisor_notes || '').trim() || null;
+    this.#persist();
+    this.#emit();
+    return shift;
+  }
+
+  escalateIncidentToMaintenance({
+    workCenterId,
+    operationDelayId = null,
+    description,
+    reportedBy = null,
+    now,
+  } = {}) {
+    const workCenter = this.workCenterById(workCenterId);
+    if (!workCenter) throw new Error(`Centro de trabajo no encontrado: ${workCenterId}`);
+    if (operationDelayId) {
+      const existing = this.maintenanceTickets.find(
+        (ticket) => ticket.operation_delay_id === operationDelayId,
+      );
+      if (existing) return existing;
+    }
+    const draft = buildUrgentMaintenanceTicket({
+      workCenterId,
+      operationDelayId,
+      description,
+      reportedBy,
+      createdAt: now || new Date().toISOString(),
+    });
+    const ticket = {
+      id: makeId('mt'),
+      ticket_code: this.#nextTicketCode(),
+      ...draft,
+    };
+    this.maintenanceTickets.push(ticket);
+    if (operationDelayId) {
+      const delay = this.#delayFor(operationDelayId);
+      if (delay) delay.escalated_to_maint = true;
+    }
+    workCenter.operational_status = 'fault';
+    this.#persist();
+    this.#emit();
+    return ticket;
+  }
+
+  #nextTicketCode() {
+    const numbers = this.maintenanceTickets
+      .map((ticket) => Number(String(ticket.ticket_code).replace(/\D/g, '')))
+      .filter((value) => !Number.isNaN(value));
+    return `MTO-${(numbers.length ? Math.max(...numbers) : 1000) + 1}`;
+  }
+
+  /* -------------------- US-08 Panel de planta -------------------- */
+
+  thresholdsFor() {
+    return this.thresholdSettings.map((row) => ({ ...row }));
+  }
+
+  rolePermissionsFor(role) {
+    return this.rolePermissions.filter((row) => row.role === role).map((row) => ({ ...row }));
+  }
+
+  canPerformActionFor(role, action) {
+    return canPerformAction(role, action, this.rolePermissions);
+  }
+
+  #enrichedOperations() {
+    return this.productionOrderOperations.map((operation) => {
+      const route = this.routingOperations.find((row) => row.id === operation.routing_operation_id);
+      const order = this.orderById(operation.production_order_id);
+      return {
+        ...operation,
+        quantity_planned: order ? order.quantity_planned : 0,
+        run_time_per_unit_minutes: route ? route.run_time_per_unit_minutes : null,
+      };
+    });
+  }
+
+  loadByWorkCenterFor(period = {}) {
+    return computeLoadByWorkCenter(this.workCenters, this.#enrichedOperations(), period);
+  }
+
+  downtimesByReasonFor(period = {}) {
+    return accumulateDowntimesByReason(
+      this.operationDelays,
+      this.maintenanceTickets,
+      period,
+      this.delayReasons,
+    );
+  }
+
+  plantPerformanceFor(period = {}) {
+    const operations = this.#enrichedOperations();
+    const loadByWorkCenter = computeLoadByWorkCenter(this.workCenters, operations, period);
+    const oeeByWorkCenter = {};
+    for (const workCenter of this.workCenters) {
+      oeeByWorkCenter[workCenter.id] = computeOee(
+        workCenter.id,
+        operations,
+        this.operationDelays,
+        period,
+      );
+    }
+    const downtimeByReason = this.downtimesByReasonFor(period);
+    const due = this.productionOrders.filter(
+      (order) => order.planned_end_date && order.status !== 'cancelled',
+    );
+    const onTime = due.filter(
+      (order) =>
+        order.status === 'completed' &&
+        order.actual_end_date &&
+        order.actual_end_date <= order.planned_end_date,
+    ).length;
+    const fulfillment = {
+      completed_on_time: onTime,
+      total_with_due_date: due.length,
+      ratio: due.length ? round2(onTime / due.length) : null,
+    };
+
+    const loadRatios = Object.values(loadByWorkCenter).map((row) => row.load_ratio);
+    const oeeValues = Object.values(oeeByWorkCenter)
+      .filter((value) => value && value.oee !== null)
+      .map((value) => value.oee);
+    const indicators = {
+      load: loadRatios.length ? Math.max(...loadRatios) : 0,
+      oee: oeeValues.length
+        ? round2(oeeValues.reduce((sum, value) => sum + value, 0) / oeeValues.length)
+        : null,
+      downtime: round2(downtimeByReason.reduce((sum, row) => sum + row.downtime_minutes, 0)),
+      fulfillment: fulfillment.ratio,
+    };
+    const thresholds = evaluateThresholds(indicators, this.thresholdSettings);
+
+    return {
+      indicators,
+      thresholds,
+      oee_by_work_center: oeeByWorkCenter,
+      load_by_work_center: loadByWorkCenter,
+      downtime_by_reason: downtimeByReason,
+      fulfillment,
+    };
+  }
+
+  consolidatedReportFor(period = {}, generatedAt = null) {
+    return buildConsolidatedReport(period, {
+      ...this.plantPerformanceFor(period),
+      generated_at: generatedAt || new Date().toISOString(),
+    });
+  }
+
+  setIndicatorThreshold({ indicator, threshold, comparison } = {}) {
+    const indicators = ['load', 'oee', 'downtime', 'fulfillment'];
+    if (!indicators.includes(indicator)) {
+      throw new Error(`Indicador desconocido: ${indicator}`);
+    }
+    const value = Number(threshold);
+    if (!Number.isFinite(value)) throw new Error('El umbral debe ser un número válido.');
+    const cmp = comparison || (indicator === 'downtime' ? 'gt' : 'lt');
+    if (cmp !== 'lt' && cmp !== 'gt') throw new Error(`Comparación inválida: ${cmp}`);
+    if (indicator === 'downtime') {
+      if (value < 0) throw new Error('El umbral de paradas no puede ser negativo.');
+      if (cmp !== 'gt') throw new Error('El umbral de paradas debe compararse con "gt".');
+    } else if (value < 0 || value > 1) {
+      throw new Error('El umbral debe estar en el rango [0, 1].');
+    }
+
+    const existing = this.thresholdSettings.find(
+      (row) => row.company_id === 'cmp_1' && row.indicator === indicator,
+    );
+    const updatedAt = new Date().toISOString();
+    if (existing) {
+      existing.threshold = value;
+      existing.comparison = cmp;
+      existing.updated_at = updatedAt;
+      this.#persist();
+      this.#emit();
+      return existing;
+    }
+    const row = {
+      id: makeId('th'),
+      company_id: 'cmp_1',
+      indicator,
+      threshold: value,
+      comparison: cmp,
+      updated_at: updatedAt,
+    };
+    this.thresholdSettings.push(row);
+    this.#persist();
+    this.#emit();
+    return row;
+  }
+
+  changeOrderPriority(orderId, priority) {
+    const order = this.orderById(orderId);
+    if (!order) throw new Error(`Orden no encontrada: ${orderId}`);
+    if (order.status !== 'planned') {
+      throw new Error('Solo se puede cambiar la prioridad de una orden planificada.');
+    }
+    if (!['low', 'normal', 'high'].includes(priority)) {
+      throw new Error(`Prioridad inválida: ${priority}`);
+    }
+    order.priority = priority;
+    this.#persist();
+    this.#emit();
+    return order;
+  }
+
+  cancelOrderFromPanel(orderId, { reason } = {}) {
+    const order = this.orderById(orderId);
+    if (!order) throw new Error(`Orden no encontrada: ${orderId}`);
+    if (order.status === 'cancelled' || order.status === 'completed') {
+      throw new Error('La orden ya está cerrada y no se puede cancelar.');
+    }
+    const cleanReason = String(reason || '').trim();
+    if (!cleanReason) throw new Error('Debe indicar el motivo de cancelación.');
+    order.status = 'cancelled';
+    order.notes = order.notes
+      ? `${order.notes} Cancelada: ${cleanReason}`
+      : `Cancelada: ${cleanReason}`;
+    this.#persist();
+    this.#emit();
+    return order;
+  }
+
+  /* -------------------- US-10 Planificación -------------------- */
+
+  ordersForScheduling({ status = null, dateFrom = null, dateTo = null } = {}) {
+    const list = this.productionOrders.filter((order) => {
+      if (status) {
+        if (order.status !== status) return false;
+      } else if (!canRescheduleOrder(order)) {
+        return false;
+      }
+      const start = order.planned_start_date || order.planned_end_date;
+      if (dateFrom && (!start || start < dateFrom)) return false;
+      if (dateTo && (!start || start > dateTo)) return false;
+      return true;
+    });
+    return sortOrdersForScheduling(list);
+  }
+
+  orderScheduleSummary(asOfDate = new Date().toISOString().slice(0, 10)) {
+    const planned = this.productionOrders.filter(
+      (order) => order.planned_start_date || order.planned_end_date,
+    ).length;
+    const unplanned = this.productionOrders.filter(
+      (order) => !order.planned_start_date && !order.planned_end_date,
+    ).length;
+    const overdue = this.productionOrders.filter(
+      (order) =>
+        order.status !== 'completed' &&
+        order.status !== 'cancelled' &&
+        order.planned_end_date &&
+        order.planned_end_date < asOfDate,
+    ).length;
+    return { planned, unplanned, overdue };
+  }
+
+  updatePlannedDates(orderId, { planned_start_date, planned_end_date } = {}) {
+    const order = this.orderById(orderId);
+    if (!order) throw new Error(`Orden no encontrada: ${orderId}`);
+    if (!canRescheduleOrder(order)) {
+      throw new Error('Una orden cerrada no admite cambios de fechas.');
+    }
+    const start = planned_start_date === undefined ? null : planned_start_date;
+    const end = planned_end_date === undefined ? null : planned_end_date;
+    const result = validatePlannedDates({
+      planned_start_date: start,
+      planned_end_date: end,
+    });
+    if (!result.valid) {
+      throw new Error(
+        result.error === 'rango_invertido'
+          ? 'La fecha de término no puede ser anterior a la de inicio.'
+          : 'Las fechas deben tener el formato YYYY-MM-DD y existir en el calendario.',
+      );
+    }
+    order.planned_start_date = start;
+    order.planned_end_date = end;
+    this.#persist();
+    this.#emit();
+    return order;
+  }
+
+  /* -------------------- US-11 Balance de líneas -------------------- */
+
+  capacityForPeriod(period = {}) {
+    const days = daysInPeriod(period);
+    const map = {};
+    for (const workCenter of this.workCenters) {
+      map[workCenter.id] = {
+        work_center_id: workCenter.id,
+        name: workCenter.name,
+        capacity_minutes: round2((Number(workCenter.capacity_per_day_minutes) || 0) * days),
+      };
+    }
+    return map;
+  }
+
+  lineBalanceFor(period = {}) {
+    const standardTimes = computeStandardTimes(this.routingOperations);
+    const projected = computeProjectedLoad(
+      this.productionOrders,
+      this.routingOperations,
+      period,
+      this.productionOrderOperations,
+    );
+    const utilization = computeUtilization(projected.load_by_work_center, this.workCenters, period);
+    const { bottleneck, candidates } = detectBottlenecks(utilization);
+    return {
+      standard_times: standardTimes,
+      load_by_work_center: projected.load_by_work_center,
+      utilization_by_work_center: utilization,
+      bottleneck,
+      bottleneck_candidates: candidates,
+      unscheduled_order_ids: projected.unscheduled_order_ids,
+    };
+  }
+
+  lineBalanceForOrder(orderId) {
+    const order = this.orderById(orderId);
+    if (!order) return null;
+    const period = { from: order.planned_start_date, to: order.planned_end_date };
+    const projected = computeProjectedLoad(
+      [order],
+      this.routingOperations,
+      period,
+      this.productionOrderOperations,
+    );
+    const utilization = computeUtilization(projected.load_by_work_center, this.workCenters, period);
+    const { bottleneck, candidates } = detectBottlenecks(utilization);
+    return {
+      order,
+      load_by_work_center: projected.load_by_work_center,
+      utilization_by_work_center: utilization,
+      bottleneck,
+      bottleneck_candidates: candidates,
+      unscheduled_order_ids: projected.unscheduled_order_ids,
+    };
   }
 
   #countBy(list, key) {

@@ -13,7 +13,7 @@
 4. Ejecute las pruebas: `npm test` (Vitest, modo watch) o `npm test -- --run` (una sola pasada).
 5. Verifique el build: `npm run build`.
 
-El módulo es frontend-only: no requiere backend ni variables de entorno. Los datos iniciales provienen de `src/data/fixtures/` y se persisten en `localStorage`: `erp.manufacturing.v1` para US-01…US-07 y `erp.manufacturing.v2` desde US-08, con migración automática.
+El módulo es frontend-only: no requiere backend ni variables de entorno. Los datos iniciales provienen de `src/data/fixtures/` y se persisten en `localStorage` bajo `erp.manufacturing.v2`; un snapshot `v1` existente se migra automáticamente al arrancar.
 
 ---
 
@@ -52,6 +52,17 @@ El módulo es frontend-only: no requiere backend ni variables de entorno. Los da
    - el atraso debe quedar marcado *Abierto — pendiente de corrección*;
    - use **Corregir atraso** para cerrarlo y confirme que el tiempo efectivo se recalcula.
 8. Abra un **nuevo turno** sobre otra operación y confirme que el contador del turno arranca en `0` y el acumulado de la operación se conserva.
+
+---
+
+## 3.1 Flujo del supervisor (US-07)
+
+1. Abra **Supervisión** y confirme las filas por centro con semáforo: *En operación*, *En pausa*, *En fallo*, *Cambio de formato* o *Disponible*.
+2. Asigne un operario (`ext_hr_employee_id`) a un centro y franja; verifique que no se duplica el operario ni el centro en la misma franja.
+3. Finalice un turno con atraso abierto y confirme que **Validar cierre** permanece bloqueado hasta corregir el atraso.
+4. Corrija el atraso y valide el cierre: `supervisor_validated = true` y la nota del supervisor quedan persistidas.
+5. Pulse **Escalar incidente** en un centro: se crea un ticket `urgent`/`open`, el atraso queda `escalated_to_maint = true` y el centro pasa a *En fallo*.
+6. Desde **Órdenes → detalle** puede abrir **Estación del operador** y **Supervisión de línea** en un panel embebido para operar sin cambiar de vista.
 
 ---
 
@@ -211,3 +222,17 @@ El módulo es frontend-only: no requiere backend ni variables de entorno. Los da
 5. Abra el detalle de una orden y compare el desglose por operación con la fila del centro.
 6. Recargue la página: el balance se recalcula desde el estado vigente y no se persiste ningún resultado.
 7. **Solución de problemas US-11**: si la tabla aparece vacía, revise que existan rutas con tiempos estándar y órdenes con fechas; si un centro muestra `—`, su capacidad nominal es `0` y debe corregirse en datos maestros.
+
+---
+
+## 16. Guion de demo (5 minutos)
+
+1. **Pedido ? orden** (30 s): cree una orden desde stock o MTO, libérela y abra su detalle.
+2. **Fechas planificadas** (30 s): en **Planificación**, asigne inicio/término; pruebe un rango invertido y corrija.
+3. **Asignación y semáforo** (40 s): en **Supervisión**, asigne un operario y revise el semáforo por centro.
+4. **Turno del operador** (60 s): en **Estación**, inicie, ajuste contadores, registre un atraso y finalice con confirmación.
+5. **Cierre y escalamiento** (40 s): valide el cierre en **Supervisión**; escale un incidente y confirme el ticket urgente y el estado *En fallo*.
+6. **Mantenimiento** (50 s): tome el ticket más antiguo, resuélvalo con marcas de parada y confirme que la máquina sale de *En fallo*.
+7. **Panel de planta** (40 s): revise carga/OEE/paradas, cambie el rol simulado, ajuste un umbral y cancele una orden con motivo.
+8. **Balance de líneas** (30 s): identifique el cuello de botella y abra el detalle por orden.
+9. **Recarga** (20 s): recargue la página y confirme que turno, atrasos, asignaciones, umbrales y fechas persisten en `erp.manufacturing.v2`.

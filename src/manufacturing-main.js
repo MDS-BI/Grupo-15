@@ -10,11 +10,21 @@ import { DashboardOverview } from './components/DashboardOverview.js';
 import { BomExplorer } from './components/BomExplorer.js';
 import { ProductionOrders } from './components/ProductionOrders.js';
 import { MaintenancePanel } from './components/MaintenancePanel.js';
+import { OperatorWorkstationPanel } from './components/OperatorWorkstationPanel.js';
+import { SupervisorLinePanel } from './components/SupervisorLinePanel.js';
+import { PlantPerformancePanel } from './components/PlantPerformancePanel.js';
+import { ProductionSchedulingPanel } from './components/ProductionSchedulingPanel.js';
+import { LineBalancePanel } from './components/LineBalancePanel.js';
 
 const MODULES = [
   { id: 'dashboard', label: 'Panel', render: () => DashboardOverview(store) },
   { id: 'bom', label: 'BOM', render: () => BomExplorer(store) },
   { id: 'orders', label: 'Órdenes', render: () => ProductionOrders(store) },
+  { id: 'operator', label: 'Estación', render: () => OperatorWorkstationPanel(store) },
+  { id: 'supervision', label: 'Supervisión', render: () => SupervisorLinePanel(store) },
+  { id: 'plant', label: 'Planta', render: () => PlantPerformancePanel(store) },
+  { id: 'scheduling', label: 'Planificación', render: () => ProductionSchedulingPanel(store) },
+  { id: 'line-balance', label: 'Balance', render: () => LineBalancePanel(store) },
   { id: 'maintenance', label: 'Mantenimiento', render: () => MaintenancePanel(store) },
 ];
 

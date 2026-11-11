@@ -203,10 +203,10 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 | AC-01 | Árbol BOM multi-nivel con ≥4 niveles y ciclo detectado | Implementado |
 | AC-02 | Ruta con secuencia estrictamente creciente y tiempo estándar calculado | Implementado |
 | AC-03 | Liberación congela BOM/ruta y genera operaciones; MTO/stock soportado | Implementado |
-| AC-04 | Tablero de carga por centro con OEE (Disponibilidad × Rendimiento × Calidad) y paradas acumuladas por período, derivados y no persistidos | Planificado |
-| AC-05 | Umbrales de alarma configurables, persistidos en el snapshot y evaluados de inmediato | Planificado |
-| AC-06 | Reprogramación de prioridad y cancelación con confirmación, conservando registros de ejecución | Planificado |
-| AC-07 | Exportación del reporte consolidado a PDF y Excel (sin dependencias externas) y permisos por rol simulados | Planificado |
+| AC-04 | Tablero de carga por centro con OEE (Disponibilidad × Rendimiento × Calidad) y paradas acumuladas por período, derivados y no persistidos | Verificado |
+| AC-05 | Umbrales de alarma configurables, persistidos en el snapshot y evaluados de inmediato | Verificado |
+| AC-06 | Reprogramación de prioridad y cancelación con confirmación, conservando registros de ejecución | Verificado |
+| AC-07 | Exportación del reporte consolidado a PDF y Excel (sin dependencias externas) y permisos por rol simulados | Verificado |
 | AC-08 | Máquinas de estados validadas; rechazo de transiciones inversas | Implementado |
 | AC-09 | Ejecución con tiempos reales; avance automático del estado de orden | Implementado |
 | AC-10 | Consumo teórico vs. real con flags de discrepancia; uso no planificado permitido | Implementado |
@@ -214,12 +214,12 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 | AC-12 | Panel con KPIs y utilización por centro de trabajo | Implementado |
 | AC-13 | Calidad derivada desde `quality_inspections` (solo lectura) | Implementado |
 | AC-14 | Pruebas unitarias del dominio y del store pasan; build exitoso | Verificado |
-| AC-15 | Inicio/fin de la operación activa con un único botón alterno y confirmación, tiempo real registrado y sin doble cierre | Planificado |
-| AC-16 | Atrasos justificados con motivos predefinidos o personalizados; tiempo efectivo pausado y cierre permitido con atraso abierto para corrección posterior | Planificado |
-| AC-17 | Dos contadores de piezas (turno y acumulado) incrementables, ajustables y validados; totales conservados al finalizar y recargar | Planificado |
-| AC-18 | Semáforo en vivo por línea/máquina (*En operación, En pausa, En fallo, Cambio de formato*) y registro de asignación de operario (`ext_hr_employee_id`) en `shift_assignments` | Planificado |
-| AC-19 | Aprobación de cierre de turno (`supervisor_validated = true`) tras verificar atrasos cerrados, y disparo de ticket urgente (`escalated_to_maint = true`) hacia `maintenance_tickets` pasando la máquina a *En fallo* | Planificado |
-| AC-20 | Carga por centro destacada sobre la capacidad efectiva y bloqueo de programación en centros desactivados | Planificado |
+| AC-15 | Inicio/fin de la operación activa con un único botón alterno y confirmación, tiempo real registrado y sin doble cierre | Verificado |
+| AC-16 | Atrasos justificados con motivos predefinidos o personalizados; tiempo efectivo pausado y cierre permitido con atraso abierto para corrección posterior | Verificado |
+| AC-17 | Dos contadores de piezas (turno y acumulado) incrementables, ajustables y validados; totales conservados al finalizar y recargar | Verificado |
+| AC-18 | Semáforo en vivo por línea/máquina (*En operación, En pausa, En fallo, Cambio de formato*) y registro de asignación de operario (`ext_hr_employee_id`) en `shift_assignments` | Verificado |
+| AC-19 | Aprobación de cierre de turno (`supervisor_validated = true`) tras verificar atrasos cerrados, y disparo de ticket urgente (`escalated_to_maint = true`) hacia `maintenance_tickets` pasando la máquina a *En fallo* | Verificado |
+| AC-20 | Carga por centro destacada sobre la capacidad efectiva y bloqueo de programación en centros desactivados | Verificado |
 | AC-21 | Bandeja de tickets escalados con prioridad, estado, centro y evento de parada vinculado, ordenada por prioridad y antigüedad | Verificado |
 | AC-22 | Toma de intervención con técnico asignado y bloqueo de dos intervenciones simultáneas sobre el mismo centro de trabajo | Verificado |
 | AC-23 | Historial por máquina con paradas acumuladas e indicador derivado de desgaste que sustenta la orden preventiva | Verificado |
@@ -227,12 +227,12 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 | AC-25 | Ticket resuelto sin reapertura; nueva incidencia genera un ticket vinculado al evento correspondiente | Verificado |
 | AC-26 | Tickets, intervenciones, tiempos de parada y órdenes preventivas conservados en el snapshot tras recargar | Verificado |
 | AC-27 | Tiempos de mantenimiento agregados por centro, sin rankings ni evaluación de desempeño de técnicos | Verificado |
-| AC-28 | El sistema permite consultar las órdenes de producción existentes y visualizar sus datos principales | Planificado |
-| AC-29 | El planificador puede asignar fechas planificadas de inicio y término a una orden de producción | Planificado |
-| AC-30 | El planificador puede modificar las fechas planificadas de una orden existente | Planificado |
-| AC-31 | El sistema impide asignar una fecha de término anterior a la fecha de inicio | Planificado |
-| AC-32 | El sistema permite visualizar las órdenes según sus fechas planificadas y estados | Planificado |
-| AC-33 | Las fechas asignadas y sus modificaciones permanecen guardadas al volver a abrir el sistema | Planificado |
+| AC-28 | El sistema permite consultar las órdenes de producción existentes y visualizar sus datos principales | Verificado |
+| AC-29 | El planificador puede asignar fechas planificadas de inicio y término a una orden de producción | Verificado |
+| AC-30 | El planificador puede modificar las fechas planificadas de una orden existente | Verificado |
+| AC-31 | El sistema impide asignar una fecha de término anterior a la fecha de inicio | Verificado |
+| AC-32 | El sistema permite visualizar las órdenes según sus fechas planificadas y estados | Verificado |
+| AC-33 | Las fechas asignadas y sus modificaciones permanecen guardadas al volver a abrir el sistema | Verificado |
 
 ## 6. Entidades Clave
 

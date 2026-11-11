@@ -62,6 +62,21 @@ export function nextStatuses(from) {
 }
 
 /**
+ * Bloquea la programación de una orden nueva cuando algún centro requerido por
+ * su ruta está desactivado (AC-20).
+ * @param {Array<{id:string, status:string}>} workCenters
+ * @param {Array<{work_center_id:string}>} routingOperations
+ * @returns {{allowed:boolean, blocked_work_center_ids:string[]}}
+ */
+export function canScheduleOnWorkCenter(workCenters = [], routingOperations = []) {
+  const required = new Set(routingOperations.map((op) => op.work_center_id));
+  const blocked = workCenters
+    .filter((wc) => required.has(wc.id) && wc.status !== 'active')
+    .map((wc) => wc.id);
+  return { allowed: blocked.length === 0, blocked_work_center_ids: blocked };
+}
+
+/**
  * Deriva el estado de una orden a partir del estado de sus operaciones.
  * - Ninguna operación iniciada → `released`
  * - Alguna en progreso/pausada/finalizada, pero no todas → `in_progress`

@@ -13,6 +13,8 @@ import {
   OP_STATUS_LABEL,
   QUALITY_LABEL,
 } from './format.js';
+import { OperatorWorkstationPanel } from './OperatorWorkstationPanel.js';
+import { SupervisorLinePanel } from './SupervisorLinePanel.js';
 
 const BOARD_COLUMNS = ['planned', 'released', 'in_progress', 'completed'];
 
@@ -189,6 +191,8 @@ export function ProductionOrders(store) {
       <div class="detail-actions">
         <button type="button" class="btn btn--small" data-role="consume">Registrar Consumo</button>
         <button type="button" class="btn btn--small btn--primary" data-role="output">Registrar Salida</button>
+        <button type="button" class="btn btn--small" data-role="open-operator">Estación del operador</button>
+        <button type="button" class="btn btn--small" data-role="open-supervisor">Supervisión de línea</button>
       </div>`;
 
     detailEl.querySelectorAll('[data-transition]').forEach((btn) => {
@@ -236,6 +240,34 @@ export function ProductionOrders(store) {
     if (consumeBtn) consumeBtn.addEventListener('click', () => openConsumptionModal(order));
     const outputBtn = detailEl.querySelector('[data-role="output"]');
     if (outputBtn) outputBtn.addEventListener('click', () => openOutputModal(order));
+    const operatorBtn = detailEl.querySelector('[data-role="open-operator"]');
+    if (operatorBtn)
+      operatorBtn.addEventListener('click', () =>
+        openEmbeddedPanel(OperatorWorkstationPanel(store)),
+      );
+    const supervisorBtn = detailEl.querySelector('[data-role="open-supervisor"]');
+    if (supervisorBtn)
+      supervisorBtn.addEventListener('click', () => openEmbeddedPanel(SupervisorLinePanel(store)));
+  }
+
+  function openEmbeddedPanel(panel) {
+    modalRoot.innerHTML = `
+      <div class="modal-backdrop" data-role="embedded-panel">
+        <div class="modal modal--wide" role="dialog" aria-modal="true">
+          <div data-role="embedded-body"></div>
+          <div class="modal-actions">
+            <button type="button" class="btn" data-role="close-embedded">Cerrar</button>
+          </div>
+        </div>
+      </div>`;
+    modalRoot.querySelector('[data-role="embedded-body"]').appendChild(panel);
+    const close = () => {
+      modalRoot.innerHTML = '';
+    };
+    modalRoot.querySelector('[data-role="close-embedded"]').addEventListener('click', close);
+    modalRoot.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') close();
+    });
   }
 
   function openConsumptionModal(order) {
