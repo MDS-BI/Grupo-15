@@ -35,14 +35,18 @@ describe('order-state-machine', () => {
   });
 
   it('assertTransition lanza con un mensaje descriptivo', () => {
-    expect(() => assertTransition(S.COMPLETED, S.IN_PROGRESS)).toThrow(/Transición de orden inválida/);
+    expect(() => assertTransition(S.COMPLETED, S.IN_PROGRESS)).toThrow(
+      /Transición de orden inválida/,
+    );
     expect(assertTransition(S.PLANNED, S.RELEASED)).toBe(S.RELEASED);
   });
 
   it('deriva el estado de la orden a partir de sus operaciones', () => {
     expect(deriveOrderStatus([])).toBe(S.RELEASED);
     expect(deriveOrderStatus([{ status: 'pending' }])).toBe(S.RELEASED);
-    expect(deriveOrderStatus([{ status: 'pending' }, { status: 'in_progress' }])).toBe(S.IN_PROGRESS);
+    expect(deriveOrderStatus([{ status: 'pending' }, { status: 'in_progress' }])).toBe(
+      S.IN_PROGRESS,
+    );
     expect(deriveOrderStatus([{ status: 'completed' }, { status: 'completed' }])).toBe(S.COMPLETED);
   });
 });

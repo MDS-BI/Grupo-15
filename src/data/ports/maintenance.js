@@ -34,7 +34,7 @@ export class MaintenancePort {
   resolvedTickets(period = {}) {
     return this.tickets
       .filter(
-        (ticket) => ticket.ticket_status === 'resolved' && inPeriod(ticket.resolved_at, period)
+        (ticket) => ticket.ticket_status === 'resolved' && inPeriod(ticket.resolved_at, period),
       )
       .map((ticket) => ({
         ...ticket,
@@ -51,8 +51,8 @@ export class MaintenancePort {
     return round2(
       this.resolvedTicketsForWorkCenter(workCenterId, period).reduce(
         (sum, ticket) => sum + (Number(ticket.downtime_minutes) || 0),
-        0
-      )
+        0,
+      ),
     );
   }
 
@@ -68,10 +68,8 @@ export class MaintenancePort {
   preventiveDowntimeMinutes(period = {}) {
     return round2(
       this.preventiveOrders
-        .filter(
-          (order) => order.status === 'completed' && inPeriod(order.completed_at, period)
-        )
-        .reduce((sum, order) => sum + (Number(order.downtime_minutes) || 0), 0)
+        .filter((order) => order.status === 'completed' && inPeriod(order.completed_at, period))
+        .reduce((sum, order) => sum + (Number(order.downtime_minutes) || 0), 0),
     );
   }
 }

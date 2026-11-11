@@ -100,23 +100,28 @@ export function ProductionOrders(store) {
     const plannedTotal = ops.reduce((s, o) => s + o.planned_time_minutes, 0);
     const actualTotal = ops.reduce((s, o) => s + (o.actual_time_minutes || 0), 0);
 
-    const transitions = {
-      planned: ['released', 'cancelled'],
-      released: ['in_progress', 'cancelled'],
-      in_progress: ['completed', 'cancelled'],
-      completed: [],
-      cancelled: [],
-    }[order.status] || [];
+    const transitions =
+      {
+        planned: ['released', 'cancelled'],
+        released: ['in_progress', 'cancelled'],
+        in_progress: ['completed', 'cancelled'],
+        completed: [],
+        cancelled: [],
+      }[order.status] || [];
 
-    const actions = transitions.map((t) =>
-      `<button type="button" class="btn btn--small" data-transition="${t}">${ORDER_STATUS_LABEL[t]}</button>`
-    ).join('');
+    const actions = transitions
+      .map(
+        (t) =>
+          `<button type="button" class="btn btn--small" data-transition="${t}">${ORDER_STATUS_LABEL[t]}</button>`,
+      )
+      .join('');
 
-    const opRows = ops.map((op) => {
-      const wc = store.workCenterById(op.work_center_id);
-      const canStart = op.status === 'pending' || op.status === 'paused';
-      const canComplete = op.status === 'in_progress' || op.status === 'paused';
-      return `
+    const opRows = ops
+      .map((op) => {
+        const wc = store.workCenterById(op.work_center_id);
+        const canStart = op.status === 'pending' || op.status === 'paused';
+        const canComplete = op.status === 'in_progress' || op.status === 'paused';
+        return `
         <tr data-op="${op.id}">
           <td>${op.sequence}</td>
           <td>${escapeHtml(wc ? wc.name : op.work_center_id)}</td>
@@ -128,17 +133,20 @@ export function ProductionOrders(store) {
             ${canComplete ? `<button type="button" class="btn btn--tiny btn--primary" data-complete="${op.id}">Completar</button>` : ''}
           </td>
         </tr>`;
-    }).join('');
+      })
+      .join('');
 
-    const varianceRows = variances.map((v) => {
-      const prod = store.productById(v.component_product_id);
-      return `<tr>
+    const varianceRows = variances
+      .map((v) => {
+        const prod = store.productById(v.component_product_id);
+        return `<tr>
         <td>${escapeHtml(prod ? prod.name : v.component_product_id)}</td>
         <td>${fmtNumber(v.theoretical_quantity, 2)}</td>
         <td>${fmtNumber(v.actual_quantity, 2)}</td>
         <td class="${v.within_tolerance ? '' : 'cell--warn'}">${v.flag === 'unplanned' ? 'no planificado' : fmtPercent(v.variance_ratio)}</td>
       </tr>`;
-    }).join('');
+      })
+      .join('');
 
     const produced = outputs.reduce((s, o) => s + o.quantity_produced, 0);
     const scrap = outputs.reduce((s, o) => s + o.scrap_quantity, 0);
@@ -209,7 +217,7 @@ export function ProductionOrders(store) {
         const op = store.productionOrderOperations.find((o) => o.id === opId);
         const value = window.prompt(
           `Tiempo real (min) para la operación ${op.sequence} (plan: ${op.planned_time_minutes}):`,
-          String(op.planned_time_minutes)
+          String(op.planned_time_minutes),
         );
         if (value == null) return;
         try {
@@ -232,11 +240,13 @@ export function ProductionOrders(store) {
 
   function openConsumptionModal(order) {
     const lines = store.bomComponents.filter((c) => c.bom_id === order.bom_id);
-    const options = lines.map((line) => {
-      const prod = store.productById(line.component_product_id);
-      return `<option value="${line.component_product_id}" data-bom="${line.id}" data-uom="${line.uom_id}">
+    const options = lines
+      .map((line) => {
+        const prod = store.productById(line.component_product_id);
+        return `<option value="${line.component_product_id}" data-bom="${line.id}" data-uom="${line.uom_id}">
         ${escapeHtml(prod ? prod.name : line.component_product_id)}</option>`;
-    }).join('');
+      })
+      .join('');
     const warehouseOptions = store.warehouses
       .filter((w) => w.warehouse_type === 'raw_materials')
       .map((w) => `<option value="${w.id}">${escapeHtml(w.name)}</option>`)
@@ -406,8 +416,12 @@ export function ProductionOrders(store) {
     const form = modalRoot.querySelector('[data-role="form"]');
     form.querySelector('select[name="product_id"]').addEventListener('change', (e) => {
       const productId = e.target.value;
-      const bom = store.billOfMaterials.find((b) => b.product_id === productId && b.status === 'active');
-      const routing = store.routings.find((r) => r.product_id === productId && r.status === 'active');
+      const bom = store.billOfMaterials.find(
+        (b) => b.product_id === productId && b.status === 'active',
+      );
+      const routing = store.routings.find(
+        (r) => r.product_id === productId && r.status === 'active',
+      );
       form.dataset.bom = bom ? bom.id : '';
       form.dataset.routing = routing ? routing.id : '';
     });

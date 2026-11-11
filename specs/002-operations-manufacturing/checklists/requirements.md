@@ -33,4 +33,4 @@
 
 - La especificación está lista para `/speckit.clarify` (si se desea afinar algún punto) y para `/speckit.plan`.
 - `data-model.md` ya incluye `MaintenanceTicket`, `PreventiveMaintenanceOrder`, `ThresholdSetting` y `RolePermission` (§3.19–3.22).
-- `tasks.md` cubre US-08, US-09, US-10 y US-11 con 90 tareas (`T001`–`T090`); el plan técnico incremental está en `plan.md` §9–§10.
+- `tasks.md` cubre US-08, US-09, US-10 y US-11 con 96 tareas (`T001`–`T096`), incluyendo la fase de remediación de análisis; el plan técnico incremental está en `plan.md` §9–§10.

@@ -46,16 +46,18 @@ export function BomExplorer(store) {
   const editorEl = root.querySelector('[data-role="editor"]');
 
   function renderList() {
-    listEl.innerHTML = boms.map((bom) => {
-      const product = store.productById(bom.product_id);
-      const active = bom.id === selectedBomId ? 'is-active' : '';
-      return `<li>
+    listEl.innerHTML = boms
+      .map((bom) => {
+        const product = store.productById(bom.product_id);
+        const active = bom.id === selectedBomId ? 'is-active' : '';
+        return `<li>
         <button type="button" class="bom-list__item ${active}" data-bom="${bom.id}">
           <span class="bom-list__name">${escapeHtml(product ? product.name : bom.product_id)}</span>
           <span class="bom-list__code">${escapeHtml(bom.code)} · v${escapeHtml(bom.version)}</span>
         </button>
       </li>`;
-    }).join('');
+      })
+      .join('');
     listEl.querySelectorAll('[data-bom]').forEach((btn) => {
       btn.addEventListener('click', () => {
         selectedBomId = btn.getAttribute('data-bom');
@@ -126,16 +128,18 @@ export function BomExplorer(store) {
       .map((p) => `<option value="${p.id}">${escapeHtml(p.name)} (${escapeHtml(p.code)})</option>`)
       .join('');
 
-    const rows = lines.map((line) => {
-      const prod = store.productById(line.component_product_id);
-      const uom = store.uomById(line.uom_id);
-      return `<tr>
+    const rows = lines
+      .map((line) => {
+        const prod = store.productById(line.component_product_id);
+        const uom = store.uomById(line.uom_id);
+        return `<tr>
         <td>${escapeHtml(prod ? prod.name : line.component_product_id)}</td>
         <td>${fmtNumber(line.quantity_per_unit, 4)} ${escapeHtml(uom ? uom.code : '')}</td>
         <td>${fmtNumber(line.scrap_percentage, 2)}%</td>
         <td>${line.sequence}</td>
       </tr>`;
-    }).join('');
+      })
+      .join('');
 
     editorEl.innerHTML = `
       <header class="panel__header"><h3>Componentes (${lines.length})</h3></header>

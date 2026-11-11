@@ -61,8 +61,7 @@ export function buildBomTree({ boms, components, products, rootBomId }) {
       const childBom = childBoms.find((b) => b.status === 'active') || childBoms[0] || null;
       const nodeAncestors = [...ancestors, bom.product_id];
       const cycle = childBom ? nodeAncestors.includes(childBom.product_id) : false;
-      const children =
-        childBom && !cycle ? visit(childBom, level + 1, nodeAncestors) : [];
+      const children = childBom && !cycle ? visit(childBom, level + 1, nodeAncestors) : [];
       return {
         product_id: line.component_product_id,
         name: childProduct ? childProduct.name : line.component_product_id,

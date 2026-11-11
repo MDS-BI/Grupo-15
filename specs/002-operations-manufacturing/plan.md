@@ -13,13 +13,18 @@
 
 Build a **frontend-only functional MVP** for the Operations & Manufacturing module of an integrated ERP. The module centralizes the *plan → schedule → execute → record* manufacturing cycle over a modular template, powered entirely by **mock data and local state management** so that the eventual replacement of mocks with real APIs requires zero changes to the presentation layer.
 
-The MVP covers five production routines:
+The MVP covers the following production routines and supervision capabilities (US-01…US-11):
 
 1. **Centralized BOM/Routing management** — author multi-level Bills of Materials (`bill_of_materials`, `bom_components`) and manufacturing routings (`routings`, `routing_operations`) over work centers (`work_centers`).
 2. **Production Order dispatching** — create and release orders (`production_orders`) from stock replenishment or make-to-order demand, snapshotting routing operations into `production_order_operations`.
 3. **Shop-floor operation tracking** — advance operation stages and capture real progress (`production_order_operations`).
 4. **Shop-floor recording** — log actual material consumption (`material_consumption`) and finished goods output (`production_output`).
 5. **Operator shift tracking (US-06)** — start/finish the active operation with one toggle button, justify delays from a reusable reason catalog, and keep per-shift and cumulative piece counters (`production_shifts`, `operation_delays`, `delay_reasons`).
+6. **Line supervision (US-07)** — live work-center traffic light, per-shift operator assignments (`shift_assignments`), shift-closure validation and urgent escalation to maintenance (`maintenance_tickets`).
+7. **Plant performance (US-08)** — load, derived OEE, accumulated downtimes and fulfillment by period; configurable thresholds, order rescheduling/cancellation, local PDF/Excel export and simulated role permissions (`threshold_settings`, `role_permissions`).
+8. **Maintenance management (US-09)** — escalated ticket inbox, technician interventions, real downtime capture, preventive orders and work-center availability restoration (`maintenance_tickets`, `preventive_maintenance_orders`).
+9. **Production scheduling (US-10)** — planned start/end dates on `production_orders` with `planned_end_date ≥ planned_start_date`.
+10. **Line balancing (US-11)** — standard times, projected load, utilization vs. nominal capacity and bottleneck detection (derived, read-only).
 
 The data model remains the single source of truth (`data-model.md`); the UI is a typed, traceable projection of that schema. Type fidelity is enforced with JSDoc typedefs in `src/domain/types.js` (the as-built stack is vanilla JavaScript, not TypeScript).
 
@@ -39,9 +44,13 @@ The data model remains the single source of truth (`data-model.md`); the UI is a
 
 | Persona | Responsibilities | Primary Entities Owned |
 |---|---|---|
-| **Production Planner / Plant Manager** | Oversees capacity; creates and versions BOMs and routings; schedules, prioritizes, and dispatches production orders; monitors shop-floor load. | `bill_of_materials`, `bom_components`, `work_centers`, `routings`, `routing_operations`, `production_orders` |
+| **Production Planner** | Oversees capacity; creates and versions BOMs and routings; schedules, prioritizes, and dispatches production orders; monitors shop-floor load. | `bill_of_materials`, `bom_components`, `work_centers`, `routings`, `routing_operations`, `production_orders` |
+| **Plant Manager (Jefa de Planta)** | Monitors plant-wide load, OEE, accumulated downtimes and fulfillment; configures thresholds, reschedules/cancels orders, exports reports and applies simulated role permissions. | `production_orders`, `threshold_settings`, `role_permissions` |
 | **Machine Operator** | Starts/finishes the active operation, logs justified delays, counts pieces per shift, and sees cumulative progress. | `production_shifts`, `operation_delays`, `delay_reasons`, `production_order_operations` (progress fields) |
-| **Shop Floor Operator / Supervisor** | Updates operation progress; registers consumed materials; logs completed batches, scrap, and output; marks operations complete. | `production_order_operations`, `material_consumption`, `production_output` |
+| **Line Supervisor** | Monitors the live traffic light, assigns operators to work centers per shift, validates shift closures and escalates incidents to maintenance. | `shift_assignments`, `production_shifts`, `maintenance_tickets` |
+| **Shop Floor Operator** | Updates operation progress; registers consumed materials; logs completed batches, scrap, and output; marks operations complete. | `production_order_operations`, `material_consumption`, `production_output` |
+| **Maintenance Manager** | Handles escalated fault tickets, assigns technicians, logs downtime, schedules preventive orders and restores work-center availability. | `maintenance_tickets`, `preventive_maintenance_orders` |
+| **Production Engineer** | Analyzes standard times, projected load, utilization and bottlenecks to balance the line. | `work_centers`, `routing_operations`, `production_orders` |
 
 ### 1.4 Integration Boundaries
 
@@ -245,7 +254,7 @@ The module references, but does **not** own, the following boundary entities. Al
 
 **Deliverables**: components in `src/components/` (`OperatorWorkstationPanel.js`, `DelayCorrectionDialog.js`, plus existing BOM/orders/dashboard views), route entry in `src/manufacturing-main.js`.
 
-**Exit Criteria**: all six user stories are demonstrable end-to-end on mock data, including an operator shift interrupted by a reload.
+**Exit Criteria**: all eleven user stories (US-01…US-11) are demonstrable end-to-end on mock data, including an operator shift interrupted by a reload.
 
 ---
 
@@ -351,7 +360,7 @@ Recording `actual_time_minutes` and `operator_id`/`consumed_by`/`recorded_by` en
 | **M0 — Kickoff & Spec draft** | Phase 1 (start) | `spec.md` draft, type skeleton | Internal review |
 | **M1 — Interfaces interim review** | Phases 1–2 | `spec.md`, `data-model.md` alignment, navigable mock prototype | **Interim course review** |
 | **M2 — Task freeze** | Phase 3 (entry) | `tasks.md` with dependencies & verification criteria | Task-freeze sign-off |
-| **M3 — Feature complete** | Phase 3 | All six user stories demonstrable E2E | Internal demo |
+| **M3 — Feature complete** | Phase 3 | All eleven user stories (US-01…US-11) demonstrable E2E | Internal demo |
 | **M4 — Validation & scalability** | Phase 4 | Test suites, integration checklist, performance report | QA sign-off |
 | **M5 — Final presentation** | Phase 4 | Defense-ready demo, 5-minute script, slides | **Final course presentation** |
 
@@ -447,7 +456,7 @@ tests/
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-- **I. Code Quality & Maintainability**: domain logic (state machine, BOM explosion, reconciliation, shift tracking) is isolated in pure modules with JSDoc contracts traceable to the data model; store mutations live in one auditable class.
+- **I. Code Quality & Maintainability**: domain logic (state machine, BOM explosion, reconciliation, shift tracking) is isolated in pure modules with JSDoc contracts traceable to the data model; store mutations live in one auditable class. Linting, formatting and static analysis are enforced with ESLint + Prettier via `npm run lint` and `npm run format:check`.
 - **II. Test-First & Verification**: each user story defines its independent test before implementation; state transitions, plan-vs-actual calculations, effective-time/delay math and counter validation receive exhaustive unit coverage.
 - **III. User Experience Consistency**: the branded ERP shell and design tokens from `001-erp-base-module` are reused; one confirmation pattern before destructive actions, one inline-validation pattern for counters/delays, and one open-delay warning style.
 - **IV. Performance & Reliability**: dashboards and lists meet `< 100 ms` at 500 records; timers derive from persisted timestamps; snapshot hydration validates the schema and falls back to fixtures; no UI action blocks the main thread or loses shift state on reload.
@@ -714,7 +723,7 @@ No hay violaciones que requieran justificación adicional.
 | **Estado** | Extensión aditiva de `ManufacturingStore`: nuevas consultas y acciones; ninguna firma existente cambia. |
 | **Persistencia** | `erp.manufacturing.v2` introducido en esta fase con migración desde `v1`; colecciones nuevas `thresholdSettings` y `rolePermissions`. US-09 extiende `v2` con mantenimiento. |
 | **Derivados** | OEE, carga, utilización, paradas acumuladas y cuellos de botella se calculan bajo demanda y no se persisten. |
-| **Exportación** | PDF y Excel generados localmente con los datos mock; sin servicios externos ni backend. |
+| **Exportación** | PDF y Excel generados localmente con los datos mock y sin dependencias externas: Excel vía descarga CSV/SpreadsheetML y PDF vía vista imprimible con `window.print()`; sin servicios externos ni backend. |
 | **Rendimiento** | Interacciones < 100 ms con 500 órdenes y BOM de 4 niveles. |
 | **Plataforma** | Navegador de escritorio moderno; usable hasta ancho de tablet. |
 | **Dependencias** | US-06/US-07 (paradas y turnos), US-03 (órdenes), US-02 (centros, rutas y tiempos estándar). |
@@ -759,6 +768,8 @@ Entidades nuevas o ampliadas en [data-model.md](data-model.md):
 - `utilization = Σ planned_time_minutes / capacity_per_day_minutes`.
 - `bottleneck = work_center con mayor utilización proyectada` (empate: mayor carga absoluta).
 
+> US-11 usa la **capacidad nominal** (`capacity_per_day_minutes` × días del período); el `efficiency_factor` solo se aplica a `load` en US-08. El panel de balance es de solo lectura y no muta rutas, operaciones ni órdenes.
+
 ## 10.5 Contratos de dominio, store y UI
 
 Contratos completos en [contracts/plant-performance.md](contracts/plant-performance.md), [contracts/order-scheduling.md](contracts/order-scheduling.md) y [contracts/line-balance.md](contracts/line-balance.md).
@@ -784,7 +795,7 @@ Contratos completos en [contracts/plant-performance.md](contracts/plant-performa
 **Consultas del store**
 - `plantPerformanceFor(period)`, `loadByWorkCenterFor(period)`, `downtimesByReasonFor(period)`, `rolePermissionsFor(role)`.
 - `ordersForScheduling({ status, dateFrom, dateTo })`.
-- `lineBalanceFor(period)`.
+- `lineBalanceFor(period)`, `lineBalanceForOrder(orderId)`, `capacityForPeriod(period)`.
 
 **Acciones del store** (aditivas, validan antes de mutar y emiten un único `change`)
 - `setIndicatorThreshold({ indicator, threshold, comparison })`.

@@ -46,8 +46,24 @@ describe('bom-explosion', () => {
       { id: 'bB', product_id: 'pB', base_quantity: 1, status: 'active' },
     ];
     const cyclicComponents = [
-      { id: 'c1', bom_id: 'bA', component_product_id: 'pB', quantity_per_unit: 1, uom_id: 'u', scrap_percentage: 0, sequence: 10 },
-      { id: 'c2', bom_id: 'bB', component_product_id: 'pA', quantity_per_unit: 1, uom_id: 'u', scrap_percentage: 0, sequence: 10 },
+      {
+        id: 'c1',
+        bom_id: 'bA',
+        component_product_id: 'pB',
+        quantity_per_unit: 1,
+        uom_id: 'u',
+        scrap_percentage: 0,
+        sequence: 10,
+      },
+      {
+        id: 'c2',
+        bom_id: 'bB',
+        component_product_id: 'pA',
+        quantity_per_unit: 1,
+        uom_id: 'u',
+        scrap_percentage: 0,
+        sequence: 10,
+      },
     ];
     const cyclicProducts = [
       { id: 'pA', name: 'A', product_type: 'finished_good' },

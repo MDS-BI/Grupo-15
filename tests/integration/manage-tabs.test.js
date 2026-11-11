@@ -8,7 +8,9 @@ const html = fs.readFileSync(fileURLToPath(new URL('../../index.html', import.me
 
 let dom;
 
-function qs(id){ return document.getElementById(id); }
+function qs(id) {
+  return document.getElementById(id);
+}
 
 beforeEach(async () => {
   dom = new JSDOM(html, { url: 'http://localhost/' });
@@ -33,7 +35,12 @@ describe('User Story 4 - manage entities and documents via the workspace sidebar
   it('shows a persistent module navigation with Dashboard, Entities, Documents, and Search buttons', () => {
     const buttons = [...document.querySelectorAll('.nav-module')];
     expect(buttons.length).toBe(4);
-    expect(buttons.map(b => b.dataset.module)).toEqual(['dashboard', 'entities', 'documents', 'search']);
+    expect(buttons.map((b) => b.dataset.module)).toEqual([
+      'dashboard',
+      'entities',
+      'documents',
+      'search',
+    ]);
   });
 
   it('switches between the entities and documents management views', () => {
@@ -63,7 +70,9 @@ describe('User Story 4 - manage entities and documents via the workspace sidebar
     qs('nav-entities').click();
     qs('name').value = 'Acme';
     qs('code').value = 'AC-001';
-    qs('entity-form').dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));
+    qs('entity-form').dispatchEvent(
+      new dom.window.Event('submit', { bubbles: true, cancelable: true }),
+    );
     expect(loadEntities().length).toBe(1);
 
     const editSelect = qs('edit-entity');
@@ -71,7 +80,9 @@ describe('User Story 4 - manage entities and documents via the workspace sidebar
     editSelect.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
     expect(qs('submit-button').textContent).toBe('Actualizar');
     qs('name').value = 'Acme Updated';
-    qs('entity-form').dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));
+    qs('entity-form').dispatchEvent(
+      new dom.window.Event('submit', { bubbles: true, cancelable: true }),
+    );
     expect(loadEntities()[0].name).toBe('Acme Updated');
 
     qs('delete-entity').click();
@@ -86,7 +97,9 @@ describe('User Story 4 - manage entities and documents via the workspace sidebar
     qs('folio').value = '1001';
     qs('startDate').value = '2026-08-01';
     qs('endDate').value = '2026-08-05';
-    qs('document-form').dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));
+    qs('document-form').dispatchEvent(
+      new dom.window.Event('submit', { bubbles: true, cancelable: true }),
+    );
     expect(loadDocuments().length).toBe(1);
 
     qs('edit-document').value = qs('edit-document').options[1].value;

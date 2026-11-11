@@ -36,11 +36,7 @@ export class ManufacturingStore extends EventTarget {
   constructor({ storage, hydrate = true } = {}) {
     super();
     this.storage =
-      storage === undefined
-        ? typeof localStorage !== 'undefined'
-          ? localStorage
-          : null
-        : storage;
+      storage === undefined ? (typeof localStorage !== 'undefined' ? localStorage : null) : storage;
     this.persistenceWarning = null;
 
     this.companies = clone(master.companies);
@@ -239,7 +235,8 @@ export class ManufacturingStore extends EventTarget {
     assertTransition(order.status, to);
     order.status = to;
     const now = new Date().toISOString();
-    if (to === 'in_progress' && !order.actual_start_date) order.actual_start_date = now.slice(0, 10);
+    if (to === 'in_progress' && !order.actual_start_date)
+      order.actual_start_date = now.slice(0, 10);
     if (to === 'completed' && !order.actual_end_date) order.actual_end_date = now.slice(0, 10);
     this.#emit();
     return order;
@@ -321,7 +318,10 @@ export class ManufacturingStore extends EventTarget {
     return op;
   }
 
-  completeOperation(operationId, { actual_time_minutes, quantity_completed = 0, scrap_quantity = 0 } = {}) {
+  completeOperation(
+    operationId,
+    { actual_time_minutes, quantity_completed = 0, scrap_quantity = 0 } = {},
+  ) {
     const op = this.productionOrderOperations.find((o) => o.id === operationId);
     if (!op) throw new Error(`Operación no encontrada: ${operationId}`);
     const minutes = Number(actual_time_minutes);
@@ -355,7 +355,11 @@ export class ManufacturingStore extends EventTarget {
       consumed_by: input.consumed_by || null,
     };
     this.materialConsumption.push(record);
-    this.inventory.debit(record.warehouse_id, record.component_product_id, record.quantity_consumed);
+    this.inventory.debit(
+      record.warehouse_id,
+      record.component_product_id,
+      record.quantity_consumed,
+    );
     this.#emit();
     return record;
   }
@@ -402,7 +406,7 @@ export class ManufacturingStore extends EventTarget {
   /** KPIs para el panel (dashboard). */
   kpis() {
     const active = this.productionOrders.filter(
-      (o) => o.status === 'released' || o.status === 'in_progress'
+      (o) => o.status === 'released' || o.status === 'in_progress',
     ).length;
     const totalProduced = this.productionOutput.reduce((s, o) => s + o.quantity_produced, 0);
     const totalScrap = this.productionOutput.reduce((s, o) => s + o.scrap_quantity, 0);
@@ -427,7 +431,7 @@ export class ManufacturingStore extends EventTarget {
   workCenterLoads() {
     return this.workCenters.map((wc) => {
       const ops = this.productionOrderOperations.filter(
-        (o) => o.work_center_id === wc.id && o.status !== 'completed'
+        (o) => o.work_center_id === wc.id && o.status !== 'completed',
       );
       const load = ops.reduce((s, o) => s + o.planned_time_minutes, 0);
       return { workCenter: wc, loadMinutes: load, pendingOperations: ops.length };
@@ -450,7 +454,7 @@ export class ManufacturingStore extends EventTarget {
     return (
       this.maintenanceTickets.find(
         (ticket) =>
-          ticket.work_center_id === workCenterId && ticket.ticket_status === 'in_progress'
+          ticket.work_center_id === workCenterId && ticket.ticket_status === 'in_progress',
       ) || null
     );
   }
@@ -458,10 +462,10 @@ export class ManufacturingStore extends EventTarget {
   maintenanceHistoryForWorkCenter(workCenterId) {
     return this.maintenanceTickets
       .filter(
-        (ticket) => ticket.work_center_id === workCenterId && ticket.ticket_status === 'resolved'
+        (ticket) => ticket.work_center_id === workCenterId && ticket.ticket_status === 'resolved',
       )
       .sort(
-        (a, b) => new Date(b.resolved_at || 0).getTime() - new Date(a.resolved_at || 0).getTime()
+        (a, b) => new Date(b.resolved_at || 0).getTime() - new Date(a.resolved_at || 0).getTime(),
       );
   }
 
@@ -515,13 +519,7 @@ export class ManufacturingStore extends EventTarget {
 
   resolveMaintenanceTicket(
     ticketId,
-    {
-      resolvedAt,
-      downtimeStartedAt,
-      downtimeEndedAt,
-      causeReasonId = null,
-      notes = '',
-    } = {}
+    { resolvedAt, downtimeStartedAt, downtimeEndedAt, causeReasonId = null, notes = '' } = {},
   ) {
     const ticket = this.maintenanceTickets.find((t) => t.id === ticketId);
     if (!ticket) throw new Error(`Ticket no encontrado: ${ticketId}`);
@@ -563,11 +561,10 @@ export class ManufacturingStore extends EventTarget {
         .filter(
           (op) =>
             op.work_center_id === ticket.work_center_id &&
-            (op.status === 'in_progress' || op.status === 'paused')
+            (op.status === 'in_progress' || op.status === 'paused'),
         )
         .sort(
-          (a, b) =>
-            new Date(b.started_at || 0).getTime() - new Date(a.started_at || 0).getTime()
+          (a, b) => new Date(b.started_at || 0).getTime() - new Date(a.started_at || 0).getTime(),
         )[0] || null;
 
     workCenter.operational_status = resolveAvailabilityStatus(activeOperation, ticket);
@@ -655,7 +652,9 @@ export class ManufacturingStore extends EventTarget {
     order.status = 'cancelled';
     const cleanReason = String(reason || '').trim();
     if (cleanReason) {
-      order.notes = order.notes ? `${order.notes} Cancelada: ${cleanReason}` : `Cancelada: ${cleanReason}`;
+      order.notes = order.notes
+        ? `${order.notes} Cancelada: ${cleanReason}`
+        : `Cancelada: ${cleanReason}`;
     }
 
     this.#persist();

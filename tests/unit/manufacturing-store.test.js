@@ -55,8 +55,11 @@ describe('ManufacturingStore', () => {
 
   it('respeta la máquina de estados al liberar y ejecutar', () => {
     const order = store.createOrder({
-      product_id: 'prod_rueda', bom_id: 'bom_rueda', routing_id: 'rt_rueda',
-      warehouse_id: 'wh_wip', quantity_planned: 5,
+      product_id: 'prod_rueda',
+      bom_id: 'bom_rueda',
+      routing_id: 'rt_rueda',
+      warehouse_id: 'wh_wip',
+      quantity_planned: 5,
     });
     store.transitionOrder(order.id, 'released');
     expect(order.status).toBe('released');
@@ -68,14 +71,20 @@ describe('ManufacturingStore', () => {
 
   it('rechaza actual_time_minutes = 0 al completar', () => {
     const ops = store.operationsForOrder('po_3002');
-    expect(() => store.completeOperation(ops[1].id, { actual_time_minutes: 0 })).toThrow(/mayor que 0/);
+    expect(() => store.completeOperation(ops[1].id, { actual_time_minutes: 0 })).toThrow(
+      /mayor que 0/,
+    );
   });
 
   it('registra consumo y debita inventario', () => {
     const before = store.inventory.getBalance('wh_mp', 'comp_tubo');
     store.recordConsumption({
-      production_order_id: 'po_3002', component_product_id: 'comp_tubo',
-      bom_component_id: 'bc_6', warehouse_id: 'wh_mp', quantity_consumed: 10, uom_id: 'uom_m',
+      production_order_id: 'po_3002',
+      component_product_id: 'comp_tubo',
+      bom_component_id: 'bc_6',
+      warehouse_id: 'wh_mp',
+      quantity_consumed: 10,
+      uom_id: 'uom_m',
     });
     expect(store.inventory.getBalance('wh_mp', 'comp_tubo')).toBe(before - 10);
   });
@@ -83,8 +92,12 @@ describe('ManufacturingStore', () => {
   it('registra salida y acredita inventario', () => {
     const before = store.inventory.getBalance('wh_pt', 'prod_bici');
     store.recordOutput({
-      production_order_id: 'po_3002', product_id: 'prod_bici', warehouse_id: 'wh_pt',
-      quantity_produced: 5, scrap_quantity: 1, uom_id: 'uom_un',
+      production_order_id: 'po_3002',
+      product_id: 'prod_bici',
+      warehouse_id: 'wh_pt',
+      quantity_produced: 5,
+      scrap_quantity: 1,
+      uom_id: 'uom_un',
     });
     expect(store.inventory.getBalance('wh_pt', 'prod_bici')).toBe(before + 5);
   });
@@ -126,7 +139,7 @@ describe('ManufacturingStore - US-09 mantenimiento', () => {
     expect(() =>
       store.startMaintenanceIntervention('mt_1006', {
         technician_ext_hr_employee_id: 'ext_hr_tec_02',
-      })
+      }),
     ).toThrow(/intervención activa/);
     expect(JSON.stringify(store.maintenanceTickets.find((t) => t.id === 'mt_1006'))).toBe(before);
   });
@@ -153,7 +166,7 @@ describe('ManufacturingStore - US-09 mantenimiento', () => {
         resolvedAt: '2026-11-02T09:40:00Z',
         downtimeStartedAt: '2026-11-02T09:00:00Z',
         downtimeEndedAt: '2026-11-02T08:00:00Z',
-      })
+      }),
     ).toThrow(/anterior/);
     expect(JSON.stringify(store.maintenanceTickets.find((t) => t.id === 'mt_1002'))).toBe(before);
   });
@@ -162,7 +175,7 @@ describe('ManufacturingStore - US-09 mantenimiento', () => {
     expect(() =>
       store.startMaintenanceIntervention('mt_1004', {
         technician_ext_hr_employee_id: 'ext_hr_tec_01',
-      })
+      }),
     ).toThrow(/reabrir/);
   });
 
@@ -184,7 +197,7 @@ describe('ManufacturingStore - US-09 mantenimiento', () => {
     expect(order.status).toBe('completed');
     expect(order.completed_at).toBeTruthy();
     expect(() => store.cancelPreventiveMaintenanceOrder(order.id, { reason: 'x' })).toThrow(
-      /no se puede cancelar/i
+      /no se puede cancelar/i,
     );
   });
 
@@ -205,7 +218,7 @@ describe('ManufacturingStore - US-09 mantenimiento', () => {
         sourceTicketId: 'mt_1004',
         plannedDate: '2026-12-05',
         title: 'Inválida',
-      })
+      }),
     ).toThrow(/otro centro/);
   });
 
@@ -236,13 +249,13 @@ describe('ManufacturingStore - persistencia de mantenimiento', () => {
     expect(raw.version).toBe(2);
     expect(raw.data.maintenanceTickets).toBeDefined();
     expect(raw.data.preventiveMaintenanceOrders.length).toBe(
-      first.preventiveMaintenanceOrders.length
+      first.preventiveMaintenanceOrders.length,
     );
 
     const reloaded = new ManufacturingStore({ storage });
     expect(reloaded.activeInterventionForWorkCenter('wc_solda').id).toBe('mt_1001');
     expect(reloaded.preventiveMaintenanceOrders.map((o) => o.title)).toContain(
-      'Revisión de cabezal'
+      'Revisión de cabezal',
     );
   });
 

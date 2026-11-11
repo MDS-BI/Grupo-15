@@ -70,7 +70,7 @@ export function canStartIntervention(ticket, activeTicketsForWorkCenter = [], te
       active &&
       active.id !== ticket.id &&
       active.work_center_id === ticket.work_center_id &&
-      active.ticket_status === MaintenanceTicketStatus.IN_PROGRESS
+      active.ticket_status === MaintenanceTicketStatus.IN_PROGRESS,
   );
 }
 
@@ -144,7 +144,7 @@ export function deriveWearIndicator(tickets = [], workCenterId, period = {}) {
 
   const totalDowntime = resolved.reduce(
     (sum, ticket) => sum + (Number(ticket.downtime_minutes) || 0),
-    0
+    0,
   );
   const failureCount = resolved.length;
   const mttr = failureCount > 0 ? totalDowntime / failureCount : 0;
@@ -207,7 +207,7 @@ export function buildPreventiveOrderFromHistory(tickets = [], workCenterId, plan
     .filter(
       (ticket) =>
         ticket.work_center_id === workCenterId &&
-        ticket.ticket_status === MaintenanceTicketStatus.RESOLVED
+        ticket.ticket_status === MaintenanceTicketStatus.RESOLVED,
     )
     .sort((a, b) => (toMillis(b.resolved_at) ?? 0) - (toMillis(a.resolved_at) ?? 0));
 

@@ -62,7 +62,7 @@ afterEach(() => {
 describe('Panel de mantenimiento (US-09)', () => {
   it('muestra la bandeja priorizada y filtra por estado', () => {
     const rows = [...document.querySelectorAll('[data-ticket-row]')].map((row) =>
-      row.getAttribute('data-ticket-row')
+      row.getAttribute('data-ticket-row'),
     );
     expect(rows[0]).toBe('mt_1001');
     expect(rows[1]).toBe('mt_1005');
@@ -72,7 +72,7 @@ describe('Panel de mantenimiento (US-09)', () => {
     statusFilter.dispatchEvent(new window.Event('change', { bubbles: true }));
 
     const openRows = [...document.querySelectorAll('[data-ticket-row]')].map((row) =>
-      row.getAttribute('data-ticket-row')
+      row.getAttribute('data-ticket-row'),
     );
     expect(openRows).toEqual(expect.arrayContaining(['mt_1001', 'mt_1003', 'mt_1005']));
     expect(openRows).not.toContain('mt_1002');
@@ -117,7 +117,7 @@ describe('Panel de mantenimiento (US-09)', () => {
     const error = document.querySelector('[data-role="resolve-form"] [data-role="error"]');
     expect(error.textContent).toMatch(/anterior/);
     expect(store.maintenanceTickets.find((t) => t.id === 'mt_1002').ticket_status).toBe(
-      'in_progress'
+      'in_progress',
     );
   });
 
@@ -128,9 +128,7 @@ describe('Panel de mantenimiento (US-09)', () => {
     fill('[data-role="preventive-form"]', 'title', 'Preventiva de prueba');
     submit('[data-role="preventive-form"]');
 
-    const order = store.preventiveMaintenanceOrders.find(
-      (o) => o.title === 'Preventiva de prueba'
-    );
+    const order = store.preventiveMaintenanceOrders.find((o) => o.title === 'Preventiva de prueba');
     expect(order).toBeTruthy();
     expect(order.status).toBe('planned');
 

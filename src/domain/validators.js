@@ -18,7 +18,8 @@ import { isPositive, isNonNegative, ProductType } from './types.js';
  */
 export function validateBom(bom, product) {
   const issues = [];
-  if (!bom?.product_id) issues.push({ field: 'product_id', message: 'El producto es obligatorio.' });
+  if (!bom?.product_id)
+    issues.push({ field: 'product_id', message: 'El producto es obligatorio.' });
   if (product && product.product_type !== ProductType.FINISHED_GOOD) {
     issues.push({
       field: 'product_id',
@@ -52,13 +53,12 @@ export function validateBomComponent(line, existing = []) {
   if (!isPositive(Number(line?.quantity_per_unit))) {
     issues.push({ field: 'quantity_per_unit', message: 'quantity_per_unit debe ser > 0.' });
   }
-  if (!line?.uom_id) issues.push({ field: 'uom_id', message: 'La unidad de medida es obligatoria.' });
+  if (!line?.uom_id)
+    issues.push({ field: 'uom_id', message: 'La unidad de medida es obligatoria.' });
   if (line?.scrap_percentage != null && !isNonNegative(Number(line.scrap_percentage))) {
     issues.push({ field: 'scrap_percentage', message: 'scrap_percentage no puede ser negativo.' });
   }
-  const duplicated = existing.some(
-    (e) => e.component_product_id === line?.component_product_id
-  );
+  const duplicated = existing.some((e) => e.component_product_id === line?.component_product_id);
   if (duplicated) {
     issues.push({
       field: 'component_product_id',
@@ -91,7 +91,10 @@ export function validateRoutingSequence(operations = []) {
       });
     }
     if (!isNonNegative(Number(op.setup_time_minutes))) {
-      issues.push({ field: `setup_time_minutes[${op.id}]`, message: 'setup_time_minutes debe ser ≥ 0.' });
+      issues.push({
+        field: `setup_time_minutes[${op.id}]`,
+        message: 'setup_time_minutes debe ser ≥ 0.',
+      });
     }
     if (!isNonNegative(Number(op.run_time_per_unit_minutes))) {
       issues.push({
@@ -113,7 +116,8 @@ export function validateProductionOrder(order) {
   if (!isPositive(Number(order?.quantity_planned))) {
     issues.push({ field: 'quantity_planned', message: 'quantity_planned debe ser > 0.' });
   }
-  if (!order?.product_id) issues.push({ field: 'product_id', message: 'El producto es obligatorio.' });
+  if (!order?.product_id)
+    issues.push({ field: 'product_id', message: 'El producto es obligatorio.' });
   if (!order?.bom_id) issues.push({ field: 'bom_id', message: 'La BOM es obligatoria.' });
   if (!order?.warehouse_id) {
     issues.push({ field: 'warehouse_id', message: 'La bodega destino es obligatoria.' });

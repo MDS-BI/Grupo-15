@@ -26,8 +26,8 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 <summary><strong>Session 2026-10-31 (Supervisor de Operaciones - US-07 / HU-04)</strong></summary>
 
 - **Q**: ¿Cómo se determina el estado del semáforo en vivo de cada línea/máquina (`work_center`)? → **A**: Se deriva reactivamente del estado operativo y eventos activos (`in_operation` / En operación, `paused` / En pausa, `fault` / En fallo cuando existe un atraso crítico o ticket urgente abierto, `changeover` / Cambio de formato) permitiendo además cambio manual justificado por el supervisor.
-- **Q**: ¿Cómo se vinculan los operarios con las máquinas para el turno? → **A**: Mediante asignaciones de turno (`shift_assignments` / `tblSHIFT_ASSIGNMENTS`) usando el puente de solo lectura `ext_hr_employee_id` hacia el módulo de *Recursos Humanos y Planillas*.
-- **Q**: ¿Qué ocurre cuando el supervisor valida un cierre de turno o escala un incidente? → **A**: La validación marca `supervisor_validated = true` con timestamp y firma del supervisor sobre el turno cerrado (`completed`); el botón de alerta de escalamiento marca `escalated_to_maint = true` en el evento de parada/atraso y genera un registro urgente en `maintenance_tickets` (`tblMAINTENANCE_TICKETS`) cambiando el semáforo del centro de trabajo a `fault` ("En fallo").
+- **Q**: ¿Cómo se vinculan los operarios con las máquinas para el turno? → **A**: Mediante asignaciones de turno (`shift_assignments`) usando el puente de solo lectura `ext_hr_employee_id` hacia el módulo de *Recursos Humanos y Planillas*.
+- **Q**: ¿Qué ocurre cuando el supervisor valida un cierre de turno o escala un incidente? → **A**: La validación marca `supervisor_validated = true` con timestamp y firma del supervisor sobre el turno cerrado (`completed`); el botón de alerta de escalamiento marca `escalated_to_maint = true` en el evento de parada/atraso y genera un registro urgente en `maintenance_tickets` cambiando el semáforo del centro de trabajo a `fault` ("En fallo").
 
 </details>
 
@@ -55,7 +55,7 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 | **Operador de Máquina (`@maximilianMC`)** | Ejecuta operaciones en pantalla táctil/piso, inicia/finaliza turno, justifica atrasos, registra conteo de piezas, consumo, salida y merma. |
 | **Ingeniero de Producción (`@JualTrupe`)** | Configura rutas de fabricación y tiempos estándar, analiza el balance de líneas y evalúa informes de materiales para optimizar tiempos, reducir mermas y encontrar rutas óptimas. |
 | **Encargado de Mantenimiento (`@SebastianRivasprg`)** | Atiende incidentes críticos escalados desde piso (`fault`), analiza historial operativo y evalúa desgaste en maquinaria para programar mantenimientos preventivos, registra tiempos de parada por mantención y restablece la disponibilidad operativa de las máquinas. |
-| **Planificador (`@maiteval`)** |  Organiza y calendariza las órdenes de producción, asignando fechas planificadas de inicio y término a las tareas. Coordina la secuencia de fabricación según las prioridades y plazos de entrega, consulta el estado de las órdenes y ajusta la programación cuando existen atrasos o cambios en la producción, buscando optimizar los tiempos y cumplir con las fechas de entrega establecidas. |. |
+| **Planificador (`@maiteval`)** |  Organiza y calendariza las órdenes de producción, asignando fechas planificadas de inicio y término a las tareas. Coordina la secuencia de fabricación según las prioridades y plazos de entrega, consulta el estado de las órdenes y ajusta la programación cuando existen atrasos o cambios en la producción, buscando optimizar los tiempos y cumplir con las fechas de entrega establecidas. |
 
 ## 4. Requisitos Funcionales
 
@@ -120,10 +120,10 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 
 **US-07 (HU-04 — Supervisor de Operaciones / Línea)**: Como Supervisor de Operaciones / Línea (Nivel Táctico-Operativo a pie de fábrica), quiero visualizar el semáforo de estado de cada línea/máquina en tiempo real, vincular operarios con máquinas para el turno, revisar y aprobar los cierres de turno y escalar incidentes a mantenimiento con un botón de alerta, para asegurar el cumplimiento del plan del turno y resolver incidencias inmediatas.
 
-- **Semáforo en tiempo real por línea/máquina (`work_centers` / `Entity`)**: Mostrar tarjetas o filas por cada centro de trabajo con su estado operativo en vivo (`in_operation` = *En operación* [verde], `paused` = *En pausa* [amarillo], `changeover` = *Cambio de formato* [azul/ámbar], `fault` = *En fallo* [rojo]), junto con la orden/operación activa, operario asignado y avance de piezas.
-- **Asignación de personal al turno (`shift_assignments` / `tblSHIFT_ASSIGNMENTS`)**: Permitir vincular un operario (`ext_hr_employee_id`, puente hacia *Recursos Humanos y Planillas*) con un centro de trabajo/máquina (`work_center_id` / `lineIdRef`) y franja de turno (`morning`, `afternoon`, `night`); impedir que un mismo operario sea asignado simultáneamente a dos máquinas activas en la misma franja sin confirmación de reasignación.
-- **Revisión y aprobación de cierres de turno (`production_shifts` / `tblPRODUCTION_COUNTS`)**: Listar los turnos finalizados (`status === 'completed'`) pendientes de revisión con su resumen de piezas conformes, merma, tiempo efectivo y atrasos (`operation_delays` / `tblDOWNTIME_EVENTS`); permitir al supervisor aprobar el cierre marcando `supervisor_validated = true`, `validated_at` y nota opcional de supervisión. Bloquear la aprobación si el turno aún tiene un atraso abierto sin corregir (integración con `DelayCorrectionDialog` de US-06).
-- **Escalamiento de incidentes a mantenimiento (`maintenance_tickets` / `tblMAINTENANCE_TICKETS`)**: Incluir un botón de alerta rápida en cada línea/máquina o evento de parada para escalar incidentes críticos; al activarlo, marcar `escalated_to_maint = true` en el evento de atraso/parada (`operation_delays` / `tblDOWNTIME_EVENTS`), crear un ticket urgente (`priority = 'urgent'`, `ticket_status = 'open'`) en `maintenance_tickets` y cambiar automáticamente el estado operativo del centro de trabajo a `fault` (*En fallo*).
+- **Semáforo en tiempo real por línea/máquina (`work_centers`)**: Mostrar tarjetas o filas por cada centro de trabajo con su estado operativo en vivo (`in_operation` = *En operación* [verde], `paused` = *En pausa* [amarillo], `changeover` = *Cambio de formato* [azul/ámbar], `fault` = *En fallo* [rojo]), junto con la orden/operación activa, operario asignado y avance de piezas.
+- **Asignación de personal al turno (`shift_assignments`)**: Permitir vincular un operario (`ext_hr_employee_id`, puente hacia *Recursos Humanos y Planillas*) con un centro de trabajo/máquina (`work_center_id`) y franja de turno (`morning`, `afternoon`, `night`); impedir que un mismo operario sea asignado simultáneamente a dos máquinas activas en la misma franja sin confirmación de reasignación.
+- **Revisión y aprobación de cierres de turno (`production_shifts`)**: Listar los turnos finalizados (`status === 'completed'`) pendientes de revisión con su resumen de piezas conformes, merma, tiempo efectivo y atrasos (`operation_delays`); permitir al supervisor aprobar el cierre marcando `supervisor_validated = true`, `validated_at` y nota opcional de supervisión. Bloquear la aprobación si el turno aún tiene un atraso abierto sin corregir (integración con `DelayCorrectionDialog` de US-06).
+- **Escalamiento de incidentes a mantenimiento (`maintenance_tickets`)**: Incluir un botón de alerta rápida en cada línea/máquina o evento de parada para escalar incidentes críticos; al activarlo, marcar `escalated_to_maint = true` en el evento de atraso/parada (`operation_delays`), crear un ticket urgente (`priority = 'urgent'`, `ticket_status = 'open'`) en `maintenance_tickets` y cambiar automáticamente el estado operativo del centro de trabajo a `fault` (*En fallo*).
 - **Persistencia**: Conservar asignaciones de personal, estados del semáforo, validaciones de turno y tickets de mantenimiento escalados dentro del snapshot versionado en `localStorage` (`erp.manufacturing.v2`; un `v1` existente se migra automáticamente).
 
 </details>
@@ -140,7 +140,7 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 - **Umbrales y alarmas**: Configurar umbrales críticos por indicador (ej. rendimiento < 75%), mostrar alarmas visibles y conservar los umbrales en el snapshot `erp.manufacturing.v2`.
 - **Gestión de órdenes**: Filtrar órdenes por `status` y `priority`, cambiar la prioridad de órdenes `planned` y cancelar órdenes con confirmación explícita, conservando los registros de ejecución.
 - **Centros desactivados**: Bloquear la programación de órdenes nuevas sobre centros de trabajo desactivados.
-- **Exportación**: Exportar el reporte consolidado del período (OEE, paradas, cumplimiento y alarmas activas) en PDF y Excel, generado localmente con datos mock.
+- **Exportación**: Exportar el reporte consolidado del período (OEE, paradas, cumplimiento y alarmas activas) en PDF y Excel, generado localmente con datos mock y sin dependencias externas: Excel mediante descarga CSV/SpreadsheetML y PDF mediante una vista imprimible con `window.print()`.
 - **Permisos por rol**: Definir permisos por rol (Jefa de Planta, Planificador, Operador) con un selector de rol simulado, sin autenticación real; la interfaz oculta o bloquea las acciones no permitidas.
 - **Ética de datos**: Agregar siempre por centro de trabajo y operación, sin ranking entre operadores; todo detalle por persona lleva la etiqueta *solo contexto operativo — no evaluación de desempeño*.
 - **Rendimiento**: Responder en menos de 100 ms con el dataset de volumen (500 órdenes, BOM de 4 niveles).
@@ -154,7 +154,7 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 
 **Por qué esta prioridad**: Es indispensable para desbloquear las máquinas que caen en estado de fallo (`fault`) y registrar los tiempos de parada que alimentan el OEE de planta.
 
-- **Bandeja de tickets**: Listar los tickets de mantenimiento (`maintenance_tickets` / `tblMAINTENANCE_TICKETS`) escalados desde piso con su prioridad (`urgent`, `high`, `normal`), estado (`open`, `in_progress`, `resolved`), centro de trabajo, evento de parada vinculado (`operation_delays` / `tblDOWNTIME_EVENTS`), quién lo reportó y su fecha de creación; ordenar por prioridad y antigüedad.
+- **Bandeja de tickets**: Listar los tickets de mantenimiento (`maintenance_tickets`) escalados desde piso con su prioridad (`urgent`, `high`, `normal`), estado (`open`, `in_progress`, `resolved`), centro de trabajo, evento de parada vinculado (`operation_delays`), quién lo reportó y su fecha de creación; ordenar por prioridad y antigüedad.
 - **Toma de intervención**: Permitir asignar un técnico y pasar el ticket a `in_progress` registrando el inicio de la intervención; impedir dos intervenciones simultáneas sobre el mismo centro de trabajo.
 - **Historial y desgaste**: Mostrar por máquina el historial de fallos e intervenciones, las paradas acumuladas y un indicador derivado de desgaste/frecuencia de fallos (no persistido) que sustente el mantenimiento preventivo.
 - **Órdenes preventivas**: Permitir programar una orden de mantenimiento preventivo a partir del historial y del indicador de desgaste, con fecha objetivo y responsable; la orden preventiva es distinta de los tickets correctivos.
@@ -186,13 +186,13 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 <details open>
 <summary><strong>FR-12: Balance de líneas (US-11)</strong></summary>
 
-**US-11**: Como Ingeniero de Producción, quiero consultar la utilización y la carga proyectada de cada centro de trabajo frente a su capacidad nominal, para identificar cuellos de botella, balancear la línea de producción, maximizar la eficiencia global de la línea y diseñar y optimizar las rutas de trabajo.
+**US-11**: Como Ingeniero de Producción, quiero consultar la utilización y la carga proyectada de cada centro de trabajo frente a su capacidad nominal, para identificar cuellos de botella, balancear la línea de producción, maximizar la eficiencia global de la línea y evaluar cómo optimizar las rutas de trabajo.
 
 - **Analizar los tiempos estándar**: Medir y determinar los tiempos teóricos de cada preparación para cada paso de la fabricación.
 - **Identificar cuellos de botella**: Evaluar qué estaciones o máquinas tardan más tiempo en procesar un lote, detectando el punto crítico que limita la velocidad de la planta.
-- **Optimizar las rutas de trabajo**: Reorganizar la secuencia de las tareas y reasignar actividades entre los centros de trabajo para nivelar la carga de trabajo.
-- **Calcular y monitorear la capacidad nominal**: Comparar la demanda planificada frente a la capacidad máxima diaria y el factor de eficiencia de cada centro de trabajo.
-- **Maximizar la eficiencia**: Ajustar la asignación de recursos y personal para reducir los tiempos muertos, reducir costos operativos y maximizar la tasa de salida de productos terminados.
+- **Proponer ajustes (solo lectura)**: Señalar qué reasignaciones entre centros o cambios de secuencia reducirían el cuello de botella, sin mutar rutas ni operaciones en esta historia.
+- **Calcular y monitorear la capacidad nominal**: Comparar la demanda planificada frente a la capacidad nominal diaria (`capacity_per_day_minutes`); el `efficiency_factor` se reserva para la carga efectiva del panel de planta (US-08).
+- **Recomendar mejoras de eficiencia**: Identificar oportunidades para reducir tiempos muertos y maximizar la tasa de salida, sin modificar la asignación de recursos ni el personal desde esta vista.
 
 </details>
 
@@ -206,7 +206,7 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 | AC-04 | Tablero de carga por centro con OEE (Disponibilidad × Rendimiento × Calidad) y paradas acumuladas por período, derivados y no persistidos | Planificado |
 | AC-05 | Umbrales de alarma configurables, persistidos en el snapshot y evaluados de inmediato | Planificado |
 | AC-06 | Reprogramación de prioridad y cancelación con confirmación, conservando registros de ejecución | Planificado |
-| AC-07 | Exportación del reporte consolidado a PDF y Excel, y permisos por rol simulados | Planificado |
+| AC-07 | Exportación del reporte consolidado a PDF y Excel (sin dependencias externas) y permisos por rol simulados | Planificado |
 | AC-08 | Máquinas de estados validadas; rechazo de transiciones inversas | Implementado |
 | AC-09 | Ejecución con tiempos reales; avance automático del estado de orden | Implementado |
 | AC-10 | Consumo teórico vs. real con flags de discrepancia; uso no planificado permitido | Implementado |
@@ -217,8 +217,8 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 | AC-15 | Inicio/fin de la operación activa con un único botón alterno y confirmación, tiempo real registrado y sin doble cierre | Planificado |
 | AC-16 | Atrasos justificados con motivos predefinidos o personalizados; tiempo efectivo pausado y cierre permitido con atraso abierto para corrección posterior | Planificado |
 | AC-17 | Dos contadores de piezas (turno y acumulado) incrementables, ajustables y validados; totales conservados al finalizar y recargar | Planificado |
-| AC-18 | Semáforo en vivo por línea/máquina (*En operación, En pausa, En fallo, Cambio de formato*) y registro de asignación de operario (`ext_hr_employee_id`) en `shift_assignments` (`tblSHIFT_ASSIGNMENTS`) | Planificado |
-| AC-19 | Aprobación de cierre de turno (`supervisor_validated = true`) tras verificar atrasos cerrados, y disparo de ticket urgente (`escalated_to_maint = true`) hacia `maintenance_tickets` (`tblMAINTENANCE_TICKETS`) pasando la máquina a *En fallo* | Planificado |
+| AC-18 | Semáforo en vivo por línea/máquina (*En operación, En pausa, En fallo, Cambio de formato*) y registro de asignación de operario (`ext_hr_employee_id`) en `shift_assignments` | Planificado |
+| AC-19 | Aprobación de cierre de turno (`supervisor_validated = true`) tras verificar atrasos cerrados, y disparo de ticket urgente (`escalated_to_maint = true`) hacia `maintenance_tickets` pasando la máquina a *En fallo* | Planificado |
 | AC-20 | Carga por centro destacada sobre la capacidad efectiva y bloqueo de programación en centros desactivados | Planificado |
 | AC-21 | Bandeja de tickets escalados con prioridad, estado, centro y evento de parada vinculado, ordenada por prioridad y antigüedad | Verificado |
 | AC-22 | Toma de intervención con técnico asignado y bloqueo de dos intervenciones simultáneas sobre el mismo centro de trabajo | Verificado |

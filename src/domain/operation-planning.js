@@ -29,9 +29,7 @@ export function plannedTimeMinutes(operation, quantity) {
  * @returns {number}
  */
 export function totalPlannedTime(operations, quantity) {
-  return round2(
-    (operations || []).reduce((sum, op) => sum + plannedTimeMinutes(op, quantity), 0)
-  );
+  return round2((operations || []).reduce((sum, op) => sum + plannedTimeMinutes(op, quantity), 0));
 }
 
 /**

@@ -46,7 +46,7 @@ export function assertTransition(from, to) {
   if (!canTransition(from, to)) {
     throw new Error(
       `Transición de orden inválida: "${from}" → "${to}". ` +
-        `Estados permitidos desde "${from}": ${(TRANSITIONS[from] || []).join(', ') || 'ninguno'}.`
+        `Estados permitidos desde "${from}": ${(TRANSITIONS[from] || []).join(', ') || 'ninguno'}.`,
     );
   }
   return to;
@@ -74,7 +74,7 @@ export function deriveOrderStatus(operations) {
   const completed = operations.filter((o) => o.status === 'completed').length;
   if (completed === operations.length) return S.COMPLETED;
   const started = operations.some(
-    (o) => o.status === 'in_progress' || o.status === 'paused' || o.status === 'completed'
+    (o) => o.status === 'in_progress' || o.status === 'paused' || o.status === 'completed',
   );
   return started ? S.IN_PROGRESS : S.RELEASED;
 }

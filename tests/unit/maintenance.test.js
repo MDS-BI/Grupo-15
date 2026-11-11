@@ -38,7 +38,11 @@ describe('domain/maintenance - tickets correctivos', () => {
   it('exige técnico cuando se informa y bloquea doble intervención por centro', () => {
     const current = ticket({ id: 't1', work_center_id: 'wc_corte' });
     const active = ticket({ id: 't2', work_center_id: 'wc_corte', ticket_status: 'in_progress' });
-    const otherCenter = ticket({ id: 't3', work_center_id: 'wc_solda', ticket_status: 'in_progress' });
+    const otherCenter = ticket({
+      id: 't3',
+      work_center_id: 'wc_solda',
+      ticket_status: 'in_progress',
+    });
 
     expect(canStartIntervention(current, [], '')).toBe(false);
     expect(canStartIntervention(current, [active], 'tec_1')).toBe(false);
@@ -56,21 +60,15 @@ describe('domain/maintenance - tickets correctivos', () => {
 
 describe('domain/maintenance - tiempos de parada', () => {
   it('calcula la parada en minutos redondeada a 2 decimales', () => {
-    expect(
-      computeDowntimeMinutes('2026-11-02T08:40:00Z', '2026-11-02T09:10:30Z')
-    ).toBe(30.5);
-    expect(
-      computeDowntimeMinutes('2026-11-02T08:00:00Z', '2026-11-02T08:01:20Z')
-    ).toBe(1.33);
-    expect(
-      computeDowntimeMinutes('2026-11-02T08:00:00Z', '2026-11-02T08:00:00Z')
-    ).toBe(0);
+    expect(computeDowntimeMinutes('2026-11-02T08:40:00Z', '2026-11-02T09:10:30Z')).toBe(30.5);
+    expect(computeDowntimeMinutes('2026-11-02T08:00:00Z', '2026-11-02T08:01:20Z')).toBe(1.33);
+    expect(computeDowntimeMinutes('2026-11-02T08:00:00Z', '2026-11-02T08:00:00Z')).toBe(0);
   });
 
   it('rechaza marcas invertidas o inválidas', () => {
-    expect(() =>
-      computeDowntimeMinutes('2026-11-02T10:00:00Z', '2026-11-02T09:00:00Z')
-    ).toThrow(/anterior/);
+    expect(() => computeDowntimeMinutes('2026-11-02T10:00:00Z', '2026-11-02T09:00:00Z')).toThrow(
+      /anterior/,
+    );
     expect(() => computeDowntimeMinutes('no-es-fecha', '2026-11-02T09:00:00Z')).toThrow(/válidas/);
   });
 
@@ -126,11 +124,7 @@ describe('domain/maintenance - órdenes preventivas', () => {
   });
 
   it('construye un borrador desde el historial de la máquina', () => {
-    const draft = buildPreventiveOrderFromHistory(
-      maintenanceTickets,
-      'wc_armado',
-      '2026-11-15'
-    );
+    const draft = buildPreventiveOrderFromHistory(maintenanceTickets, 'wc_armado', '2026-11-15');
     expect(draft.status).toBe('planned');
     expect(draft.source_ticket_id).toBe('mt_1004');
     expect(draft.planned_date).toBe('2026-11-15');

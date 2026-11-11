@@ -1,0 +1,11 @@
+node_modules/
+dist/
+build/
+coverage/
+.specify/
+.opencode/
+.vscode/
+specs/
+*.md
+index.html
+package-lock.json

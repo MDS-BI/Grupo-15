@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { reconcileConsumption, requiresReview, DEFAULT_TOLERANCE } from '../../src/domain/reconciliation.js';
+import {
+  reconcileConsumption,
+  requiresReview,
+  DEFAULT_TOLERANCE,
+} from '../../src/domain/reconciliation.js';
 
 const bomComponents = [
   { id: 'bc1', component_product_id: 'comp_tubo', quantity_per_unit: 6, scrap_percentage: 0 },

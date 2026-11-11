@@ -4,10 +4,7 @@
  * Ver contracts/maintenance.md §4.
  */
 
-import {
-  computeDowntimeMinutes,
-  buildPreventiveOrderFromHistory,
-} from '../domain/maintenance.js';
+import { computeDowntimeMinutes, buildPreventiveOrderFromHistory } from '../domain/maintenance.js';
 import { escapeHtml, el, fmtNumber } from './format.js';
 
 const TICKET_STATUS_LABEL = {
@@ -42,7 +39,7 @@ function pad(value) {
 function nowLocalInput() {
   const date = new Date();
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
-    date.getHours()
+    date.getHours(),
   )}:${pad(date.getMinutes())}`;
 }
 
@@ -51,7 +48,7 @@ function isoToLocalInput(value) {
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return '';
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
-    date.getHours()
+    date.getHours(),
   )}:${pad(date.getMinutes())}`;
 }
 
@@ -187,7 +184,7 @@ export function MaintenancePanel(store) {
 
   function renderFaultBanner() {
     const active = store.maintenanceTickets.filter(
-      (ticket) => ticket.ticket_status === 'in_progress'
+      (ticket) => ticket.ticket_status === 'in_progress',
     );
     if (active.length === 0) {
       faultBannerEl.innerHTML = '';
@@ -204,7 +201,7 @@ export function MaintenancePanel(store) {
               : null;
             return `<div class="fault-banner__item" data-fault-ticket="${ticket.id}">
               <span>${escapeHtml(ticket.ticket_code)} · ${escapeHtml(
-                workCenterName(ticket.work_center_id)
+                workCenterName(ticket.work_center_id),
               )}</span>
               <span>Técnico: ${escapeHtml(ticket.technician_ext_hr_employee_id || '—')}</span>
               <span>Parada: ${minutes === null ? '—' : `${fmtNumber(minutes)} min`}</span>
@@ -280,7 +277,7 @@ export function MaintenancePanel(store) {
       ${
         ticket.resolution_notes
           ? `<p class="maintenance-description"><strong>Notas de cierre:</strong> ${escapeHtml(
-              ticket.resolution_notes
+              ticket.resolution_notes,
             )}</p>`
           : ''
       }
@@ -304,7 +301,7 @@ export function MaintenancePanel(store) {
           <td>${fmtDateTime(ticket.resolved_at)}</td>
           <td>${fmtNumber(ticket.downtime_minutes || 0, 2)} min</td>
           <td>${escapeHtml(ticket.cause_reason_id || '—')}</td>
-        </tr>`
+        </tr>`,
       )
       .join('');
 
@@ -316,8 +313,8 @@ export function MaintenancePanel(store) {
             .map(
               (wc) =>
                 `<option value="${wc.id}" ${wc.id === workCenterId ? 'selected' : ''}>${escapeHtml(
-                  wc.name
-                )}</option>`
+                  wc.name,
+                )}</option>`,
             )
             .join('')}
         </select>
@@ -335,7 +332,8 @@ export function MaintenancePanel(store) {
         <table class="data-table data-table--compact">
           <thead><tr><th>Ticket</th><th>Resuelto</th><th>Parada</th><th>Causa</th></tr></thead>
           <tbody>${
-            rows || '<tr><td colspan="4" class="empty-cell">Sin fallos resueltos en esta máquina.</td></tr>'
+            rows ||
+            '<tr><td colspan="4" class="empty-cell">Sin fallos resueltos en esta máquina.</td></tr>'
           }</tbody>
         </table>
       </div>
@@ -348,17 +346,17 @@ export function MaintenancePanel(store) {
     const buttons = [];
     if (order.status === 'planned') {
       buttons.push(
-        `<button type="button" class="btn btn--small btn--primary" data-preventive-action="start" data-order="${order.id}">Iniciar</button>`
+        `<button type="button" class="btn btn--small btn--primary" data-preventive-action="start" data-order="${order.id}">Iniciar</button>`,
       );
     }
     if (order.status === 'in_progress') {
       buttons.push(
-        `<button type="button" class="btn btn--small btn--primary" data-preventive-action="complete" data-order="${order.id}">Completar</button>`
+        `<button type="button" class="btn btn--small btn--primary" data-preventive-action="complete" data-order="${order.id}">Completar</button>`,
       );
     }
     if (order.status === 'planned' || order.status === 'in_progress') {
       buttons.push(
-        `<button type="button" class="btn btn--small" data-preventive-action="cancel" data-order="${order.id}">Cancelar</button>`
+        `<button type="button" class="btn btn--small" data-preventive-action="cancel" data-order="${order.id}">Cancelar</button>`,
       );
     }
     return buttons.join('');
@@ -385,7 +383,7 @@ export function MaintenancePanel(store) {
                   <td>${preventiveStatusBadge(order.status)}</td>
                   <td>${escapeHtml(order.source_ticket_id || '—')}</td>
                   <td class="cell--actions">${preventiveActions(order)}</td>
-                </tr>`
+                </tr>`,
               )
               .join('')}
           </tbody>
@@ -397,7 +395,7 @@ export function MaintenancePanel(store) {
     modalRoot.innerHTML = `<div class="modal-backdrop"><div class="modal" role="dialog" aria-modal="true">${innerHtml}</div></div>`;
     const modal = modalRoot.querySelector('.modal');
     const focusable = modal.querySelectorAll(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
     );
     if (focusable.length) focusable[0].focus();
 
@@ -443,8 +441,8 @@ export function MaintenancePanel(store) {
       .map(
         (tech) =>
           `<option value="${escapeHtml(tech.ext_hr_employee_id)}">${escapeHtml(tech.name)} — ${escapeHtml(
-            tech.specialty
-          )}</option>`
+            tech.specialty,
+          )}</option>`,
       )
       .join('');
     showModal(`
@@ -485,7 +483,9 @@ export function MaintenancePanel(store) {
     const causeOptions = store.maintenanceCauses
       .map((cause) => `<option value="${escapeHtml(cause.id)}">${escapeHtml(cause.label)}</option>`)
       .join('');
-    const startedValue = isoToLocalInput(ticket.downtime_started_at || ticket.intervention_started_at);
+    const startedValue = isoToLocalInput(
+      ticket.downtime_started_at || ticket.intervention_started_at,
+    );
     showModal(`
       <h2 id="resolve-title">Resolver intervención · ${escapeHtml(ticket.ticket_code)}</h2>
       <form data-role="resolve-form" class="stack-form">
@@ -557,13 +557,13 @@ export function MaintenancePanel(store) {
     const suggestion = buildPreventiveOrderFromHistory(
       store.maintenanceTickets,
       centerId,
-      new Date().toISOString().slice(0, 10)
+      new Date().toISOString().slice(0, 10),
     );
     const wear = store.maintenanceIndicatorsForWorkCenter(centerId);
     const techOptions = store.technicians
       .map(
         (tech) =>
-          `<option value="${escapeHtml(tech.ext_hr_employee_id)}">${escapeHtml(tech.name)}</option>`
+          `<option value="${escapeHtml(tech.ext_hr_employee_id)}">${escapeHtml(tech.name)}</option>`,
       )
       .join('');
     showModal(`
@@ -596,9 +596,7 @@ export function MaintenancePanel(store) {
       try {
         const plannedDate = form.querySelector('[name="plannedDate"]').value;
         const title = form.querySelector('[name="title"]').value;
-        const technician = form.querySelector(
-          '[name="technician_ext_hr_employee_id"]'
-        ).value;
+        const technician = form.querySelector('[name="technician_ext_hr_employee_id"]').value;
         store.createPreventiveMaintenanceOrder({
           workCenterId: centerId,
           sourceTicketId: suggestion.source_ticket_id,
@@ -656,7 +654,7 @@ export function MaintenancePanel(store) {
     if (button.matches('[data-preventive-action]')) {
       handlePreventiveAction(
         button.getAttribute('data-order'),
-        button.getAttribute('data-preventive-action')
+        button.getAttribute('data-preventive-action'),
       );
       return;
     }

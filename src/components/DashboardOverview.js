@@ -14,14 +14,16 @@ export function DashboardOverview(store) {
   const kpis = store.kpis();
   const loads = store.workCenterLoads();
 
-  const activeByStatus = ['released', 'in_progress', 'planned'].map((status) => {
-    const count = kpis.byStatus[status] || 0;
-    return `
+  const activeByStatus = ['released', 'in_progress', 'planned']
+    .map((status) => {
+      const count = kpis.byStatus[status] || 0;
+      return `
       <div class="mini-stat">
         <span class="mini-stat__value">${count}</span>
         <span class="mini-stat__label">${ORDER_STATUS_LABEL[status]}</span>
       </div>`;
-  }).join('');
+    })
+    .join('');
 
   const kpiCards = `
     <div class="kpi-grid">
@@ -47,11 +49,12 @@ export function DashboardOverview(store) {
       </article>
     </div>`;
 
-  const capacityRows = loads.map(({ workCenter, loadMinutes, pendingOperations }) => {
-    const util = capacityUtilization(loadMinutes, workCenter);
-    const pct = Math.min(util * 100, 100);
-    const over = util > 1;
-    return `
+  const capacityRows = loads
+    .map(({ workCenter, loadMinutes, pendingOperations }) => {
+      const util = capacityUtilization(loadMinutes, workCenter);
+      const pct = Math.min(util * 100, 100);
+      const over = util > 1;
+      return `
       <tr>
         <td>${escapeHtml(workCenter.name)}</td>
         <td>${fmtNumber(loadMinutes)} min</td>
@@ -64,7 +67,8 @@ export function DashboardOverview(store) {
           <span class="bar__label ${over ? 'is-over' : ''}">${fmtPercent(util)}</span>
         </td>
       </tr>`;
-  }).join('');
+    })
+    .join('');
 
   const html = `
     <section class="view">

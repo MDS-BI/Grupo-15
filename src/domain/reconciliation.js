@@ -55,7 +55,7 @@ export function reconcileConsumption({
     const entry = byComponent.get(key);
     if (entry) {
       entry.actual_quantity = round6(
-        entry.actual_quantity + (Number(consumption.quantity_consumed) || 0)
+        entry.actual_quantity + (Number(consumption.quantity_consumed) || 0),
       );
     } else {
       byComponent.set(key, {
@@ -77,8 +77,7 @@ export function reconcileConsumption({
     else if (variance > 0) flag = 'over';
     else if (variance < 0) flag = 'under';
 
-    const within =
-      entry.theoretical_quantity === 0 ? false : Math.abs(ratio) <= tolerance;
+    const within = entry.theoretical_quantity === 0 ? false : Math.abs(ratio) <= tolerance;
 
     result.push({
       component_product_id: entry.component_product_id,
