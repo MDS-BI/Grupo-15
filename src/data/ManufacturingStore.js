@@ -25,6 +25,11 @@ import {
 } from '../domain/order-state-machine.js';
 import { plannedTimeMinutes } from '../domain/operation-planning.js';
 import { buildBomTree, flattenBom } from '../domain/bom-explosion.js';
+import {
+  validateBom,
+  validateBomComponent,
+  validateRoutingSequence,
+} from '../domain/validators.js';
 import { reconcileConsumption, requiresReview } from '../domain/reconciliation.js';
 import {
   canResolveTicket,
@@ -267,6 +272,570 @@ export class ManufacturingStore extends EventTarget {
 
   flattenedBom(rootBomId) {
     return flattenBom(this.bomTree(rootBomId));
+  }
+
+  bomMaterials(bomId) {
+    return this.bomComponents
+      .filter((component) => component.bom_id === bomId)
+      .sort((a, b) => a.sequence - b.sequence);
+  }
+
+  routingForBom(bomId) {
+    const bom = this.billOfMaterials.find((item) => item.id === bomId);
+    if (!bom) return null;
+    const linked = this.routings.find((routing) => routing.bom_id === bomId);
+    if (linked) return linked;
+    return (
+      this.routings.find(
+        (routing) => routing.product_id === bom.product_id && routing.status === 'active',
+      ) || null
+    );
+  }
+
+  operationsForBom(bomId) {
+    const routing = this.routingForBom(bomId);
+    if (!routing) return [];
+    return this.routingOperations
+      .filter((operation) => operation.routing_id === routing.id)
+      .sort((a, b) => a.sequence - b.sequence);
+  }
+
+  bomStations(bomId) {
+    const bom = this.billOfMaterials.find((item) => item.id === bomId);
+    const baseQuantity = bom ? Number(bom.base_quantity) || 1 : 1;
+    return this.operationsForBom(bomId).map((operation) => {
+      const workCenter = this.workCenterById(operation.work_center_id);
+      return {
+        ...operation,
+        work_center: workCenter,
+        estimated_time_minutes:
+          (Number(operation.setup_time_minutes) || 0) +
+          (Number(operation.run_time_per_unit_minutes) || 0) * baseQuantity,
+      };
+    });
+  }
+
+  /** Crea una receta completa: cabecera BOM, materiales, estaciones y tiempos. */
+  createBomRecipe(input = {}) {
+    const resolved = this.#resolveRecipeProduct(input);
+    const product = resolved.product;
+    const bom = {
+      id: makeId('bom'),
+      company_id: product.company_id || 'cmp_1',
+      product_id: product.id,
+      code: String(input.code || '').trim() || this.#nextBomCode(product),
+      version: String(input.version || '').trim() || this.#nextBomVersion(product.id),
+      effective_from: input.effective_from || new Date().toISOString().slice(0, 10),
+      effective_to: input.effective_to || null,
+      base_quantity:
+        input.base_quantity === undefined || input.base_quantity === ''
+          ? 1
+          : Number(input.base_quantity),
+      status: input.status || 'active',
+      notes: String(input.notes || '').trim(),
+    };
+    const issues = validateBom(bom, product);
+    if (issues.length) throw new Error(issues.map((issue) => issue.message).join(' '));
+    if (this.billOfMaterials.some((item) => item.code.toLowerCase() === bom.code.toLowerCase())) {
+      throw new Error(`Ya existe una receta con el código ${bom.code}.`);
+    }
+    if (
+      this.billOfMaterials.some(
+        (item) => item.product_id === product.id && item.version === bom.version,
+      )
+    ) {
+      throw new Error(`El producto ya tiene una receta en la versión ${bom.version}.`);
+    }
+
+    const components = this.#buildMaterialLines(bom.id, product.id, input.materials);
+    const routing = {
+      id: makeId('rt'),
+      company_id: bom.company_id,
+      product_id: product.id,
+      code: this.#nextRoutingCode(product),
+      version: bom.version,
+      status: 'active',
+      bom_id: bom.id,
+    };
+    const operations = this.#buildRoutingOperations(routing.id, input.stations);
+
+    if (resolved.isNew) this.products.push(product);
+    this.billOfMaterials.push(bom);
+    this.bomComponents.push(...components);
+    this.routings.push(routing);
+    this.routingOperations.push(...operations);
+    this.#persist();
+    this.#emit();
+    return { bom, routing, operations };
+  }
+
+  /** Modifica cabecera, materiales y/o estaciones de una receta existente. */
+  updateBomRecipe(bomId, changes = {}) {
+    const bom = this.billOfMaterials.find((item) => item.id === bomId);
+    if (!bom) throw new Error(`Receta no encontrada: ${bomId}`);
+
+    let product = this.productById(bom.product_id);
+    if (!product) throw new Error(`Producto no encontrado: ${bom.product_id}`);
+    let renameTo = null;
+
+    if (changes.product_id && changes.product_id !== bom.product_id) {
+      product = this.productById(changes.product_id);
+      if (!product) throw new Error(`Producto no encontrado: ${changes.product_id}`);
+      if (product.product_type !== 'finished_good') {
+        throw new Error('El producto de una receta debe ser un bien terminado.');
+      }
+    } else if (changes.product_name !== undefined) {
+      const name = String(changes.product_name || '').trim();
+      if (!name) throw new Error('El nombre del producto no puede estar vacío.');
+      const duplicated = this.products.some(
+        (item) => item.id !== product.id && item.name.toLowerCase() === name.toLowerCase(),
+      );
+      if (duplicated) throw new Error(`Ya existe un producto llamado ${name}.`);
+      renameTo = name;
+    }
+
+    const next = {
+      ...bom,
+      product_id: product.id,
+      code: changes.code !== undefined ? String(changes.code).trim() || bom.code : bom.code,
+      version:
+        changes.version !== undefined ? String(changes.version).trim() || bom.version : bom.version,
+      effective_from:
+        changes.effective_from !== undefined
+          ? changes.effective_from || bom.effective_from
+          : bom.effective_from,
+      base_quantity:
+        changes.base_quantity !== undefined && changes.base_quantity !== ''
+          ? Number(changes.base_quantity)
+          : bom.base_quantity,
+      notes: changes.notes !== undefined ? String(changes.notes).trim() : bom.notes,
+    };
+    const issues = validateBom(next, product);
+    if (issues.length) throw new Error(issues.map((issue) => issue.message).join(' '));
+    if (
+      this.billOfMaterials.some(
+        (item) => item.id !== bom.id && item.code.toLowerCase() === next.code.toLowerCase(),
+      )
+    ) {
+      throw new Error(`Ya existe una receta con el código ${next.code}.`);
+    }
+    if (
+      this.billOfMaterials.some(
+        (item) =>
+          item.id !== bom.id && item.product_id === product.id && item.version === next.version,
+      )
+    ) {
+      throw new Error(`El producto ya tiene una receta en la versión ${next.version}.`);
+    }
+
+    const newComponents =
+      changes.materials !== undefined
+        ? this.#buildMaterialLines(bom.id, product.id, changes.materials)
+        : null;
+
+    let routing = this.routingForBom(bom.id);
+    let routingToCreate = null;
+    let newOperations = null;
+    if (changes.stations !== undefined) {
+      if (!routing) {
+        routingToCreate = {
+          id: makeId('rt'),
+          company_id: bom.company_id,
+          product_id: product.id,
+          code: this.#nextRoutingCode(product),
+          version: next.version,
+          status: 'active',
+          bom_id: bom.id,
+        };
+        newOperations = this.#buildRoutingOperations(routingToCreate.id, changes.stations);
+      } else {
+        newOperations = this.#buildRoutingOperations(routing.id, changes.stations);
+      }
+    }
+
+    if (renameTo) product.name = renameTo;
+    Object.assign(bom, next);
+    if (newComponents) {
+      this.bomComponents = this.bomComponents
+        .filter((component) => component.bom_id !== bom.id)
+        .concat(newComponents);
+    }
+    if (routingToCreate) {
+      this.routings.push(routingToCreate);
+      routing = routingToCreate;
+    }
+    if (routing && newOperations) {
+      this.routingOperations = this.routingOperations
+        .filter((operation) => operation.routing_id !== routing.id)
+        .concat(newOperations);
+      routing.product_id = product.id;
+      routing.version = next.version;
+      routing.bom_id = bom.id;
+    } else if (routing && changes.product_id) {
+      routing.product_id = product.id;
+    }
+
+    this.#persist();
+    this.#emit();
+    return bom;
+  }
+
+  /** Elimina la receta y sus líneas/ruta asociadas (operación confirmada en UI). */
+  deleteBomRecipe(bomId) {
+    const bom = this.billOfMaterials.find((item) => item.id === bomId);
+    if (!bom) throw new Error(`Receta no encontrada: ${bomId}`);
+
+    this.billOfMaterials = this.billOfMaterials.filter((item) => item.id !== bomId);
+    this.bomComponents = this.bomComponents.filter((component) => component.bom_id !== bomId);
+
+    const routingIds = new Set(
+      this.routings.filter((routing) => routing.bom_id === bomId).map((routing) => routing.id),
+    );
+    const stillUsed = this.billOfMaterials.some((item) => item.product_id === bom.product_id);
+    if (!stillUsed) {
+      for (const routing of this.routings.filter((item) => item.product_id === bom.product_id)) {
+        routingIds.add(routing.id);
+      }
+    }
+    this.routingOperations = this.routingOperations.filter(
+      (operation) => !routingIds.has(operation.routing_id),
+    );
+    this.routings = this.routings.filter((routing) => !routingIds.has(routing.id));
+
+    this.#persist();
+    this.#emit();
+    return bom;
+  }
+
+  addBomComponent(bomId, input = {}) {
+    const bom = this.billOfMaterials.find((item) => item.id === bomId);
+    if (!bom) throw new Error(`Receta no encontrada: ${bomId}`);
+    const component = this.productById(input.component_product_id);
+    if (!component) throw new Error('El material seleccionado no existe.');
+    if (component.id === bom.product_id) {
+      throw new Error('La receta no puede incluir el mismo producto como material.');
+    }
+    const existing = this.bomComponents.filter((line) => line.bom_id === bomId);
+    const line = {
+      id: makeId('bc'),
+      bom_id: bomId,
+      component_product_id: component.id,
+      quantity_per_unit: Number(input.quantity_per_unit),
+      uom_id: input.uom_id || component.uom_id,
+      scrap_percentage:
+        input.scrap_percentage === undefined || input.scrap_percentage === ''
+          ? 0
+          : Number(input.scrap_percentage),
+      sequence:
+        input.sequence === undefined || input.sequence === ''
+          ? (existing.reduce((max, item) => Math.max(max, item.sequence), 0) || 0) + 10
+          : Number(input.sequence),
+      is_optional: Boolean(input.is_optional),
+    };
+    const issues = validateBomComponent(line, existing);
+    if (issues.length) throw new Error(issues.map((issue) => issue.message).join(' '));
+    this.bomComponents.push(line);
+    this.#persist();
+    this.#emit();
+    return line;
+  }
+
+  updateBomComponent(bomId, componentId, changes = {}) {
+    const line = this.bomComponents.find(
+      (component) => component.id === componentId && component.bom_id === bomId,
+    );
+    if (!line) throw new Error(`Material de la receta no encontrado: ${componentId}`);
+    const bom = this.billOfMaterials.find((item) => item.id === bomId);
+    const candidate = { ...line, ...changes };
+    if (changes.component_product_id) {
+      const component = this.productById(changes.component_product_id);
+      if (!component) throw new Error('El material seleccionado no existe.');
+      if (component.id === bom.product_id) {
+        throw new Error('La receta no puede incluir el mismo producto como material.');
+      }
+      candidate.component_product_id = component.id;
+      candidate.uom_id = changes.uom_id || component.uom_id;
+    }
+    if (changes.quantity_per_unit !== undefined) {
+      candidate.quantity_per_unit = Number(changes.quantity_per_unit);
+    }
+    if (changes.scrap_percentage !== undefined) {
+      candidate.scrap_percentage = Number(changes.scrap_percentage);
+    }
+    if (changes.sequence !== undefined) candidate.sequence = Number(changes.sequence);
+    const others = this.bomComponents.filter(
+      (component) => component.bom_id === bomId && component.id !== componentId,
+    );
+    const issues = validateBomComponent(candidate, others);
+    if (issues.length) throw new Error(issues.map((issue) => issue.message).join(' '));
+    Object.assign(line, candidate);
+    this.#persist();
+    this.#emit();
+    return line;
+  }
+
+  removeBomComponent(bomId, componentId) {
+    const line = this.bomComponents.find(
+      (component) => component.id === componentId && component.bom_id === bomId,
+    );
+    if (!line) throw new Error(`Material de la receta no encontrado: ${componentId}`);
+    this.bomComponents = this.bomComponents.filter((component) => component !== line);
+    this.#persist();
+    this.#emit();
+    return line;
+  }
+
+  addRoutingOperationForBom(bomId, input = {}) {
+    const bom = this.billOfMaterials.find((item) => item.id === bomId);
+    if (!bom) throw new Error(`Receta no encontrada: ${bomId}`);
+    const existingRouting = this.routingForBom(bomId);
+    const currentOperations = existingRouting
+      ? this.routingOperations.filter((operation) => operation.routing_id === existingRouting.id)
+      : [];
+    const routingId = existingRouting ? existingRouting.id : makeId('rt');
+    const operation = this.#normalizeOperation(
+      routingId,
+      input,
+      (currentOperations.reduce((max, item) => Math.max(max, item.sequence), 0) || 0) + 10,
+    );
+    if (currentOperations.some((item) => item.work_center_id === operation.work_center_id)) {
+      throw new Error('La estación ya está incluida en la receta.');
+    }
+    const issues = validateRoutingSequence([...currentOperations, operation]);
+    if (issues.length) throw new Error(issues.map((issue) => issue.message).join(' '));
+
+    let routing = existingRouting;
+    if (!routing) {
+      routing = {
+        id: routingId,
+        company_id: bom.company_id,
+        product_id: bom.product_id,
+        code: this.#nextRoutingCode(this.productById(bom.product_id)),
+        version: bom.version,
+        status: 'active',
+        bom_id: bom.id,
+      };
+      this.routings.push(routing);
+    }
+    routing.bom_id = bom.id;
+    this.routingOperations.push(operation);
+    this.#persist();
+    this.#emit();
+    return operation;
+  }
+
+  updateRoutingOperationForBom(bomId, operationId, changes = {}) {
+    const routing = this.routingForBom(bomId);
+    if (!routing) throw new Error('La receta no tiene estaciones configuradas.');
+    const operation = this.routingOperations.find(
+      (item) => item.id === operationId && item.routing_id === routing.id,
+    );
+    if (!operation) throw new Error(`Estación de la receta no encontrada: ${operationId}`);
+    const candidate = this.#normalizeOperation(
+      routing.id,
+      { ...operation, ...changes },
+      operation.sequence,
+    );
+    const others = this.routingOperations.filter(
+      (item) => item.routing_id === routing.id && item.id !== operationId,
+    );
+    if (others.some((item) => item.work_center_id === candidate.work_center_id)) {
+      throw new Error('La estación ya está incluida en la receta.');
+    }
+    const issues = validateRoutingSequence([...others, candidate]);
+    if (issues.length) throw new Error(issues.map((issue) => issue.message).join(' '));
+    Object.assign(operation, candidate);
+    this.#persist();
+    this.#emit();
+    return operation;
+  }
+
+  removeRoutingOperationForBom(bomId, operationId) {
+    const routing = this.routingForBom(bomId);
+    if (!routing) throw new Error('La receta no tiene estaciones configuradas.');
+    const operation = this.routingOperations.find(
+      (item) => item.id === operationId && item.routing_id === routing.id,
+    );
+    if (!operation) throw new Error(`Estación de la receta no encontrada: ${operationId}`);
+    this.routingOperations = this.routingOperations.filter((item) => item !== operation);
+    this.#persist();
+    this.#emit();
+    return operation;
+  }
+
+  #codeSegment(value) {
+    return (
+      String(value || 'REC')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 24) || 'REC'
+    );
+  }
+
+  #nextBomCode(product) {
+    const base = `BOM-${this.#codeSegment(product?.code || product?.id)}`;
+    let code = base;
+    let suffix = 2;
+    while (this.billOfMaterials.some((item) => item.code.toLowerCase() === code.toLowerCase())) {
+      code = `${base}-${suffix}`;
+      suffix += 1;
+    }
+    return code;
+  }
+
+  #nextRoutingCode(product) {
+    const base = `RT-${this.#codeSegment(product?.code || product?.id)}`;
+    let code = base;
+    let suffix = 2;
+    while (this.routings.some((item) => item.code.toLowerCase() === code.toLowerCase())) {
+      code = `${base}-${suffix}`;
+      suffix += 1;
+    }
+    return code;
+  }
+
+  #nextBomVersion(productId) {
+    const versions = this.billOfMaterials
+      .filter((item) => item.product_id === productId)
+      .map((item) => String(item.version));
+    if (!versions.length) return 'A';
+    for (let index = 0; index < 26; index += 1) {
+      const version = String.fromCharCode(65 + index);
+      if (!versions.includes(version)) return version;
+    }
+    return `V${versions.length + 1}`;
+  }
+
+  #nextProductCode(name) {
+    const base = `FG-${this.#codeSegment(name)}`;
+    let code = base;
+    let suffix = 2;
+    while (this.products.some((item) => item.code.toLowerCase() === code.toLowerCase())) {
+      code = `${base}-${suffix}`;
+      suffix += 1;
+    }
+    return code;
+  }
+
+  #resolveRecipeProduct({ product_id, product_name } = {}) {
+    if (product_id) {
+      const product = this.productById(product_id);
+      if (!product) throw new Error(`Producto no encontrado: ${product_id}`);
+      if (product.product_type !== 'finished_good') {
+        throw new Error('El producto de una receta debe ser un bien terminado.');
+      }
+      return { product, isNew: false };
+    }
+    const name = String(product_name || '').trim();
+    if (!name) throw new Error('El nombre del producto es obligatorio.');
+    const existing = this.products.find(
+      (product) => product.name.toLowerCase() === name.toLowerCase(),
+    );
+    if (existing) {
+      if (existing.product_type !== 'finished_good') {
+        throw new Error('El producto de una receta debe ser un bien terminado.');
+      }
+      return { product: existing, isNew: false };
+    }
+    return {
+      product: {
+        id: makeId('prod'),
+        company_id: 'cmp_1',
+        code: this.#nextProductCode(name),
+        name,
+        product_type: 'finished_good',
+        uom_id: 'uom_un',
+        unit_cost: 0,
+      },
+      isNew: true,
+    };
+  }
+
+  #buildMaterialLines(bomId, productId, materials) {
+    const list = Array.isArray(materials) ? materials : [];
+    if (!list.length) throw new Error('Debe añadir al menos un material a la receta.');
+    const lines = [];
+    for (let index = 0; index < list.length; index += 1) {
+      const raw = list[index] || {};
+      const component = this.productById(String(raw.component_product_id || '').trim());
+      if (!component) throw new Error('Seleccione un material válido para cada línea.');
+      if (component.id === productId) {
+        throw new Error('La receta no puede incluir el mismo producto como material.');
+      }
+      const line = {
+        id: makeId('bc'),
+        bom_id: bomId,
+        component_product_id: component.id,
+        quantity_per_unit: Number(raw.quantity_per_unit),
+        uom_id: raw.uom_id || component.uom_id,
+        scrap_percentage:
+          raw.scrap_percentage === undefined || raw.scrap_percentage === ''
+            ? 0
+            : Number(raw.scrap_percentage),
+        sequence:
+          raw.sequence === undefined || raw.sequence === ''
+            ? (index + 1) * 10
+            : Number(raw.sequence),
+        is_optional: Boolean(raw.is_optional),
+      };
+      const issues = validateBomComponent(line, lines);
+      if (issues.length) throw new Error(issues.map((issue) => issue.message).join(' '));
+      lines.push(line);
+    }
+    return lines;
+  }
+
+  #normalizeOperation(routingId, input = {}, fallbackSequence = 10) {
+    const workCenterId = String(input.work_center_id || '').trim();
+    const workCenter = this.workCenterById(workCenterId);
+    if (!workCenter) throw new Error('Seleccione una estación válida para cada operación.');
+    const setup =
+      input.setup_time_minutes === undefined || input.setup_time_minutes === ''
+        ? 0
+        : Number(input.setup_time_minutes);
+    const rawRun =
+      input.run_time_per_unit_minutes ?? input.estimated_time_minutes ?? input.time_minutes;
+    const run = rawRun === undefined || rawRun === '' ? 0 : Number(rawRun);
+    if (!Number.isFinite(setup) || setup < 0) {
+      throw new Error(`El alistamiento de ${workCenter.name} debe ser mayor o igual que 0.`);
+    }
+    if (!Number.isFinite(run) || run < 0) {
+      throw new Error(`El tiempo estimado de ${workCenter.name} debe ser mayor o igual que 0.`);
+    }
+    if (setup + run <= 0) {
+      throw new Error(`Indique un tiempo estimado mayor que 0 para ${workCenter.name}.`);
+    }
+    return {
+      id: input.id || makeId('ro'),
+      routing_id: routingId,
+      work_center_id: workCenter.id,
+      sequence:
+        input.sequence === undefined || input.sequence === ''
+          ? fallbackSequence
+          : Number(input.sequence),
+      description: String(input.description || '').trim() || `Operación en ${workCenter.name}`,
+      setup_time_minutes: setup,
+      run_time_per_unit_minutes: run,
+    };
+  }
+
+  #buildRoutingOperations(routingId, stations) {
+    const list = Array.isArray(stations) ? stations : [];
+    if (!list.length) throw new Error('Debe indicar al menos una estación de trabajo.');
+    const operations = [];
+    for (let index = 0; index < list.length; index += 1) {
+      const operation = this.#normalizeOperation(routingId, list[index], (index + 1) * 10);
+      if (operations.some((item) => item.work_center_id === operation.work_center_id)) {
+        throw new Error(`La estación ${operation.work_center_id} está repetida en la receta.`);
+      }
+      operations.push(operation);
+    }
+    const issues = validateRoutingSequence(operations);
+    if (issues.length) throw new Error(issues.map((issue) => issue.message).join(' '));
+    return operations;
   }
 
   /* -------------------- Órdenes -------------------- */
