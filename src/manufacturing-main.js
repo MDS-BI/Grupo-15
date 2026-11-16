@@ -1,7 +1,6 @@
 /**
  * @file Punto de entrada del Módulo de Operaciones / Manufactura.
- * Monta el marco (barra superior + barra lateral) y enruta entre las vistas:
- * Panel, BOM, Órdenes. El menú se filtra según el rol de usuario activo.
+ * Pantalla inicial de selección de rol y marco principal (Panel/BOM/Órdenes, etc.).
  */
 
 import './styles/manufacturing.css';
@@ -27,7 +26,7 @@ import {
 const MODULE_NAME = 'Manufactura';
 const ROLE_STORAGE_KEY = 'erp.manufacturing.role';
 
-const state = { active: 'dashboard', role: loadRole() };
+const state = { active: 'dashboard', role: loadRole(), screen: 'welcome' };
 
 const MODULES = [
   { id: 'dashboard', label: 'Panel', render: () => DashboardOverview(store) },
@@ -46,7 +45,7 @@ const MODULES = [
       RoleAccessPanel({
         currentRole: state.role,
         modules: MODULES,
-        onSelect: (role) => selectRole(role, { goHome: true }),
+        onSelect: (role) => selectRole(role, { goHome: true, enterApp: true }),
       }),
   },
 ];
@@ -67,12 +66,13 @@ function persistRole(role) {
   }
 }
 
-function selectRole(role, { goHome = false } = {}) {
+function selectRole(role, { goHome = false, enterApp = false } = {}) {
   state.role = normalizeRole(role);
   persistRole(state.role);
+  if (enterApp) state.screen = 'app';
   if (goHome) state.active = 'dashboard';
   else if (!isModuleAllowed(state.role, state.active)) state.active = 'dashboard';
-  renderShell();
+  renderApp();
 }
 
 function visibleModules() {
@@ -81,6 +81,32 @@ function visibleModules() {
 
 function monogram(name) {
   return name.slice(0, 2).toUpperCase();
+}
+
+function roleCard(role) {
+  return `
+    <button type="button" class="role-select-card" data-pick-role="${role}">
+      <span class="role-select-card__title">${ROLE_LABELS[role]}</span>
+      <span class="role-select-card__hint">Seleccionar rol</span>
+    </button>`;
+}
+
+function renderWelcome() {
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <div class="welcome-screen">
+      <div class="welcome-card">
+        <p class="welcome-kicker">Módulo de Operaciones / Manufactura</p>
+        <h1 class="welcome-title">Selecciona tu rol activo</h1>
+        <p class="welcome-subtitle">Elige cómo deseas ingresar al Panel de Producción.</p>
+        <div class="role-select-grid">
+          ${ROLE_ORDER.map(roleCard).join('')}
+        </div>
+      </div>
+    </div>`;
+  app.querySelectorAll('[data-pick-role]').forEach((btn) => {
+    btn.addEventListener('click', () => selectRole(btn.getAttribute('data-pick-role'), { enterApp: true, goHome: true }));
+  });
 }
 
 function sidebarButtons() {
@@ -107,8 +133,10 @@ function renderShell() {
   app.innerHTML = `
     <div class="shell">
       <header class="topbar">
-        <span class="logo" aria-hidden="true">${monogram(MODULE_NAME)}</span>
-        <span class="topbar__name">Módulo de ${MODULE_NAME}</span>
+        <button type="button" class="topbar__brand" data-go-welcome aria-label="Volver a selección de rol">
+          <span class="logo" aria-hidden="true">${monogram(MODULE_NAME)}</span>
+          <span class="topbar__name">Módulo de ${MODULE_NAME}</span>
+        </button>
         <label class="topbar__role" for="role-select">Rol activo
           <select id="role-select" data-role="role-select" aria-label="Seleccionar rol de usuario">
             ${roleOptions()}
@@ -120,6 +148,11 @@ function renderShell() {
         <main class="content" data-role="content"></main>
       </div>
     </div>`;
+
+  app.querySelector('[data-go-welcome]').addEventListener('click', () => {
+    state.screen = 'welcome';
+    renderApp();
+  });
 
   app.querySelectorAll('[data-module]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -143,4 +176,12 @@ function renderContent() {
   content.replaceChildren(module.render());
 }
 
-renderShell();
+function renderApp() {
+  if (state.screen === 'welcome') {
+    renderWelcome();
+    return;
+  }
+  renderShell();
+}
+
+renderApp();
