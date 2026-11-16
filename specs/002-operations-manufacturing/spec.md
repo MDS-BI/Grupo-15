@@ -196,6 +196,7 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 
 </details>
 
+
 ## 5. Criterios de Aceptación
 
 | ID | Criterio | Estado |

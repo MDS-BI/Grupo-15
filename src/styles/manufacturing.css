@@ -1028,3 +1028,54 @@ button {
   max-height: 90vh;
   overflow: auto;
 }
+
+/* -------------------- Autor�a de recetas BOM -------------------- */
+
+.recipe-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.recipe-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--erp-border);
+  border-radius: 8px;
+}
+
+.recipe-fieldset legend {
+  padding: 0 0.35rem;
+  font-weight: 600;
+}
+
+.recipe-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.recipe-row select,
+.recipe-row input {
+  height: 34px;
+  padding: 0 0.45rem;
+  border: 1px solid var(--erp-border);
+  border-radius: 6px;
+  font: inherit;
+}
+
+.recipe-row select {
+  min-width: 190px;
+}
+
+.recipe-row input[type='text'] {
+  min-width: 170px;
+}
+
+.recipe-row input[name='station_description'] {
+  flex: 1;
+}
