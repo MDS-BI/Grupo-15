@@ -1028,3 +1028,91 @@ button {
   max-height: 90vh;
   overflow: auto;
 }
+
+/* ---------------- Acceso por rol ---------------- */
+
+.topbar__role {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.topbar__role select {
+  height: 32px;
+  padding: 0 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.topbar__role select option {
+  color: var(--erp-text);
+  background: var(--erp-surface);
+}
+
+.role-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.role-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.25rem;
+  background: var(--erp-surface);
+  border: 1px solid var(--erp-border);
+  border-radius: 8px;
+  box-shadow: var(--erp-shadow);
+}
+
+.role-card.is-active {
+  border-color: var(--erp-accent);
+  box-shadow: 0 0 0 1px var(--erp-accent);
+}
+
+.role-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.role-card__header h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.role-card__badge {
+  padding: 0 0.5rem;
+  border-radius: 999px;
+  background: var(--erp-accent-weak);
+  color: var(--erp-accent);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.role-card__desc {
+  margin: 0;
+  color: var(--erp-text-muted);
+}
+
+.role-card__label {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--erp-text-muted);
+}
+
+.role-card__pages {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: var(--erp-text);
+}
