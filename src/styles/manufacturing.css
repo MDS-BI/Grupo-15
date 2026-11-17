@@ -1045,9 +1045,9 @@ button {
   overflow: auto;
 }
 
-/* ---------------- Pantalla inicial / selección de rol ---------------- */
+/* ---------------- Ingreso y datos de roles (solo administrador) ---------------- */
 
-.welcome-screen {
+.login-screen {
   min-height: 100vh;
   display: flex;
   align-items: center;
@@ -1056,8 +1056,8 @@ button {
   background: radial-gradient(1200px 600px at 20% 0%, #e8f0fe 0%, var(--erp-bg) 55%);
 }
 
-.welcome-card {
-  width: min(980px, 100%);
+.login-card {
+  width: min(420px, 100%);
   background: var(--erp-surface);
   border: 1px solid var(--erp-border);
   border-radius: 12px;
@@ -1065,22 +1065,57 @@ button {
   padding: 2rem;
 }
 
-.welcome-kicker {
+.login-kicker {
   margin: 0 0 0.5rem;
   color: var(--erp-text-muted);
   font-weight: 600;
   letter-spacing: 0.02em;
 }
 
-.welcome-title {
+.login-title {
   margin: 0;
   font-size: clamp(1.6rem, 2.4vw, 2.4rem);
   line-height: 1.2;
 }
 
-.welcome-subtitle {
+.login-subtitle {
   margin: 0.75rem 0 1.5rem;
   color: var(--erp-text-muted);
+}
+
+.login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.login-field input {
+  height: 40px;
+  padding: 0 0.75rem;
+  border: 1px solid var(--erp-border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--erp-text);
+  font: inherit;
+  font-weight: 400;
+}
+
+.login-field input:focus {
+  outline: 2px solid rgba(15, 98, 254, 0.35);
+  outline-offset: 1px;
+}
+
+.login-error {
+  margin: 0 0 1rem;
+  color: var(--erp-danger);
+  font-size: 0.9rem;
+}
+
+.login-submit {
+  width: 100%;
 }
 
 .role-select-grid {
@@ -1107,9 +1142,33 @@ button {
   box-shadow: 0 0 0 1px rgba(15, 98, 254, 0.2);
 }
 
+.role-select-card__monogram {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--erp-accent);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.role-select-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
 .role-select-card__title {
   font-weight: 700;
   color: var(--erp-text);
+}
+
+.role-select-card__desc {
+  color: var(--erp-text-muted);
+  font-size: 0.9rem;
+  line-height: 1.35;
 }
 
 .role-select-card__hint {
@@ -1135,6 +1194,16 @@ button {
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.12);
   color: #fff;
+}
+
+.topbar__logout {
+  height: 32px;
+  padding: 0 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 6px;
+  background: transparent;
+  color: #fff;
+  font-size: 0.85rem;
 }
 
 .topbar__role select option {

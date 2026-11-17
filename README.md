@@ -29,24 +29,35 @@ Abre la URL que muestra Vite (normalmente http://localhost:5173).
 | `npm run lint` | ESLint |
 | `npm run format:check` | Verificación de formato |
 
-## Roles simulados
+## Ingreso y roles simulados
 
-El ingreso muestra cuatro roles. El selector de la barra superior permite cambiar de rol sin recargar, y la navegación lateral se filtra con `src/domain/access-control.js`.
+El inicio es un login genérico: no muestra roles, descripciones ni pistas sobre los permisos. Usa una de estas cuentas de demostración:
+
+| Usuario | Contraseña | Rol |
+|---|---|---|
+| `operador` | `Op3rador2026` | Operador de Máquina |
+| `supervisor` | `Sup3rvisor2026` | Supervisor de línea |
+| `planificador` | `Pl4nificador2026` | Planificador |
+| `jefa.planta` | `Pl4nta2026` | Jefa de Planta (administrador) |
+
+No hay autenticación real: es una simulación frontend para demostrar permisos. El formulario valida las credenciales con `src/data/fixtures/demo-accounts.js`, guarda el rol en `erp.manufacturing.role` y vuelve al login al cargar la página o al pulsar **Cerrar sesión**. El selector de la barra superior permite cambiar de rol sin recargar, y la navegación lateral se filtra con `src/domain/access-control.js`.
 
 | Rol | Módulos principales |
 |---|---|
-| Jefa de Planta | Panel, BOM, Órdenes, Estación, Supervisión, Planta, Planificación, Balance, Mantenimiento, Roles |
+| Jefa de Planta | Panel, BOM, Órdenes, Estación, Supervisión, Planta, Planificación, Balance, Mantenimiento, Roles y Datos de roles |
 | Supervisor de línea | Panel, Órdenes, Estación, Supervisión, Planta, Mantenimiento, Roles |
 | Planificador | Panel, BOM, Órdenes, Planta, Planificación, Balance, Roles |
 | Operador de Máquina | Panel, Estación, Planta, Mantenimiento, Roles |
 
-La etiqueta visible es **Operador de Máquina** (o **Operador** en selectores compactos). No hay autenticación real: es una simulación para demostrar permisos.
+Las tarjetas con los datos de cada rol (nombre, descripción y "Entrar como…") viven solo en `#/admin/roles`, accesible únicamente para la Jefa de Planta; los demás roles son redirigidos aunque escriban el hash directamente.
+
+La etiqueta visible es **Operador de Máquina** (o **Operador** en selectores compactos).
 
 ## Navegación
 
 - El módulo activo se sincroniza con el hash (`#/dashboard`, `#/plant`, `#/scheduling`, ...), por lo que funcionan enlaces profundos y el botón atrás del navegador.
 - Si un rol abre por URL un módulo no permitido, la app lo redirige a su módulo de inicio.
-- El panel **Roles** muestra las páginas disponibles para cada rol.
+- El panel **Roles** muestra las páginas disponibles para cada rol; **Datos de roles** (`#/admin/roles`) está restringido a la Jefa de Planta.
 - El panel inicial ofrece accesos rápidos por rol, avisos de situación (alarmas, tickets, cierres y atrasos) y actividad reciente simulada.
 
 ## Datos simulados

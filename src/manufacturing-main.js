@@ -1,6 +1,6 @@
 /**
  * @file Punto de entrada del Módulo de Operaciones / Manufactura.
- * Pantalla inicial de selección de rol y marco principal (Panel/BOM/Órdenes, etc.).
+ * Ingreso genérico y marco principal (Panel/BOM/Órdenes, etc.).
  */
 
 import './styles/manufacturing.css';
@@ -15,7 +15,8 @@ import { PlantPerformancePanel } from './components/PlantPerformancePanel.js';
 import { ProductionSchedulingPanel } from './components/ProductionSchedulingPanel.js';
 import { LineBalancePanel } from './components/LineBalancePanel.js';
 import { RoleAccessPanel } from './components/RoleAccessPanel.js';
-import { escapeHtml } from './components/format.js';
+import { el, escapeHtml } from './components/format.js';
+import { authenticate } from './data/fixtures/demo-accounts.js';
 import {
   DEFAULT_ROLE,
   MODULE_GROUPS,
@@ -50,18 +51,18 @@ const MODULES = [
     render: (context) =>
       RoleAccessPanel({
         currentRole: context.role,
-        modules: MODULES,
+        modules: MODULES.filter((module) => module.id !== 'admin-roles'),
         onSelect: (role) => selectRole(role, { goHome: true, enterApp: true }),
       }),
   },
+  {
+    id: 'admin-roles',
+    label: 'Datos de roles',
+    render: () => adminRolesView(),
+  },
 ];
 
-const state = { active: 'dashboard', role: loadRole(), screen: 'welcome' };
-const initialModule = moduleFromHash();
-if (initialModule && isModuleAllowed(state.role, initialModule)) {
-  state.active = initialModule;
-  state.screen = 'app';
-}
+const state = { active: 'dashboard', role: loadRole(), screen: 'login' };
 
 function loadRole() {
   try {
@@ -76,6 +77,14 @@ function persistRole(role) {
     globalThis.localStorage?.setItem(ROLE_STORAGE_KEY, role);
   } catch {
     /* almacenamiento no disponible: el rol dura la sesión */
+  }
+}
+
+function forgetRole() {
+  try {
+    globalThis.localStorage?.removeItem(ROLE_STORAGE_KEY);
+  } catch {
+    state.role = DEFAULT_ROLE;
   }
 }
 
@@ -105,6 +114,7 @@ function navigateTo(moduleId) {
 }
 
 function handleLocationChange() {
+  if (state.screen === 'login') return;
   const target = moduleFromHash();
   state.active =
     target && isModuleAllowed(state.role, target) ? target : homeModuleForRole(state.role);
@@ -122,6 +132,12 @@ function selectRole(role, { goHome = false, enterApp = false } = {}) {
   else if (!isModuleAllowed(state.role, state.active)) state.active = homeModuleForRole(state.role);
 
   syncHash(state.active, true);
+  renderApp();
+}
+
+function logout() {
+  forgetRole();
+  state.screen = 'login';
   renderApp();
 }
 
@@ -145,24 +161,58 @@ function roleCard(role) {
     </button>`;
 }
 
-function renderWelcome() {
+function renderLogin() {
   const app = document.getElementById('app');
   app.innerHTML = `
-    <div class="welcome-screen">
-      <div class="welcome-card">
-        <p class="welcome-kicker">Módulo de Operaciones / Manufactura</p>
-        <h1 class="welcome-title">Selecciona tu rol activo</h1>
-        <p class="welcome-subtitle">Cada rol muestra sólo los módulos de su tarea. Puedes cambiarlo después desde la barra superior.</p>
-        <div class="role-select-grid">
-          ${ROLE_ORDER.map(roleCard).join('')}
-        </div>
-      </div>
+    <div class="login-screen">
+      <form class="login-card" data-role="login-form" novalidate>
+        <p class="login-kicker">Módulo de Operaciones / Manufactura</p>
+        <h1 class="login-title">Iniciar sesión</h1>
+        <p class="login-subtitle">Ingresa tus credenciales para acceder al módulo.</p>
+        <label class="login-field">Usuario
+          <input type="text" name="username" autocomplete="username" required />
+        </label>
+        <label class="login-field">Contraseña
+          <input type="password" name="password" autocomplete="current-password" required />
+        </label>
+        <p class="login-error" data-role="login-error" role="alert" hidden></p>
+        <button type="submit" class="btn btn--primary login-submit">Entrar</button>
+      </form>
     </div>`;
-  app.querySelectorAll('[data-pick-role]').forEach((btn) => {
-    btn.addEventListener('click', () =>
-      selectRole(btn.getAttribute('data-pick-role'), { enterApp: true, goHome: true }),
+
+  const form = app.querySelector('[data-role="login-form"]');
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const role = authenticate(form.elements.username.value, form.elements.password.value);
+    const error = form.querySelector('[data-role="login-error"]');
+    if (!role) {
+      error.textContent = 'Usuario o contraseña incorrectos';
+      error.hidden = false;
+      return;
+    }
+    error.hidden = true;
+    error.textContent = '';
+    selectRole(role, { enterApp: true, goHome: true });
+  });
+}
+
+function adminRolesView() {
+  const root = el(`
+    <section class="view">
+      <header class="view__header">
+        <div>
+          <h1>Datos de roles</h1>
+          <p class="view__subtitle">Información de los roles simulados. Solo disponible para ${escapeHtml(ROLE_LABELS[DEFAULT_ROLE])}.</p>
+        </div>
+      </header>
+      <div class="role-select-grid">${ROLE_ORDER.map(roleCard).join('')}</div>
+    </section>`);
+  root.querySelectorAll('[data-pick-role]').forEach((button) => {
+    button.addEventListener('click', () =>
+      selectRole(button.getAttribute('data-pick-role'), { enterApp: true, goHome: true }),
     );
   });
+  return root;
 }
 
 function sidebarButtons() {
@@ -199,7 +249,7 @@ function renderShell() {
   app.innerHTML = `
     <div class="shell">
       <header class="topbar">
-        <button type="button" class="topbar__brand" data-go-welcome aria-label="Volver a selección de rol">
+        <button type="button" class="topbar__brand" data-logout aria-label="Cerrar sesión y volver al ingreso">
           <span class="logo" aria-hidden="true">${monogram(MODULE_NAME)}</span>
           <span class="topbar__name">Módulo de ${MODULE_NAME}</span>
         </button>
@@ -213,6 +263,7 @@ function renderShell() {
             ${roleOptions()}
           </select>
         </label>
+        <button type="button" class="topbar__logout" data-logout>Cerrar sesión</button>
       </header>
       <div class="shell__body">
         <nav class="sidebar" aria-label="Módulos">${sidebarButtons()}</nav>
@@ -220,9 +271,8 @@ function renderShell() {
       </div>
     </div>`;
 
-  app.querySelector('[data-go-welcome]').addEventListener('click', () => {
-    state.screen = 'welcome';
-    renderApp();
+  app.querySelectorAll('[data-logout]').forEach((button) => {
+    button.addEventListener('click', logout);
   });
 
   app.querySelectorAll('[data-module]').forEach((btn) => {
@@ -254,8 +304,8 @@ function renderContent() {
 }
 
 function renderApp() {
-  if (state.screen === 'welcome') {
-    renderWelcome();
+  if (state.screen === 'login') {
+    renderLogin();
     return;
   }
   renderShell();

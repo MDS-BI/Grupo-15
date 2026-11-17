@@ -19,6 +19,8 @@ export const ROLE_ORDER = Object.freeze([
 
 export const DEFAULT_ROLE = USER_ROLES.PLANT_MANAGER;
 
+export const ADMIN_ROLE = DEFAULT_ROLE;
+
 export const ROLE_LABELS = Object.freeze({
   operator: 'Operador de Máquina',
   supervisor: 'Supervisor de línea',
@@ -39,7 +41,7 @@ export const MODULE_GROUPS = Object.freeze([
     modules: ['dashboard', 'orders', 'operator', 'supervision', 'maintenance'],
   },
   { label: 'Planificación', modules: ['bom', 'scheduling', 'line-balance', 'plant'] },
-  { label: 'Sistema', modules: ['roles'] },
+  { label: 'Sistema', modules: ['roles', 'admin-roles'] },
 ]);
 
 export const ROLE_HOME_MODULE = Object.freeze({
@@ -64,11 +66,17 @@ export const MODULE_ACCESS = Object.freeze({
   'line-balance': ['planner', 'plant_manager'],
   maintenance: ['operator', 'supervisor', 'plant_manager'],
   roles: ROLE_ORDER,
+  'admin-roles': [ADMIN_ROLE],
 });
 
 /** @param {string} role */
 export function normalizeRole(role) {
   return ROLE_ORDER.includes(role) ? role : DEFAULT_ROLE;
+}
+
+/** @param {string} role */
+export function isAdmin(role) {
+  return normalizeRole(role) === ADMIN_ROLE;
 }
 
 /**

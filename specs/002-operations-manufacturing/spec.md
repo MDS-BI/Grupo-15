@@ -43,7 +43,7 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 - Panel con KPIs, tablero kanban, trazabilidad plan-vs-real y estado de calidad derivado.
 - **Panel de desempeño de planta (US-08 / Jefa de Planta)**: carga por centro, OEE y paradas acumuladas por período, umbrales críticos con alarmas, reprogramación y cancelación de órdenes, exportación del reporte consolidado a PDF y Excel, y permisos por rol simulados.
 - **Gestión de mantenimiento y disponibilidad de máquinas (US-09 / HU-06)**: bandeja de tickets escalados, toma de intervención con técnico asignado, historial y desgaste por máquina, órdenes de mantenimiento preventivo, registro de tiempos reales de parada y restablecimiento del semáforo del centro de trabajo.
-- **Acceso por rol y navegación**: selección de rol al entrar, filtrado de la navegación según permisos, navegación por hash (deep links y botón atrás), panel de acceso por rol y datos simulados para probar accesos rápidos, estados y formularios sin backend.
+- **Acceso por rol y navegación**: ingreso genérico con credenciales simuladas, filtrado de la navegación según permisos, navegación por hash (deep links y botón atrás), panel de acceso por rol, datos de roles restringidos a la Jefa de Planta y datos simulados para probar accesos rápidos, estados y formularios sin backend.
 
 **Límites**: sin backend, sin MRP automático, sin MES en tiempo real. Las entidades de frontera (`products`, `warehouses`, `units_of_measure`, `companies`, `sales_orders`, `quality_inspections`, `hr_employees`) se consumen como datos simulados de solo lectura.
 
@@ -205,8 +205,9 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 <details open>
 <summary><strong>FR-13: Acceso por rol, navegación y datos de demostración</strong></summary>
 
-- Mostrar una pantalla de ingreso con los cuatro roles simulados y persistir el rol activo en `erp.manufacturing.role`.
+- Mostrar una pantalla de ingreso genérica con usuario y contraseña, sin exponer roles ni descripciones, y persistir el rol resuelto en `erp.manufacturing.role` (`src/data/fixtures/demo-accounts.js`). Cargar la página o cerrar sesión vuelve al ingreso.
 - Filtrar la navegación lateral y el panel "Acceso por rol" según la matriz `MODULE_ACCESS`; denegar módulos no permitidos aunque se acceda por URL.
+- Exponer las tarjetas con nombre, descripción y acceso por rol solo en `#/admin/roles`, permitido únicamente para la Jefa de Planta (`isAdmin`).
 - Sincronizar el módulo activo con el hash (`#/dashboard`, `#/plant`, etc.) para soportar enlaces profundos y el botón atrás del navegador.
 - Usar datos simulados deterministas para accesos rápidos por rol y actividad reciente, identificados como datos de demostración y sin mutar el snapshot de manufactura.
 - Aplicar etiqueta "Operador" de forma consistente en selector global, panel de planta, estación y supervisión.
@@ -258,6 +259,7 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 | AC-38 | US-11 | La carga proyectada y la utilización por centro se calculan para el período seleccionado contra capacidad nominal diaria, sin aplicar `efficiency_factor` | Verificado |
 | AC-39 | US-11 | El centro con mayor utilización proyectada se resalta como cuello de botella; en empate se usa mayor carga absoluta | Verificado |
 | AC-40 | US-11 | Las sugerencias de reasignación o cambio de secuencia son solo lectura y no modifican rutas, operaciones ni asignaciones | Verificado |
+| AC-41 | FR-13 | El ingreso es genérico, valida credenciales simuladas y los datos de roles solo son visibles para la Jefa de Planta en `#/admin/roles` | Verificado |
 
 > **Nota de numeración**: los IDs AC son anclas históricas estables; no se renombran al añadir historias. La columna "Historia" disambigúa los rangos: AC-04..AC-07 y AC-20 pertenecen a US-08, AC-08..AC-14 a la base US-01..US-05/FR-06, y AC-37..AC-40 a US-11. No existen IDs duplicados ni un mismo criterio asignado a dos historias.
 
