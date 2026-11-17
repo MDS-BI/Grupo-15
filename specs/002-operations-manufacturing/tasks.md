@@ -22,7 +22,7 @@
 **Propósito**: Confirmar que el entorno de ejecución y pruebas del módulo está listo.
 
 - [X] T001 [P] Verificar dependencias y scripts de manufactura en `package.json` y `package-lock.json`; ejecutar `npm ci` si `node_modules` no existe
-- [ ] T002 [P] Configurar el entorno jsdom para las pruebas de integración de manufactura en `vitest.config.mjs`
+- [X] T002 [P] Confirmar que jsdom se configura por suite con `JSDOM` en las pruebas de integración de manufactura; no se requiere cambio global en `vitest.config.mjs`
 - [X] T003 [P] Confirmar la estructura real del proyecto (`src/domain/`, `src/data/`, `src/data/fixtures/`, `src/data/ports/`, `src/components/`, `src/styles/`, `tests/unit/`, `tests/integration/`) contra `plan.md` §6
 
 **Punto de control**: entorno y estructura verificados.
@@ -141,7 +141,7 @@
 
 **Prueba Independiente**: iniciar la primera operación mueve la orden a `in_progress` y el semáforo a `in_operation`; pausar y completar respetan la máquina de estados; completar la última operación mueve la orden a `completed`.
 
-- [X] T034 [P] [US4] Verificar AC-08 y AC-09 ejecutando `tests/unit/manufacturing-store.test.js` y revisando `startOperation`, `pauseOperation` y `completeOperation` en `src/data/ManufacturingStore.js`
+- [X] T034 [P] [US4] Verificar AC-08 y AC-09 ejecutando `tests/unit/manufacturing-store.test.js` y revisando `startOperation`, `pauseOperation` y `completeOperation` en `src/data/ManufacturingStore.js`; la orden se completa aunque falte output (E-06)
 - [X] T035 [US4] Asegurar que `finishOperation` reutiliza la lógica de `completeOperation` sin romper pausas ni el cálculo previo de `actual_time_minutes`, y actualiza el estado del semáforo en `src/data/ManufacturingStore.js`
 
 **Punto de control**: US-04, US-06 y US-07 conviven sin dobles cierres ni estados inconsistentes.
@@ -174,7 +174,7 @@
 
 ### Implementación para US-08
 
-- [X] T040 [P] [US8] Extender `src/domain/types.js` con los enums `PlantRole` (`plant_manager`/`planner`/`operator`), `PlantIndicator` (`load`/`oee`/`downtime`/`fulfillment`) y el typedef `ThresholdSetting` (`indicator`, `threshold`, `comparison`, `updated_at`); añadir el mapa de permisos rol×acción
+- [X] T040 [P] [US8] Extender `src/domain/types.js` con los enums `PlantRole` (`plant_manager`/`supervisor`/`planner`/`operator`), `PlantIndicator` (`load`/`oee`/`downtime`/`fulfillment`) y el typedef `ThresholdSetting` (`indicator`, `threshold`, `comparison`, `updated_at`); añadir el mapa de permisos rol×acción con supervisor sin set_threshold ni cancel_order
 - [X] T041 [P] [US8] Implementar `src/domain/plant-performance.js` con funciones puras `computeOee`, `computeLoadByWorkCenter`, `accumulateDowntimesByReason`, `evaluateThresholds`, `canPerformAction` y `buildConsolidatedReport`
 - [X] T042 [P] [US8] Crear fixtures deterministas de umbrales y permisos en `src/data/fixtures/plant-performance.js`, incluyendo un escenario con centro sobre capacidad y una alarma activa
 - [X] T043 [US8] Implementar el snapshot `erp.manufacturing.v2` en `src/data/persistence.js` con migración desde `v1` (inicializa `thresholdSettings` y `rolePermissions` y conserva el resto del estado; cae a fixtures con advertencia si es inválido) (depende de T005, T040)
@@ -265,7 +265,7 @@
 - [X] T080 [US11] Crear `src/components/LineBalancePanel.js` con tabla por centro de trabajo, utilización vs. capacidad nominal, carga proyectada y resaltado de cuellos de botella
 - [X] T081 [US11] Añadir un escenario determinista de cuello de botella en `src/data/fixtures/routings.js` y `src/data/fixtures/work-centers.js`
 - [X] T082 [US11] Integrar `LineBalancePanel` en una vista/ruta de `src/manufacturing-main.js` y añadir estilos de barras de utilización y cuello de botella en `src/styles/manufacturing.css` (depende de T080)
-- [X] T083 [US11] Ejecutar `tests/unit/line-balance.test.js` y `tests/integration/line-balance-panel.test.js`; documentar en `quickstart.md` el flujo de balance de líneas
+- [X] T083 [US11] Ejecutar `tests/unit/line-balance.test.js` y `tests/integration/line-balance-panel.test.js`; documentar en `quickstart.md` el flujo de balance de líneas y actualizar AC-37..AC-40 a Verificado en `spec.md`
 
 **Punto de control**: US-11 completamente funcional y comprobable de forma independiente.
 
@@ -275,13 +275,13 @@
 
 **Propósito**: Calidad, accesibilidad, rendimiento, documentación y cierre de AC.
 
-- [ ] T084 [P] Reparar o aislar las 12 suites legadas de `001-erp-base-module` que importan `src/storage.js` y `src/module-config.js` inexistentes, ajustando `vitest.config.mjs` o `tests/` según corresponda
+- [ ] T084 [P] Documentar y aislar las 12 suites legadas de `001-erp-base-module` que importan `src/storage.js` y `src/module-config.js` inexistentes, ajustando `vitest.config.mjs` o `tests/` según corresponda; deuda heredada no bloqueante para AC-14
 - [X] T085 [P] Revisar accesibilidad y consistencia de `src/components/OperatorWorkstationPanel.js`, `src/components/DelayCorrectionDialog.js`, `src/components/SupervisorLinePanel.js`, `src/components/PlantPerformancePanel.js`, `src/components/MaintenancePanel.js`, `src/components/ProductionSchedulingPanel.js` y `src/components/LineBalancePanel.js` (ARIA, foco, `Esc`, mensajes inline)
 - [X] T086 [P] Actualizar `quickstart.md` y `contracts/operator-shift.md` con selectores, etiquetas y pasos finales de todas las historias implementadas
 - [X] T087 [P] Validar el rendimiento con 500 órdenes, semáforo de supervisión, panel de planta, balance de líneas y cronómetro activo (<100 ms por interacción) usando `src/data/ManufacturingStore.js` y las vistas en `src/components/`
 - [X] T088 Ejecutar `npm run lint`, `npm run format:check`, `npm test -- --run` y `npm run build`; documentar en `tasks.md` cualquier fallo preexistente no relacionado con las historias nuevas
 
-> **Nota de gate (2026-11-11, revisada 2026-11-17)**: `npm run lint`, `npm run format:check` y `npm run build` pasan. `npm test -- --run` deja 114 pruebas verdes y 12 suites legadas de `001-erp-base-module` que no cargan por imports inexistentes (`src/storage.js`, `src/module-config.js`); es el fallo preexistente cubierto por T084, ajeno a las historias US-06…US-11. T002 tampoco se marca porque el entorno jsdom se configura por prueba con `JSDOM` en lugar de `vitest.config.mjs`.
+> **Nota de gate (2026-11-11, revisada 2026-11-17)**: `npm run lint`, `npm run format:check` y `npm run build` pasan. `npm test -- --run` deja 114 pruebas verdes y 12 suites legadas de `001-erp-base-module` que no cargan por imports inexistentes (`src/storage.js`, `src/module-config.js`); es el fallo preexistente cubierto por T084, ajeno a las historias US-06…US-11. T002 quedó cerrado: jsdom se configura por suite con `JSDOM`; no se requiere cambio en `vitest.config.mjs`. AC-14 se interpreta como “suites del módulo en verde”.
 - [X] T089 Actualizar `spec.md` para fijar la versión de snapshot en `erp.manufacturing.v2` de forma consistente y marcar todos los AC implementados como `Implementado`/`Verificado`
 - [X] T090 Preparar el guion de demo de 5 minutos (pedido → orden → fechas planificadas → asignación de operario → turno operador → atraso → escalamiento → mantenimiento → validación de cierre → panel de planta → balance de líneas → recarga) en `quickstart.md`
 
@@ -292,7 +292,7 @@
 **Propósito**: Cerrar los hallazgos del análisis de consistencia entre `spec.md`, `plan.md` y `tasks.md`.
 
 - [X] T091 [P] [US8] Implementar y probar el bloqueo de programación de órdenes nuevas sobre centros de trabajo desactivados (`canScheduleOnWorkCenter`) en `src/domain/order-state-machine.js` y `src/data/ManufacturingStore.js`, con pruebas en `tests/unit/order-state-machine.test.js` y `tests/unit/manufacturing-store.test.js` (AC-20)
-- [X] T092 [P] [US11] Implementar las consultas de store `lineBalanceFor(period)`, `lineBalanceForOrder(orderId)` y `capacityForPeriod(period)` en `src/data/ManufacturingStore.js`, con pruebas en `tests/unit/line-balance.test.js` y `tests/unit/manufacturing-store.test.js`
+- [X] T092 [P] [US11] Implementar las consultas de store `lineBalanceFor(period)`, `lineBalanceForOrder(orderId)` y `capacityForPeriod(period)` en `src/data/ManufacturingStore.js`, con pruebas en `tests/unit/line-balance.test.js` y `tests/unit/manufacturing-store.test.js`, usando capacidad nominal sin `efficiency_factor`
 - [X] T093 [P] [US8] Añadir pruebas de verificación de FR-06 (KPIs del panel y utilización por centro, AC-12) y de la calidad derivada desde `quality_inspections` (AC-13) en `tests/unit/` y `tests/integration/`
 - [X] T094 [P] [US8] [US9] Añadir pruebas de tiempo para SC-03 (exportación PDF/Excel en menos de 10 s) y SC-04 (toma del ticket urgente más antiguo en menos de 30 s)
 - [X] T095 [P] [US8] [US9] Añadir verificación de SC-08: ninguna vista expone rankings individuales y todo detalle por persona lleva la etiqueta *solo contexto operativo — no evaluación de desempeño*
@@ -306,17 +306,17 @@
 
 **Propósito**: Cerrar los hallazgos del feedback sobre IDs AC, roles y consistencia sitio–especificación, y mejorar la experiencia navegable con datos de demostración.
 
-- [X] T097 [P] Auditar la tabla de AC de `spec.md`: confirmar 36 IDs únicos, añadir la columna "Historia" y documentar que AC-04..AC-07/AC-20 son US-08 mientras AC-08..AC-14 son la base US-01..US-05/FR-06 (AC-34..AC-36)
-- [X] T098 [P] [FR-13] Formalizar en `spec.md` los cuatro roles simulados (Jefa de Planta, Supervisor, Planificador, Operador), la matriz `MODULE_ACCESS` y el panel `RoleAccessPanel`, añadiendo permisos de planta para Supervisor en `src/data/fixtures/plant-performance.js`
+- [X] T097 [P] Auditar la tabla de AC de `spec.md`: confirmar 40 IDs únicos, añadir la columna "Historia" y documentar que AC-04..AC-07/AC-20 son US-08 mientras AC-08..AC-14 son la base US-01..US-05/FR-06 (AC-34..AC-36), y AC-37..AC-40 son US-11
+- [X] T098 [P] [FR-13] Formalizar en `spec.md` los cuatro roles simulados (Jefa de Planta, Supervisor, Planificador, Operador), la matriz `MODULE_ACCESS` y el panel `RoleAccessPanel`, añadiendo permisos de planta para Supervisor en `src/data/fixtures/plant-performance.js`, `role_permissions`, `contracts/plant-performance.md` y `data-model.md`
 - [X] T099 [P] [FR-13] Unificar la etiqueta visible "Operador" en `src/domain/access-control.js`, `src/components/PlantPerformancePanel.js`, `src/components/SupervisorLinePanel.js` y `src/manufacturing-main.js`, conservando "operario" sólo como término de RR.HH. en documentación
 - [X] T100 [P] [FR-13] Añadir navegación por hash en `src/manufacturing-main.js` (`#/dashboard`, `#/plant`, etc.), breadcrumb, agrupación de módulos en la barra lateral y respeto de permisos al abrir un módulo por URL (AC-35)
 - [X] T101 [P] [FR-13] Crear `src/data/fixtures/dashboard-demo.js` con accesos rápidos por rol, actividad reciente y avisos de demostración; mostrarlos en `src/components/DashboardOverview.js` sin mutar el snapshot (AC-36)
 - [X] T102 [P] [FR-13] Añadir transiciones suaves, animación de entrada, estados de foco y `prefers-reduced-motion` en `src/styles/manufacturing.css`
 - [X] T103 [P] [FR-13] Añadir `tests/unit/dashboard-demo.test.js` y `tests/integration/dashboard-shell.test.js`, y ejecutar regresión de `tests/integration/plant-scheduling-panels.test.js` y `tests/unit/operations-store.test.js`
-- [X] T104 Actualizar `README.md` con roles, módulos, datos simulados, navegación por hash y comandos de validación; mantener T002 y T084 pendientes porque jsdom se configura por suite y las 12 suites legadas de 001 siguen importando archivos ausentes
+- [X] T104 Actualizar `README.md` con roles, módulos, datos simulados, navegación por hash y comandos de validación; T002 cerrado por configuración jsdom por suite; T084 sigue como deuda heredada de 001
 - [X] T105 Ajustar `.prettierrc.json` con `endOfLine: "auto"` para validar el formato en checkouts Windows y Unix sin normalizar archivos no relacionados, y volver a ejecutar el gate
 
-**Punto de control**: sin IDs AC duplicados ni cruzados, roles y terminología alineados, navegación profunda y demo visual verificadas, formato validado en ambos sistemas de archivos; T002/T084 permanecen como deuda conocida y documentada.
+**Punto de control**: sin IDs AC duplicados ni cruzados, roles y terminología alineados, navegación profunda y demo visual verificadas, formato validado en ambos sistemas de archivos; T002 está cerrado; T084 permanece como deuda heredada documentada.
 
 ---
 
@@ -337,7 +337,7 @@
 - **US-11 (Fase 13)**: depende de Fase 2 y de centros/rutas de US-02 y de las órdenes de US-03.
 - **Pulido (Fase 14)**: depende de todas las historias deseadas.
 - **Remediación (Fase 15)**: depende de Fase 2 y de las historias que toca cada tarea (US-08, US-09, US-11); T096 debe completarse antes de ejecutar el gate de calidad de T088.
-- **Consolidación UX (Fase 16)**: depende de Fases 2, 10 y 14; no modifica contratos de datos ni el snapshot `v2` y preserva la deuda T002/T084.
+- **Consolidación UX (Fase 16)**: depende de Fases 2, 10 y 14; no modifica el snapshot `v2`; actualiza los contratos documentales de roles y preserva la deuda heredada T084.
 
 ### Dependencias dentro de cada historia
 

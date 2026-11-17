@@ -52,6 +52,8 @@ The data model remains the single source of truth (`data-model.md`); the UI is a
 | **Maintenance Manager** | Handles escalated fault tickets, assigns technicians, logs downtime, schedules preventive orders and restores work-center availability. | `maintenance_tickets`, `preventive_maintenance_orders` |
 | **Production Engineer** | Analyzes standard times, projected load, utilization and bottlenecks to balance the line. | `work_centers`, `routing_operations`, `production_orders` |
 
+> **Demo role mapping**: the selectable roles are only `Jefa de Planta`, `Supervisor de Operaciones/Línea`, `Planificador` and `Operador`. Maintenance and Production Engineer responsibilities are exercised from `Jefa de Planta`/`Supervisor` and `Planificador` respectively; no extra credentials are created.
+
 ### 1.4 Integration Boundaries
 
 The module references, but does **not** own, the following boundary entities. All are consumed as **read-only mock** datasets in the MVP:
@@ -158,7 +160,7 @@ The module references, but does **not** own, the following boundary entities. Al
 | E-03 | Operation completed with `actual_time_minutes = 0` | Rejected as invalid; minimum positive duration required. |
 | E-04 | `quantity_produced` exceeds `quantity_planned` | Permitted (over-yield); completion rate shown > 100% and flagged. |
 | E-05 | Make-to-order `sales_orders` cancelled after release | Order remains valid; a warning banner notes the detached demand. |
-| E-06 | All operations completed but no output recorded | Order stays `in_progress`; UI prompts to log output before completion. |
+| E-06 | All operations completed but no output recorded | Order moves to `completed` per FR-04/AC-09; the UI shows a non-blocking reminder to log output before traceability is considered complete. |
 | E-07 | `units_of_measure` mismatch between BOM line and consumption | Flagged as a unit-conversion warning; conversion is out of MVP scope. |
 | E-08 | Work center deactivated with pending operations | Existing operations remain; new scheduling onto the center is blocked. |
 | E-09 | Operator tries to start a second operation while one is `in_progress` | Rejected with "Ya tienes una operación en curso"; the active operation is highlighted. |
@@ -406,46 +408,69 @@ Testable acceptance criteria and accountable owner.
 
 ```text
 specs/002-operations-manufacturing/
-├── plan.md              # This file
-├── research.md          # Phase 1 output
-├── data-model.md        # Data contracts (source of truth projection)
-├── quickstart.md        # Phase 1 output
-├── contracts/           # State machine, repository & UI contracts (Phase 1)
-│   └── operator-shift.md  # US-06 store/UI contract
-└── tasks.md             # Phase 3 output
+├── plan.md                        # This file
+├── spec.md                        # Functional specification + AC-01…AC-40
+├── research.md                    # Phase 1 + incremental decisions
+├── data-model.md                  # Data contracts (source of truth projection)
+├── quickstart.md                  # Demo and validation flows
+├── checklists/requirements.md     # Spec quality checklist
+├── contracts/                     # Store/UI contracts
+│   ├── operator-shift.md          # US-06/US-07 store/UI contract
+│   ├── plant-performance.md       # US-08 thresholds, roles and export
+│   ├── order-scheduling.md        # US-10 planned dates
+│   ├── line-balance.md            # US-11 read-only balancing
+│   └── maintenance.md             # US-09 ticket and intervention contract
+└── tasks.md                       # Phase 3 output + remediation phases
 ```
 
 ### Source Code (frontend)
 
 ```text
 src/
-├── domain/                      # Pure manufacturing logic (no UI)
-│   ├── types.js                 # JSDoc mirror of data-model.md entities/enums
-│   ├── order-state-machine.js   # production_orders transitions & guards
-│   ├── bom-explosion.js         # Theoretical consumption, multi-level explosion
-│   ├── operation-planning.js    # planned_time_minutes = setup + run × qty
-│   ├── reconciliation.js        # Plan-vs-actual variance & discrepancy flags
-│   ├── shift-tracking.js        # Effective time, delay guards, counter rules (US-06)
-│   └── validators.js            # Schema & business-rule validation
+├── domain/                         # Pure manufacturing logic (no UI)
+│   ├── types.js                    # JSDoc mirror of data-model.md entities/enums
+│   ├── order-state-machine.js      # production_orders transitions & guards
+│   ├── bom-explosion.js            # Theoretical consumption, multi-level explosion
+│   ├── operation-planning.js       # planned_time_minutes = setup + run × qty
+│   ├── reconciliation.js           # Plan-vs-actual variance & discrepancy flags
+│   ├── shift-tracking.js           # Effective time, delay guards, counters (US-06)
+│   ├── line-supervision.js         # Traffic light, assignment and validation rules (US-07)
+│   ├── plant-performance.js        # OEE, load, downtimes, thresholds, report (US-08)
+│   ├── maintenance.js              # Tickets, downtime, wear and availability (US-09)
+│   ├── order-scheduling.js         # Planned date validation (US-10)
+│   ├── line-balance.js             # Standard times, utilization, bottlenecks (US-11)
+│   ├── access-control.js           # Single source of roles and MODULE_ACCESS
+│   └── validators.js               # Schema & business-rule validation
 ├── data/
-│   ├── ManufacturingStore.js        # Single EventTarget store + actions + snapshot write-through
-│   ├── persistence.js               # Versioned localStorage snapshot adapter (new)
+│   ├── ManufacturingStore.js       # Single EventTarget store + actions + write-through
+│   ├── persistence.js              # Versioned localStorage snapshot adapter (v1 → v2)
+│   ├── exporters/
+│   │   └── plant-report.js         # Local PDF/Excel export (US-08)
 │   ├── ports/
-│   │   └── index.js                 # InventoryPort + QualityPort (in-memory)
-│   └── fixtures/                    # Deterministic datasets (incl. volume set)
+│   │   ├── index.js                # InventoryPort + QualityPort (in-memory)
+│   │   └── maintenance.js          # Read-only downtime/ticket adapter for US-08
+│   └── fixtures/                   # Deterministic datasets (incl. volume set)
+│       ├── dashboard-demo.js       # Non-mutating demo data (FR-13)
+│       ├── plant-performance.js    # Thresholds and role permissions
+│       └── ...                     # BOM, routings, orders, shifts, tickets, etc.
 ├── components/
 │   ├── DashboardOverview.js
 │   ├── BomExplorer.js
 │   ├── ProductionOrders.js
-│   ├── OperatorWorkstationPanel.js  # US-06 toggle, delays, counters (new)
-│   ├── DelayCorrectionDialog.js     # Open-delay correction (new)
+│   ├── OperatorWorkstationPanel.js # US-06 toggle, delays, counters
+│   ├── DelayCorrectionDialog.js    # Open-delay correction
+│   ├── SupervisorLinePanel.js      # US-07 traffic light and escalation
+│   ├── PlantPerformancePanel.js    # US-08 KPIs, alarms, roles, export
+│   ├── MaintenancePanel.js         # US-09 ticket inbox and interventions
+│   ├── ProductionSchedulingPanel.js# US-10 planned dates
+│   ├── LineBalancePanel.js         # US-11 read-only balancing
 │   └── format.js
-├── manufacturing-main.js            # Shell + routing
-└── styles/manufacturing.css         # Design tokens reused from 001-erp-base-module
+├── manufacturing-main.js           # Shell, role selector and hash routing
+└── styles/manufacturing.css        # Design tokens reused from 001-erp-base-module
 
 tests/
-├── unit/                            # Domain + store tests (Vitest)
-└── integration/                     # Flow tests (jsdom)
+├── unit/                           # Domain + store tests (Vitest)
+└── integration/                    # Flow tests (jsdom)
 ```
 
 **Structure Decision**: a strict `domain` (pure, testable) / `data` (store + swappable ports) / `components` (presentation) separation. The `domain` layer mirrors `data-model.md` entity-for-entity, guaranteeing traceability between specification artifacts and code, and ensuring the mock store can be replaced by a real backend without touching the UI. A single `ManufacturingStore` is kept deliberately: domain logic stays pure, and the store is the only stateful boundary.
@@ -693,7 +718,7 @@ No hay violaciones que requieran justificación adicional.
 
 # 10. Plan Técnico Incremental — US-08 (Panel de Planta), US-10 (Planificación) y US-11 (Balance de Líneas)
 
-**Alcance**: FR-09 / US-08 (AC-04…AC-07 y AC-20), FR-11 / US-10 (AC-28…AC-33) y FR-12 / US-11 (sin AC propio; se apoya en FR-02, FR-03, FR-09 y FR-11). No reabre ni rediseña US-01…US-07 ni US-09.
+**Alcance**: FR-09 / US-08 (AC-04…AC-07 y AC-20), FR-11 / US-10 (AC-28…AC-33) y FR-12 / US-11 (AC-37…AC-40; se apoya en FR-02, FR-03, FR-09 y FR-11). No reabre ni rediseña US-01…US-07 ni US-09.
 
 ## 10.1 Alcance y no objetivos
 
@@ -743,7 +768,7 @@ US-08 ◄─────────────────┴──► compute
 
 US-10 ◄── production_orders.planned_start_date / planned_end_date (persistido en v2)
 
-US-11 ◄── work_centers.capacity_per_day_minutes + efficiency_factor
+US-11 ◄── work_centers.capacity_per_day_minutes
        ◄── routing_operations.setup_time_minutes / run_time_per_unit_minutes
        ◄── production_orders.quantity_planned / planned_end_date
        └──► utilización y cuello de botella (derivados, no persistidos)
@@ -754,7 +779,7 @@ US-11 ◄── work_centers.capacity_per_day_minutes + efficiency_factor
 Entidades nuevas o ampliadas en [data-model.md](data-model.md):
 
 - **`threshold_settings`** (§3.21): umbral crítico por indicador (`load`, `oee`, `downtime`, `fulfillment`) con comparación (`lt`, `gt`) y marca de actualización. Se persiste en `v2`.
-- **`role_permissions`** (§3.22): matriz local rol×acción (`plant_manager`, `planner`, `operator`) usada por la UI para ocultar o bloquear acciones. Se persiste en `v2`.
+- **`role_permissions`** (§3.22): matriz local rol×acción (`plant_manager`, `supervisor`, `planner`, `operator`) usada por la UI para ocultar o bloquear acciones. Se persiste en `v2`. El supervisor puede `view_plant_panel`, `change_priority` y `export_report`, pero no `set_threshold` ni `cancel_order`.
 - **`production_orders.planned_start_date` / `planned_end_date`** (ya definidos en §3.11): se editan en US-10; `planned_end_date ≥ planned_start_date`.
 - **`production_orders.priority`** (ya definido): se modifica desde US-08 solo para órdenes `planned`.
 - **`production_orders.status`**: la cancelación desde US-08 usa la transición existente a `cancelled` y conserva los registros de ejecución.
@@ -769,6 +794,8 @@ Entidades nuevas o ampliadas en [data-model.md](data-model.md):
 - `bottleneck = work_center con mayor utilización proyectada` (empate: mayor carga absoluta).
 
 > US-11 usa la **capacidad nominal** (`capacity_per_day_minutes` × días del período); el `efficiency_factor` solo se aplica a `load` en US-08. El panel de balance es de solo lectura y no muta rutas, operaciones ni órdenes.
+
+> `downtime_minutes` tiene una sola definición para US-08/US-09: `Σ operation_delays.duration_minutes + Σ maintenance_tickets.downtime_minutes` del período, sin duplicar una misma parada. `actual_time_minutes` es el tiempo ejecutado observado y no se usa como multiplicador adicional del OEE.
 
 ## 10.5 Contratos de dominio, store y UI
 
@@ -854,7 +881,7 @@ No hay violaciones que requieran justificación adicional.
 | R-17 | Umbrales o permisos perdidos al migrar | Migración `v1 → v2` con valores por defecto y validación de forma; prueba de round-trip. |
 | R-18 | Exportación PDF/Excel lenta o dependiente de servicios | Generación local con datos mock y límite de período; prueba de rendimiento. |
 | R-19 | Fechas planificadas inválidas por edición concurrente | Validación en dominio + store antes de mutar; mensaje inline y conservación del último valor válido. |
-| R-20 | Cuello de botella mal señalado por capacidad desactualizada | Recalcular con `capacity_per_day_minutes × efficiency_factor` en cada render; prueba con escenario sembrado. |
+| R-20 | Cuello de botella mal señalado por capacidad desactualizada | Recalcular con `capacity_per_day_minutes` (capacidad nominal) en cada render; `efficiency_factor` se reserva para la carga efectiva de US-08; prueba con escenario sembrado. |
 | R-21 | Permisos simulados tratados como seguridad real | Etiquetar el selector como simulación y no exponer datos sensibles; documentar que no hay autenticación. |
 
 ## 10.10 Fases de implementación (entrada para `/speckit.tasks`)
@@ -880,6 +907,10 @@ No hay violaciones que requieran justificación adicional.
 | AC-20 Carga sobre capacidad y centros desactivados | `computeLoadByWorkCenter` + validación de `work_centers.status` |
 | AC-28..AC-33 Planificación de fechas | `validatePlannedDates`, `updatePlannedDates`, `ProductionSchedulingPanel` |
 | FR-12 Balance de líneas | `computeStandardTimes`, `computeProjectedLoad`, `computeUtilization`, `detectBottlenecks` + `LineBalancePanel` |
+| AC-37 Tiempos estándar por operación y ruta | `computeStandardTimes` + `LineBalancePanel` |
+| AC-38 Carga/ utilización vs. capacidad nominal | `computeProjectedLoad`, `computeUtilization` + `LineBalancePanel` |
+| AC-39 Cuello de botella y desempate por carga | `detectBottlenecks` + escenario sembrado |
+| AC-40 Recomendaciones solo lectura | Contrato de UI de `LineBalancePanel` |
 
 ## 10.12 Complexity Tracking (US-08 / US-10 / US-11)
 

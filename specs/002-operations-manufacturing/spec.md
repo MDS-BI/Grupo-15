@@ -47,6 +47,8 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 
 **Límites**: sin backend, sin MRP automático, sin MES en tiempo real. Las entidades de frontera (`products`, `warehouses`, `units_of_measure`, `companies`, `sales_orders`, `quality_inspections`, `hr_employees`) se consumen como datos simulados de solo lectura.
 
+> **Convención de "tiempo real"**: en esta especificación significa actualización reactiva inmediata de la interfaz ante cambios del store local y eventos persistidos, con objetivo `< 100 ms` (SC-07). No implica telemetría de máquina, backend ni sincronización externa.
+
 ## 3. Personas
 
 | Persona | Descripción |
@@ -58,7 +60,7 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 | **Encargado de Mantenimiento (`@SebastianRivasprg`)** | Atiende incidentes críticos escalados desde piso (`fault`), analiza historial operativo y evalúa desgaste en maquinaria para programar mantenimientos preventivos, registra tiempos de parada por mantención y restablece la disponibilidad operativa de las máquinas. |
 | **Planificador (`@maiteval`)** |  Organiza y calendariza las órdenes de producción, asignando fechas planificadas de inicio y término a las tareas. Coordina la secuencia de fabricación según las prioridades y plazos de entrega, consulta el estado de las órdenes y ajusta la programación cuando existen atrasos o cambios en la producción, buscando optimizar los tiempos y cumplir con las fechas de entrega establecidas. |
 
-> **Convención de roles simulados**: la interfaz usa cuatro etiquetas de rol —Jefa de Planta, Supervisor de Operaciones/Línea, Planificador y Operador de Máquina—. "Operario" en textos de asignación de RR.HH. es sinónimo de Operador; la etiqueta visible preferida es **Operador**. Las responsabilidades de Ingeniería de Producción y Mantenimiento se ejercen, en la demo, desde los roles Planificador y Supervisor/Jefa de Planta respectivamente, sin crear credenciales adicionales.
+> **Convención de roles simulados**: la interfaz usa cuatro etiquetas de rol —Jefa de Planta, Supervisor de Operaciones/Línea, Planificador y **Operador**—. "Operario" en textos de asignación de RR.HH. y "Operador de Máquina" en descripciones de persona son sinónimos documentales; la etiqueta visible canónica en toda la interfaz es **Operador**. Las responsabilidades de Ingeniería de Producción y Mantenimiento se ejercen, en la demo, desde los roles Planificador y Supervisor/Jefa de Planta respectivamente, sin crear credenciales adicionales.
 
 ## 4. Requisitos Funcionales
 
@@ -125,7 +127,7 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 
 - **Semáforo en tiempo real por línea/máquina (`work_centers`)**: Mostrar tarjetas o filas por cada centro de trabajo con su estado operativo en vivo (`in_operation` = *En operación* [verde], `paused` = *En pausa* [amarillo], `changeover` = *Cambio de formato* [azul/ámbar], `fault` = *En fallo* [rojo]), junto con la orden/operación activa, operario asignado y avance de piezas.
 - **Asignación de personal al turno (`shift_assignments`)**: Permitir vincular un operario (`ext_hr_employee_id`, puente hacia *Recursos Humanos y Planillas*) con un centro de trabajo/máquina (`work_center_id`) y franja de turno (`morning`, `afternoon`, `night`); impedir que un mismo operario sea asignado simultáneamente a dos máquinas activas en la misma franja sin confirmación de reasignación.
-- **Revisión y aprobación de cierres de turno (`production_shifts`)**: Listar los turnos finalizados (`status === 'completed'`) pendientes de revisión con su resumen de piezas conformes, merma, tiempo efectivo y atrasos (`operation_delays`); permitir al supervisor aprobar el cierre marcando `supervisor_validated = true`, `validated_at` y nota opcional de supervisión. Bloquear la aprobación si el turno aún tiene un atraso abierto sin corregir (integración con `DelayCorrectionDialog` de US-06).
+- **Revisión y aprobación de cierres de turno (`production_shifts`)**: Listar los turnos finalizados (`status === 'completed'`) pendientes de revisión con su resumen de piezas conformes, merma, tiempo efectivo y atrasos (`operation_delays`); permitir al supervisor aprobar el cierre marcando `supervisor_validated = true`, `validated_by`, `validated_at` y nota opcional de supervisión. Bloquear la aprobación si el turno aún tiene un atraso abierto sin corregir (integración con `DelayCorrectionDialog` de US-06).
 - **Escalamiento de incidentes a mantenimiento (`maintenance_tickets`)**: Incluir un botón de alerta rápida en cada línea/máquina o evento de parada para escalar incidentes críticos; al activarlo, marcar `escalated_to_maint = true` en el evento de atraso/parada (`operation_delays`), crear un ticket urgente (`priority = 'urgent'`, `ticket_status = 'open'`) en `maintenance_tickets` y cambiar automáticamente el estado operativo del centro de trabajo a `fault` (*En fallo*).
 - **Persistencia**: Conservar asignaciones de personal, estados del semáforo, validaciones de turno y tickets de mantenimiento escalados dentro del snapshot versionado en `localStorage` (`erp.manufacturing.v2`; un `v1` existente se migra automáticamente).
 
@@ -138,7 +140,7 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 **US-08 (Jefa de Planta)**: Como Jefa de Planta, quiero consultar en un solo lugar la carga de cada centro de trabajo, el OEE, las paradas acumuladas y el cumplimiento de órdenes (por día, semana o mes), recibir alertas cuando un indicador cae bajo su umbral crítico y reprogramar o cancelar órdenes desde la misma vista, para mantener una visión global del desempeño de la planta y decidir en minutos.
 
 - **Carga y capacidad**: Mostrar la carga por centro de trabajo contra `capacity_per_day_minutes` ajustada por `efficiency_factor`, destacando los centros sobre el 100%.
-- **OEE derivado**: Calcular el OEE (Disponibilidad × Rendimiento × Calidad) por centro y período (diario, semanal, mensual), derivado de `planned_time_minutes`, `actual_time_minutes`, `operation_delays`, `quantity_completed` y `scrap_quantity`; no se persiste.
+- **OEE derivado**: Calcular el OEE (Disponibilidad × Rendimiento × Calidad) por centro y período (diario, semanal, mensual), derivado de `planned_time_minutes`, `actual_time_minutes` como tiempo ejecutado observado, `operation_delays`, `maintenance_tickets.downtime_minutes` de intervenciones cerradas, `quantity_completed` y `scrap_quantity`; no se persiste. Fórmula única: `disponibilidad = (planned_time_minutes − downtime_minutes) / planned_time_minutes`, con `downtime_minutes = Σ operation_delays.duration_minutes + Σ maintenance_tickets.downtime_minutes` del período; `rendimiento = quantity_completed / (run_time_per_unit_minutes × quantity_planned)`; `calidad = quantity_completed / (quantity_completed + scrap_quantity)`; `OEE = disponibilidad × rendimiento × calidad`, acotado a `[0,1]`.
 - **Paradas acumuladas**: Resumir las paradas acumuladas por centro y motivo (`delay_reasons`), ordenadas de mayor a menor, sin atribuirlas a personas.
 - **Umbrales y alarmas**: Configurar umbrales críticos por indicador (ej. rendimiento < 75%), mostrar alarmas visibles y conservar los umbrales en el snapshot `erp.manufacturing.v2`.
 - **Gestión de órdenes**: Filtrar órdenes por `status` y `priority`, cambiar la prioridad de órdenes `planned` y cancelar órdenes con confirmación explícita, conservando los registros de ejecución.
@@ -252,8 +254,12 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 | AC-34 | FR-13 | El selector global filtra navegación y módulos por rol, incluido Supervisor, con denegación por URL | Verificado |
 | AC-35 | FR-13 | El hash mantiene el módulo activo y responde a enlaces profundos y navegación atrás | Verificado |
 | AC-36 | FR-13 | El panel inicial muestra datos simulados por rol, accesos rápidos y la etiqueta Operador de forma consistente | Verificado |
+| AC-37 | US-11 | El panel muestra tiempos estándar por operación y totales por ruta (`setup + run × cantidad`) sin mutar rutas ni operaciones | Verificado |
+| AC-38 | US-11 | La carga proyectada y la utilización por centro se calculan para el período seleccionado contra capacidad nominal diaria, sin aplicar `efficiency_factor` | Verificado |
+| AC-39 | US-11 | El centro con mayor utilización proyectada se resalta como cuello de botella; en empate se usa mayor carga absoluta | Verificado |
+| AC-40 | US-11 | Las sugerencias de reasignación o cambio de secuencia son solo lectura y no modifican rutas, operaciones ni asignaciones | Verificado |
 
-> **Nota de numeración**: los IDs AC son anclas históricas estables; no se renombran al añadir historias. La columna "Historia" disambigúa los rangos: AC-04..AC-07 y AC-20 pertenecen a US-08, mientras que AC-08..AC-14 corresponden a la base US-01..US-05/FR-06. No existen IDs duplicados ni un mismo criterio asignado a dos historias.
+> **Nota de numeración**: los IDs AC son anclas históricas estables; no se renombran al añadir historias. La columna "Historia" disambigúa los rangos: AC-04..AC-07 y AC-20 pertenecen a US-08, AC-08..AC-14 a la base US-01..US-05/FR-06, y AC-37..AC-40 a US-11. No existen IDs duplicados ni un mismo criterio asignado a dos historias.
 
 ## 6. Entidades Clave
 
@@ -281,11 +287,12 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 
 - El snapshot local se mantiene versionado con `erp.manufacturing.v2` como versión vigente desde US-08; `erp.manufacturing.v1` se migra automáticamente. Cualquier cambio de forma incrementa la versión y se valida al hidratar.
 - `maintenance_tickets`, las órdenes preventivas, `threshold_settings` y `role_permissions` se modelan como entidades locales del módulo y ya están descritas en `data-model.md` §3.19–3.22.
-- Los roles simulados con selector son Jefa de Planta, Supervisor de Operaciones/Línea, Planificador y Operador de Máquina; no existe autenticación real. La etiqueta visible es "Operador" en toda la interfaz.
+- Los roles simulados con selector son Jefa de Planta, Supervisor de Operaciones/Línea, Planificador y Operador; no existe autenticación real. La etiqueta visible canónica es "Operador" en toda la interfaz.
 - La exportación a PDF y Excel se genera localmente con los datos mock, sin backend ni servicios externos.
 - Los catálogos de RR.HH., calidad y ventas son datos simulados de solo lectura.
 - Los tiempos de turno y de parada se derivan de marcas de tiempo persistidas, no de temporizadores en memoria.
 - El OEE, la carga, la utilización, el cuello de botella y el indicador de desgaste son valores derivados y no se persisten.
+- `efficiency_factor` se aplica únicamente a la carga efectiva del panel de planta (US-08); el balance de líneas (US-11) usa capacidad nominal `capacity_per_day_minutes`.
 
 ## 9. Artefactos Spec-Kit
 

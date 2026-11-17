@@ -20,8 +20,8 @@ Definir el contrato verificable entre la UI del panel de planta, el `Manufacturi
 - Invariantes: `(company_id, indicator)` único; `oee | load | fulfillment` ⇒ `threshold ∈ [0, 1]`; `downtime` ⇒ `threshold ≥ 0` y `comparison = gt`.
 
 ### `role_permissions`
-- `id`, `company_id`, `role` (`plant_manager` | `planner` | `operator`), `action` (`view_plant_panel` | `set_threshold` | `change_priority` | `cancel_order` | `export_report`), `allowed`, `updated_at`.
-- Invariantes: `(company_id, role, action)` único; `plant_manager` ⇒ todas las acciones permitidas; `planner` ⇒ `view_plant_panel`, `change_priority`, `export_report`; `operator` ⇒ solo `view_plant_panel`.
+- `id`, `company_id`, `role` (`plant_manager` | `supervisor` | `planner` | `operator`), `action` (`view_plant_panel` | `set_threshold` | `change_priority` | `cancel_order` | `export_report`), `allowed`, `updated_at`.
+- Invariantes: `(company_id, role, action)` único; `plant_manager` ⇒ todas las acciones permitidas; `supervisor` y `planner` ⇒ `view_plant_panel`, `change_priority`, `export_report`; `operator` ⇒ solo `view_plant_panel`. `supervisor` y `planner` no pueden `set_threshold` ni `cancel_order`.
 
 ### Campos de solo lectura consumidos
 - `production_orders`: `id`, `order_number`, `status`, `priority`, `quantity_planned`, `planned_start_date`, `planned_end_date`.
@@ -39,7 +39,7 @@ Sin efectos secundarios, sin acceso a `localStorage` y sin lectura del reloj glo
 
 ### `computeOee(workCenterId, operations, delays, period)`
 1. Filtra operaciones del centro dentro de `period`.
-2. `availability = (planned_time_minutes − downtime_minutes) / planned_time_minutes`; si no hay tiempo planificado, devuelve `null`.
+2. `downtime_minutes = Σ operation_delays.duration_minutes + Σ maintenance_tickets.downtime_minutes` del período; `availability = (planned_time_minutes − downtime_minutes) / planned_time_minutes`; si no hay tiempo planificado, devuelve `null`.
 3. `performance = quantity_completed / (run_time_per_unit_minutes × quantity_planned)` acotado a `[0, 1]`.
 4. `quality = quantity_completed / (quantity_completed + scrap_quantity)`; si el denominador es `0`, devuelve `null`.
 5. Devuelve `{ availability, performance, quality, oee }` con `oee = availability × performance × quality` acotado a `[0, 1]`, o `null` si falta algún componente.
@@ -162,7 +162,7 @@ fulfillment      = órdenes completadas a tiempo / órdenes con fecha objetivo
 3. **Datos insuficientes**: sin tiempo planificado, `computeOee` devuelve `null` y la UI muestra `—`.
 4. **Paradas por motivo**: dos atrasos y un ticket del mismo motivo suman minutos una sola vez y se ordenan de mayor a menor.
 5. **Umbral**: configurar OEE `< 0.7` y obtener `0.65` genera alarma; un valor `0.75` no la genera.
-6. **Permisos**: como `operator`, las acciones de umbral, prioridad y cancelación se deshabilitan; como `plant_manager` se habilitan.
+6. **Permisos**: como `operator`, las acciones de umbral, prioridad y cancelación se deshabilitan; como `supervisor`/`planner` se habilitan prioridad y exportación pero no umbrales ni cancelación; como `plant_manager` se habilitan todas.
 7. **Prioridad**: cambiar la prioridad de una orden `planned` se refleja en la tabla; una orden `in_progress` se rechaza.
 8. **Cancelación**: cancelar exige motivo, deja la orden `cancelled` y conserva operaciones y registros de ejecución.
 9. **Exportación**: el reporte PDF/Excel contiene los indicadores del período y no incluye datos por operador.

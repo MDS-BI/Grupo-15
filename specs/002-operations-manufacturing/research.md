@@ -158,7 +158,7 @@ No quedan incógnitas bloqueantes para la Fase 1 de US-09.
 
 ### D-17 — OEE y carga derivados, nunca persistidos
 
-- **Decisión**: `computeOee` y `computeLoadByWorkCenter` calculan bajo demanda a partir de `production_order_operations`, `operation_delays`, `maintenance_tickets`, `work_centers` y `routing_operations` del período. No se guarda ningún valor de OEE, carga o utilización.
+- **Decisión**: `computeOee` y `computeLoadByWorkCenter` calculan bajo demanda a partir de `production_order_operations`, `operation_delays`, `maintenance_tickets.downtime_minutes`, `work_centers` y `routing_operations` del período. `downtime_minutes = Σ operation_delays.duration_minutes + Σ maintenance_tickets.downtime_minutes`, sin duplicar paradas. No se guarda ningún valor de OEE, carga o utilización.
 - **Razón**: evita métricas obsoletas y una segunda fuente de verdad; el OEE depende de datos que cambian con cada operación y parada.
 - **Alternativas descartadas**: persistir snapshots de OEE (deriva y duplicación); recalcular en la UI (no testeable de forma pura).
 
@@ -170,7 +170,7 @@ No quedan incógnitas bloqueantes para la Fase 1 de US-09.
 
 ### D-19 — Permisos por rol simulados y persistidos
 
-- **Decisión**: `role_permissions` es una matriz local rol×acción (`plant_manager`, `planner`, `operator`) que la UI consulta con `canPerformAction`. Se persiste en `v2` para conservar la simulación entre recargas. No hay autenticación real.
+- **Decisión**: `role_permissions` es una matriz local rol×acción (`plant_manager`, `supervisor`, `planner`, `operator`) que la UI consulta con `canPerformAction`. `supervisor` y `planner` pueden ver el panel, cambiar prioridades y exportar, pero no configurar umbrales ni cancelar órdenes. Se persiste en `v2` para conservar la simulación entre recargas. No hay autenticación real.
 - **Razón**: el requisito pide un selector de rol simulado que oculte o bloquee acciones no permitidas; persistirlo mantiene coherencia en la demo.
 - **Alternativas descartadas**: permisos hardcodeados en componentes (duplicación y difícil testing); autenticación real (fuera de alcance).
 
@@ -238,9 +238,9 @@ No quedan incógnitas bloqueantes para la Fase 1 de US-08.
 
 ### D-25 — Carga y utilización derivadas de estándares y órdenes
 
-- **Decisión**: `computeProjectedLoad` suma `planned_time_minutes` de las operaciones del período por centro; `computeUtilization` divide la carga entre `capacity_per_day_minutes × efficiency_factor`. Ambos valores se calculan bajo demanda y no se persisten.
-- **Razón**: el balance es un análisis, no un dato operativo; derivarlo evita desactualización.
-- **Alternativas descartadas**: persistir carga por centro (se invalida con cada orden); calcular con capacidad nominal sin eficiencia (sobreestima la capacidad real).
+- **Decisión**: `computeProjectedLoad` suma `planned_time_minutes` de las operaciones del período por centro; `computeUtilization` divide la carga entre `capacity_per_day_minutes` (capacidad nominal del período), sin aplicar `efficiency_factor`. Ambos valores se calculan bajo demanda y no se persisten.
+- **Razón**: el balance es un análisis, no un dato operativo; derivarlo evita desactualización y el criterio nominal es comparable entre centros y coherente con AC-38.
+- **Alternativas descartadas**: persistir carga por centro (se invalida con cada orden); aplicar `efficiency_factor` (mezcla la capacidad efectiva de US-08 con el análisis nominal de US-11 y rompe AC-38).
 
 ### D-26 — Cuello de botella determinista
 

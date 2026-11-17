@@ -295,12 +295,17 @@ Rol funcional: **turno de trabajo del operador** sobre una operación concreta. 
 | started_at | timestamp | — | No | inicio del turno |
 | ended_at | timestamp | — | Sí | ≥ `started_at`; se fija al finalizar el turno/operación |
 | quantity_counted | numeric(14,4) | — | No | `default 0`; ≥ 0; **contador del turno, se reinicia en cada turno nuevo** |
+| supervisor_validated | boolean | — | No | `default false`; cierre aprobado por supervisor |
+| validated_by | uuid | FK → (usuarios/supervisores) | Sí | obligatorio cuando `supervisor_validated = true` |
+| validated_at | timestamp | — | Sí | obligatorio cuando `supervisor_validated = true` |
+| supervisor_notes | string | — | Sí | nota opcional de supervisión |
 
 **Reglas**
 - Un operador solo puede tener un turno `in_progress` a la vez; una operación solo puede tener un turno `in_progress` a la vez.
 - Al iniciar un turno nuevo, `quantity_counted` arranca en `0`; el acumulado de la operación (`production_order_operations.quantity_completed`) se conserva.
 - Finalizar la operación cierra el turno activo (`status = completed`, `ended_at = completed_at`).
 - Incrementar/decrementar/fijar el contador del turno ajusta también `production_order_operations.quantity_completed` en el mismo delta; nunca se permiten valores negativos.
+- `supervisor_validated = true` exige `status = completed`, `validated_by`, `validated_at` y ningún `operation_delay` abierto; la aprobación no elimina ni reescribe atrasos.
 
 ### 3.17 `delay_reasons` — Manufactura (catálogo de apoyo, US-06)
 
@@ -435,14 +440,14 @@ Rol funcional: **matriz rol×acción** simulada para el selector de rol del pane
 |---|---|---|---|---|
 | id | uuid | PK | No | — |
 | company_id | uuid | FK → companies.id | No | — |
-| role | enum | — | No | `plant_manager` \| `planner` \| `operator`; único por empresa |
+| role | enum | — | No | `plant_manager` \| `supervisor` \| `planner` \| `operator`; único por empresa |
 | action | enum | — | No | `view_plant_panel` \| `set_threshold` \| `change_priority` \| `cancel_order` \| `export_report`; único por rol |
 | allowed | boolean | — | No | `default false`; define si la acción está habilitada |
 | updated_at | timestamp | — | No | marca de la última configuración |
 
 **Reglas**
 - `(company_id, role, action)` es único.
-- `plant_manager` tiene permitidas todas las acciones; `planner` puede `view_plant_panel`, `change_priority` y `export_report`; `operator` solo `view_plant_panel`.
+- `plant_manager` tiene permitidas todas las acciones; `supervisor` puede `view_plant_panel`, `change_priority` y `export_report`; `planner` puede `view_plant_panel`, `change_priority` y `export_report`; `operator` solo `view_plant_panel`. `supervisor` y `planner` no pueden `set_threshold` ni `cancel_order`.
 - La matriz es una simulación de UX: no sustituye controles de seguridad ni autenticación.
 
 ---
@@ -788,13 +793,13 @@ erDiagram
 | `planned_date` | `preventive_maintenance_orders` | Fecha objetivo de la preventiva; base del calendario de mantenimiento. |
 | `downtime_minutes` | `preventive_maintenance_orders` | Parada real de la preventiva; se distingue de la correctiva en los análisis de disponibilidad. |
 
-**Indicadores derivados (no persistidos):** *Desgaste de la máquina* = frecuencia de fallos y paradas acumuladas por período; *Tiempo medio de reparación (MTTR)* = promedio de `downtime_minutes` de tickets resueltos; *Disponibilidad* = 1 − (paradas de mantenimiento / tiempo planificado). El desgaste es un indicador de contexto operativo, no una evaluación de personas.
+**Indicadores derivados (no persistidos):** *Desgaste de la máquina* = frecuencia de fallos y paradas acumuladas por período; *Tiempo medio de reparación (MTTR)* = promedio de `downtime_minutes` de tickets resueltos; *Disponibilidad* = (`planned_time_minutes` − `Σ operation_delays.duration_minutes` − `Σ maintenance_tickets.downtime_minutes`) / `planned_time_minutes`. El desgaste es un indicador de contexto operativo, no una evaluación de personas.
 
 ### 6.5 Panel de planta (US-08) y balance de líneas (US-11)
 
 | Variable derivada | Fuente | Significado en el negocio |
 |---|---|---|
-| `availability` | `planned_time_minutes`, `downtime_minutes` | Fracción del tiempo planificado sin paradas; componente del OEE. |
+| `availability` | `planned_time_minutes`, `operation_delays`, `maintenance_tickets.downtime_minutes` | Fracción del tiempo planificado sin paradas; componente del OEE, sin duplicar paradas. |
 | `performance` | `quantity_completed`, `run_time_per_unit_minutes`, `quantity_planned` | Ritmo real frente al estándar; componente del OEE. |
 | `quality` | `quantity_completed`, `scrap_quantity` | Proporción conforme de la producción; componente del OEE. |
 | `oee` | `availability × performance × quality` | Eficiencia global del centro en el período. |
@@ -876,5 +881,5 @@ erDiagram
 - `preventive_maintenance_orders` no reabre ni reemplaza su `source_ticket_id`; el ticket de origen se conserva como trazabilidad.
 - `production_orders.planned_end_date ≥ planned_start_date` cuando ambas existen; `updatePlannedDates` rechaza fechas no ISO y conserva el último valor válido.
 - `threshold_settings`: `(company_id, indicator)` único; `oee | load | fulfillment` ⇒ `threshold ∈ [0, 1]`; `downtime` ⇒ `threshold ≥ 0` y `comparison = gt`.
-- `role_permissions`: `(company_id, role, action)` único; `plant_manager` ⇒ todas las acciones permitidas; `operator` ⇒ solo `view_plant_panel`.
+- `role_permissions`: `(company_id, role, action)` único; `plant_manager` ⇒ todas las acciones permitidas; `supervisor` y `planner` ⇒ `view_plant_panel`, `change_priority`, `export_report`; `operator` ⇒ solo `view_plant_panel`.
 - Los valores de OEE, carga, utilización y cuello de botella son derivados y no se persisten en ninguna colección.

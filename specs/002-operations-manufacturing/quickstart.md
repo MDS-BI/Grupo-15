@@ -223,6 +223,13 @@ El módulo es frontend-only: no requiere backend ni variables de entorno. Los da
 6. Recargue la página: el balance se recalcula desde el estado vigente y no se persiste ningún resultado.
 7. **Solución de problemas US-11**: si la tabla aparece vacía, revise que existan rutas con tiempos estándar y órdenes con fechas; si un centro muestra `—`, su capacidad nominal es `0` y debe corregirse en datos maestros.
 
+| AC | Verificación |
+|---|---|
+| AC-37 | Paso 2: tiempos estándar por operación y totales por ruta. |
+| AC-38 | Pasos 1–2: carga y utilización contra capacidad nominal, sin `efficiency_factor`. |
+| AC-39 | Paso 3: cuello de botella resaltado con texto y desempate por carga. |
+| AC-40 | Pasos 4–6: vista solo lectura; ninguna acción muta rutas ni asignaciones. |
+
 ---
 
 ## 16. Guion de demo (5 minutos)
