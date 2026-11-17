@@ -15,6 +15,8 @@ import {
 } from './format.js';
 import { OperatorWorkstationPanel } from './OperatorWorkstationPanel.js';
 import { SupervisorLinePanel } from './SupervisorLinePanel.js';
+import { decimalInput, parseDecimal } from './numeric-field.js';
+import { canTransition } from '../domain/order-state-machine.js';
 
 const BOARD_COLUMNS = ['planned', 'released', 'in_progress', 'completed'];
 
@@ -24,6 +26,8 @@ const BOARD_COLUMNS = ['planned', 'released', 'in_progress', 'completed'];
  */
 export function ProductionOrders(store) {
   let selectedOrderId = null;
+  let draggingOrderId = null;
+  let dragJustEnded = false;
 
   const root = el(`
     <section class="view">
@@ -50,7 +54,7 @@ export function ProductionOrders(store) {
       const orders = store.productionOrders.filter((o) => o.status === status);
       const cards = orders.map((order) => card(order)).join('');
       return `
-        <div class="kanban-col">
+        <div class="kanban-col" data-status="${status}">
           <header class="kanban-col__header">
             <span>${ORDER_STATUS_LABEL[status]}</span>
             <span class="kanban-col__count">${orders.length}</span>
@@ -61,8 +65,62 @@ export function ProductionOrders(store) {
 
     boardEl.querySelectorAll('[data-order]').forEach((cardEl) => {
       cardEl.addEventListener('click', () => {
+        if (dragJustEnded) {
+          dragJustEnded = false;
+          return;
+        }
         selectedOrderId = cardEl.getAttribute('data-order');
         renderDetail();
+      });
+      cardEl.addEventListener('dragstart', (event) => {
+        const orderId = cardEl.getAttribute('data-order');
+        draggingOrderId = orderId;
+        if (event.dataTransfer) {
+          event.dataTransfer.setData('text/plain', orderId);
+          event.dataTransfer.effectAllowed = 'move';
+        }
+        cardEl.classList.add('is-dragging');
+      });
+      cardEl.addEventListener('dragend', () => {
+        draggingOrderId = null;
+        dragJustEnded = true;
+        cardEl.classList.remove('is-dragging');
+        boardEl.querySelectorAll('.is-drop-target').forEach((node) => {
+          node.classList.remove('is-drop-target');
+        });
+        setTimeout(() => {
+          dragJustEnded = false;
+        }, 0);
+      });
+    });
+
+    boardEl.querySelectorAll('.kanban-col__body').forEach((columnEl) => {
+      columnEl.addEventListener('dragover', (event) => {
+        const status = columnEl.parentElement.getAttribute('data-status');
+        const orderId = draggingOrderId || event.dataTransfer?.getData('text/plain');
+        const order = store.orderById(orderId);
+        if (!order || order.status === status || !canTransition(order.status, status)) return;
+        event.preventDefault();
+        if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+        columnEl.classList.add('is-drop-target');
+      });
+      columnEl.addEventListener('dragleave', (event) => {
+        if (!columnEl.contains(event.relatedTarget)) columnEl.classList.remove('is-drop-target');
+      });
+      columnEl.addEventListener('drop', (event) => {
+        event.preventDefault();
+        columnEl.classList.remove('is-drop-target');
+        const status = columnEl.parentElement.getAttribute('data-status');
+        const orderId = draggingOrderId || event.dataTransfer?.getData('text/plain');
+        draggingOrderId = null;
+        if (!orderId || !status) return;
+        const order = store.orderById(orderId);
+        if (!order || order.status === status || !canTransition(order.status, status)) return;
+        try {
+          store.transitionOrder(orderId, status);
+        } catch (err) {
+          window.alert(err.message);
+        }
       });
     });
   }
@@ -74,7 +132,7 @@ export function ProductionOrders(store) {
       : '<span class="tag tag--stock">Stock</span>';
     const active = order.id === selectedOrderId ? 'is-active' : '';
     return `
-      <button type="button" class="order-card ${active}" data-order="${order.id}">
+      <button type="button" class="order-card ${active}" data-order="${order.id}" draggable="true" title="Arrastra a otra columna para cambiar el estado">
         <div class="order-card__top">
           <strong>${escapeHtml(order.order_number)}</strong>
           <span class="priority priority--${order.priority}">${order.priority}</span>
@@ -230,14 +288,16 @@ export function ProductionOrders(store) {
         if (value == null) return;
         try {
           store.completeOperation(opId, {
-            actual_time_minutes: Number(value),
-            quantity_completed: order.quantity_planned,
-            scrap_quantity: 0,
+            actual_time_minutes: parseDecimal(value, {
+              required: true,
+              min: 0.01,
+              label: 'El tiempo real',
+            }),
           });
+          renderAll();
         } catch (err) {
           window.alert(err.message);
         }
-        renderAll();
       });
     });
     const consumeBtn = detailEl.querySelector('[data-role="consume"]');
@@ -298,7 +358,7 @@ export function ProductionOrders(store) {
           </select>
         </label>
         <label>Cantidad consumida
-          <input name="quantity_consumed" type="number" min="0.0001" step="0.0001" required />
+          ${decimalInput({ name: 'quantity_consumed', required: true, min: 0.01, label: 'La cantidad consumida' })}
         </label>
         <label>Bodega origen
           <select name="warehouse_id" required>${warehouseOptions}</select>
@@ -330,7 +390,11 @@ export function ProductionOrders(store) {
           component_product_id: realComponentId,
           bom_component_id: unplanned ? null : opt.getAttribute('data-bom'),
           warehouse_id: data.get('warehouse_id'),
-          quantity_consumed: Number(data.get('quantity_consumed')),
+          quantity_consumed: parseDecimal(data.get('quantity_consumed'), {
+            required: true,
+            min: 0.01,
+            label: 'La cantidad consumida',
+          }),
           uom_id: unplanned ? 'uom_un' : opt.getAttribute('data-uom'),
           lot_number: data.get('lot_number'),
         });
@@ -352,10 +416,10 @@ export function ProductionOrders(store) {
       <h2>Registrar Salida de Bien Terminado</h2>
       <form data-role="form" class="stack-form">
         <label>Cantidad producida
-          <input name="quantity_produced" type="number" min="0.0001" step="0.0001" required />
+          ${decimalInput({ name: 'quantity_produced', required: true, min: 0.01, label: 'La cantidad producida' })}
         </label>
         <label>Merma
-          <input name="scrap_quantity" type="number" min="0" step="0.0001" value="0" />
+          ${decimalInput({ name: 'scrap_quantity', value: '0', min: 0, label: 'La merma' })}
         </label>
         <label>Bodega destino
           <select name="warehouse_id" required>${warehouseOptions}</select>
@@ -380,8 +444,13 @@ export function ProductionOrders(store) {
           production_order_id: order.id,
           product_id: order.product_id,
           warehouse_id: data.get('warehouse_id'),
-          quantity_produced: Number(data.get('quantity_produced')),
-          scrap_quantity: Number(data.get('scrap_quantity')) || 0,
+          quantity_produced: parseDecimal(data.get('quantity_produced'), {
+            required: true,
+            min: 0.01,
+            label: 'La cantidad producida',
+          }),
+          scrap_quantity:
+            parseDecimal(data.get('scrap_quantity'), { min: 0, label: 'La merma' }) ?? 0,
           lot_number: data.get('lot_number'),
           uom_id: product ? product.uom_id : 'uom_un',
         });
@@ -426,7 +495,7 @@ export function ProductionOrders(store) {
           </select>
         </label>
         <label>Cantidad planificada
-          <input name="quantity_planned" type="number" min="1" step="1" required />
+          ${decimalInput({ name: 'quantity_planned', required: true, min: 1, decimals: 0, label: 'La cantidad planificada' })}
         </label>
         <label>Origen
           <select name="sales_order_id">
@@ -464,18 +533,28 @@ export function ProductionOrders(store) {
     form.addEventListener('submit', (event) => {
       event.preventDefault();
       const data = new FormData(form);
-      const order = store.createOrder({
-        product_id: data.get('product_id'),
-        bom_id: form.dataset.bom,
-        routing_id: form.dataset.routing,
-        sales_order_id: data.get('sales_order_id') || null,
-        warehouse_id: data.get('warehouse_id'),
-        quantity_planned: Number(data.get('quantity_planned')),
-        priority: data.get('priority'),
-      });
-      selectedOrderId = order.id;
-      closeModal();
-      renderAll();
+      const errorEl = form.querySelector('[data-role="error"]');
+      try {
+        const order = store.createOrder({
+          product_id: data.get('product_id'),
+          bom_id: form.dataset.bom,
+          routing_id: form.dataset.routing,
+          sales_order_id: data.get('sales_order_id') || null,
+          warehouse_id: data.get('warehouse_id'),
+          quantity_planned: parseDecimal(data.get('quantity_planned'), {
+            required: true,
+            min: 1,
+            decimals: 0,
+            label: 'La cantidad planificada',
+          }),
+          priority: data.get('priority'),
+        });
+        selectedOrderId = order.id;
+        closeModal();
+        renderAll();
+      } catch (err) {
+        errorEl.textContent = err.message;
+      }
     });
   }
 

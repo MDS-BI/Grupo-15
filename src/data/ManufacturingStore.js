@@ -51,6 +51,7 @@ import {
   round2,
   sumClosedDelayMinutes,
   validateCounter,
+  validateCumulative,
 } from '../domain/shift-tracking.js';
 import {
   buildUrgentMaintenanceTicket,
@@ -978,10 +979,7 @@ export class ManufacturingStore extends EventTarget {
     return op;
   }
 
-  completeOperation(
-    operationId,
-    { actual_time_minutes, quantity_completed = 0, scrap_quantity = 0 } = {},
-  ) {
+  completeOperation(operationId, { actual_time_minutes, scrap_quantity = 0 } = {}) {
     const op = this.productionOrderOperations.find((o) => o.id === operationId);
     if (!op) throw new Error(`Operación no encontrada: ${operationId}`);
     const minutes = Number(actual_time_minutes);
@@ -990,7 +988,6 @@ export class ManufacturingStore extends EventTarget {
     }
     op.status = 'completed';
     op.actual_time_minutes = minutes;
-    op.quantity_completed = Number(quantity_completed) || 0;
     op.scrap_quantity = Number(scrap_quantity) || 0;
     op.completed_at = new Date().toISOString();
     this.recomputeOrderStatus(op.production_order_id);
@@ -1573,7 +1570,8 @@ export class ManufacturingStore extends EventTarget {
     if (!operation) throw new Error('Operación del turno no encontrada.');
     const delta = nextValue - (Number(shift.quantity_counted) || 0);
     const cumulative = (Number(operation.quantity_completed) || 0) + delta;
-    if (cumulative < 0) throw new Error('El contador acumulado no puede ser negativo.');
+    const order = this.orderById(operation.production_order_id);
+    validateCumulative(cumulative, order ? order.quantity_planned : 0);
     shift.quantity_counted = nextValue;
     operation.quantity_completed = cumulative;
     this.#persist();

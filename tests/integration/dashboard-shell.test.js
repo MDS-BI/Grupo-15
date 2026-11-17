@@ -38,16 +38,11 @@ afterEach(() => {
 });
 
 describe('Panel inicial con datos de demostración', () => {
-  it('muestra contexto por rol, accesos rápidos y actividad sin mutar el snapshot', () => {
+  it('muestra contexto por rol y actividad sin accesos rápidos ni mutar el snapshot', () => {
     const snapshotBefore = storage.getItem('erp.manufacturing.v2');
     const onNavigate = vi.fn();
     const view = DashboardOverview(store, {
       role: 'supervisor',
-      modules: [
-        { id: 'supervision', label: 'Supervisión' },
-        { id: 'maintenance', label: 'Mantenimiento' },
-        { id: 'orders', label: 'Órdenes' },
-      ],
       onNavigate,
     });
     document.body.appendChild(view);
@@ -55,27 +50,23 @@ describe('Panel inicial con datos de demostración', () => {
     expect(document.body.textContent).toContain('Supervisor de línea');
     expect(document.body.textContent).toContain('Datos de demostración');
     expect(document.body.textContent).toContain('Actividad reciente');
-    expect(document.querySelectorAll('[data-quick-action]')).toHaveLength(3);
+    expect(document.body.textContent).not.toContain('Accesos rápidos');
+    expect(document.querySelectorAll('[data-quick-action]')).toHaveLength(0);
     expect(document.querySelectorAll('[data-activity]')).toHaveLength(4);
 
-    document.querySelector('[data-quick-action="supervision"]').click();
     document.querySelector('[data-attention="maintenance"]').click();
-    expect(onNavigate).toHaveBeenNthCalledWith(1, 'supervision');
-    expect(onNavigate).toHaveBeenNthCalledWith(2, 'maintenance');
+    expect(onNavigate).toHaveBeenCalledWith('maintenance');
     expect(storage.getItem('erp.manufacturing.v2')).toBe(snapshotBefore);
   });
 
   it('usa Operador como etiqueta y deniega accesos no permitidos', () => {
     const view = DashboardOverview(store, {
       role: 'operator',
-      modules: [{ id: 'operator', label: 'Estación' }],
       onNavigate: vi.fn(),
     });
     document.body.appendChild(view);
 
     expect(document.querySelector('.role-badge').textContent).toBe('Operador de Máquina');
-    expect(document.querySelector('[data-quick-action="operator"]')).toBeTruthy();
-    expect(document.querySelector('[data-quick-action="scheduling"]')).toBeNull();
     expect(document.querySelector('[data-attention="supervision"]')).toBeNull();
     expect(document.querySelector('[data-attention="scheduling"]')).toBeNull();
     expect(document.body.textContent).not.toContain('Operario');

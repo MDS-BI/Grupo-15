@@ -6,6 +6,7 @@
 import { escapeHtml, el, fmtNumber, OP_STATUS_LABEL } from './format.js';
 import { elapsedMinutes, sumClosedDelayMinutes } from '../domain/shift-tracking.js';
 import { DelayCorrectionDialog } from './DelayCorrectionDialog.js';
+import { decimalInput, parseDecimal } from './numeric-field.js';
 
 /**
  * @param {import('../data/ManufacturingStore.js').ManufacturingStore} store
@@ -60,6 +61,8 @@ export function OperatorWorkstationPanel(store) {
       return;
     }
     const order = store.orderById(operation.production_order_id);
+    const plannedQuantity = Number(order?.quantity_planned) || 0;
+    const atLimit = Number(operation.quantity_completed) >= plannedQuantity;
     const shift = store.activeShiftFor(operation.id);
     const openDelay = store.openDelayFor(operation.id);
     const delays = store.delaysForOperation(operation.id);
@@ -114,7 +117,7 @@ export function OperatorWorkstationPanel(store) {
               <div class="mini-stat"><span class="mini-stat__value" data-role="timer">${fmtNumber(timerMinutes, 2)} min</span><span class="mini-stat__label">Tiempo efectivo del turno</span></div>
               <div class="mini-stat"><span class="mini-stat__value">${fmtNumber(operation.planned_time_minutes)}</span><span class="mini-stat__label">Tiempo planificado</span></div>
               <div class="mini-stat"><span class="mini-stat__value">${fmtNumber(operation.delay_time_minutes || 0, 2)}</span><span class="mini-stat__label">Atrasos cerrados</span></div>
-              <div class="mini-stat"><span class="mini-stat__value">${fmtNumber(operation.quantity_completed)} / ${fmtNumber(order ? order.quantity_planned : 0)}</span><span class="mini-stat__label">Avance acumulado</span></div>
+              <div class="mini-stat"><span class="mini-stat__value">${fmtNumber(operation.quantity_completed)} / ${fmtNumber(plannedQuantity)}</span><span class="mini-stat__label">Avance acumulado</span></div>
             </div>
             <div class="detail-actions">
               <button type="button" class="btn btn--primary" data-role="toggle" aria-pressed="${operation.status === 'in_progress'}" ${operation.status === 'completed' ? 'disabled' : ''}>${toggleText}</button>
@@ -129,11 +132,11 @@ export function OperatorWorkstationPanel(store) {
             <div class="counter-row">
               <span>Turno: <strong data-role="shift-counter">${fmtNumber(shift ? shift.quantity_counted : 0)}</strong></span>
               <button type="button" class="btn btn--tiny" data-counter="dec">−</button>
-              <input type="number" min="0" step="1" data-role="counter-input" value="${shift ? shift.quantity_counted : 0}" ${shift ? '' : 'disabled'} />
-              <button type="button" class="btn btn--tiny" data-counter="inc">+</button>
+              ${decimalInput({ name: 'counter', value: String(shift ? shift.quantity_counted : 0), min: 0, decimals: 0, label: 'El contador del turno', extra: `data-role="counter-input" ${shift ? '' : 'disabled'}` })}
+              <button type="button" class="btn btn--tiny" data-counter="inc" ${atLimit ? 'disabled' : ''}>+</button>
               <button type="button" class="btn btn--tiny" data-role="set-counter" ${shift ? '' : 'disabled'}>Fijar</button>
             </div>
-            <p class="counter-row">Acumulado: <strong data-role="cumulative-counter">${fmtNumber(operation.quantity_completed)}</strong></p>
+            <p class="counter-row">Acumulado: <strong data-role="cumulative-counter">${fmtNumber(operation.quantity_completed)}</strong> / ${fmtNumber(plannedQuantity)}</p>
           </div>
         </article>
 
@@ -242,7 +245,12 @@ export function OperatorWorkstationPanel(store) {
       try {
         store.setShiftCounter(
           operation.id,
-          bodyEl.querySelector('[data-role="counter-input"]').value,
+          parseDecimal(bodyEl.querySelector('[data-role="counter-input"]').value, {
+            required: true,
+            min: 0,
+            decimals: 0,
+            label: 'El contador del turno',
+          }),
         );
         render();
       } catch (err) {

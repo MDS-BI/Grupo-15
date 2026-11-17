@@ -51,6 +51,35 @@ function submit(selector) {
   node.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
 }
 
+function dragOrderTo(orderId, status) {
+  const card = document.querySelector(`[data-order="${orderId}"]`);
+  const column = document.querySelector(`.kanban-col[data-status="${status}"] .kanban-col__body`);
+  expect(card).toBeTruthy();
+  expect(column).toBeTruthy();
+  const dataTransfer = {
+    values: {},
+    setData(type, value) {
+      this.values[type] = value;
+    },
+    getData(type) {
+      return this.values[type] || '';
+    },
+    effectAllowed: '',
+    dropEffect: '',
+  };
+  const event = (name) => {
+    const evt = new window.Event(name, { bubbles: true, cancelable: true });
+    Object.defineProperty(evt, 'dataTransfer', { value: dataTransfer });
+    return evt;
+  };
+  card.dispatchEvent(event('dragstart'));
+  const dragover = event('dragover');
+  column.dispatchEvent(dragover);
+  column.dispatchEvent(event('drop'));
+  card.dispatchEvent(event('dragend'));
+  return dragover;
+}
+
 beforeEach(() => {
   dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost/' });
   globalThis.window = dom.window;
@@ -106,6 +135,43 @@ describe('Estación del operador (US-06)', () => {
     click('[data-role="confirm-finish"]');
     expect(document.querySelector('[data-role="delay-correction"]')).toBeTruthy();
     expect(document.querySelector('[data-correction-form]')).toBeTruthy();
+  });
+
+  it('rechaza fijar un acumulado superior al planificado', () => {
+    document.body.appendChild(OperatorWorkstationPanel(store));
+    change('[data-role="operation-select"]', 'poo_3003_1');
+    click('[data-role="toggle"]');
+
+    fill('[data-role="counter-input"]', '101');
+    click('[data-role="set-counter"]');
+
+    expect(document.querySelector('[data-role="error"]').textContent).toContain('superar');
+    expect(
+      store.productionOrderOperations.find((op) => op.id === 'poo_3003_1').quantity_completed,
+    ).toBe(0);
+  });
+});
+
+describe('Tablero de órdenes', () => {
+  it('permite arrastrar una orden a la siguiente columna válida', () => {
+    document.body.appendChild(ProductionOrders(store));
+    expect(store.orderById('po_3004').status).toBe('planned');
+
+    const dragover = dragOrderTo('po_3004', 'released');
+
+    expect(dragover.defaultPrevented).toBe(true);
+    expect(store.orderById('po_3004').status).toBe('released');
+    expect(
+      document.querySelector('[data-order="po_3004"]').closest('.kanban-col').dataset.status,
+    ).toBe('released');
+  });
+
+  it('no permite saltos de estado inválidos', () => {
+    document.body.appendChild(ProductionOrders(store));
+    const dragover = dragOrderTo('po_3004', 'completed');
+
+    expect(dragover.defaultPrevented).toBe(false);
+    expect(store.orderById('po_3004').status).toBe('planned');
   });
 });
 

@@ -1,24 +1,20 @@
 import { fmtNumber, fmtPercent, escapeHtml, el, ORDER_STATUS_LABEL } from './format.js';
 import { capacityUtilization } from '../domain/operation-planning.js';
 import { isModuleAllowed, ROLE_DESCRIPTIONS, ROLE_LABELS } from '../domain/access-control.js';
-import { ACTIVITY_FEED, DEMO_NOTICE, shortcutsForRole } from '../data/fixtures/dashboard-demo.js';
+import { ACTIVITY_FEED, DEMO_NOTICE } from '../data/fixtures/dashboard-demo.js';
 
 /**
  * @param {import('../data/ManufacturingStore.js').ManufacturingStore} store
- * @param {{role?: string, modules?: Array<{id: string, label: string}>, onNavigate?: (moduleId: string) => void}} [options]
+ * @param {{role?: string, onNavigate?: (moduleId: string) => void}} [options]
  * @returns {HTMLElement}
  */
 export function DashboardOverview(store, options = {}) {
   const role = options.role || 'plant_manager';
-  const modules = options.modules || [];
   const onNavigate = options.onNavigate;
   const kpis = store.kpis();
   const loads = store.workCenterLoads();
   const roleLabel = ROLE_LABELS[role] || role;
   const roleDescription = ROLE_DESCRIPTIONS[role] || '';
-  const shortcuts = shortcutsForRole(role).filter((shortcut) =>
-    isModuleAllowed(role, shortcut.moduleId),
-  );
   const performance = store.plantPerformanceFor({});
   const breachedCount = performance.thresholds.filter((row) => row.breached).length;
   const urgentTickets = store.maintenanceTickets.filter(
@@ -103,19 +99,6 @@ export function DashboardOverview(store, options = {}) {
     )
     .join('');
 
-  const quickCards = shortcuts
-    .map((shortcut) => {
-      const module = modules.find((entry) => entry.id === shortcut.moduleId);
-      return `
-      <button type="button" class="quick-card" data-quick-action="${shortcut.moduleId}">
-        <span class="quick-card__tag">${escapeHtml(shortcut.tag)}</span>
-        <span class="quick-card__title">${escapeHtml(module ? module.label : shortcut.label)}</span>
-        <span class="quick-card__hint">${escapeHtml(shortcut.hint)}</span>
-        <span class="quick-card__go" aria-hidden="true">→</span>
-      </button>`;
-    })
-    .join('');
-
   const activityRows = ACTIVITY_FEED.map(
     (item) => `
     <li class="activity-item activity-item--${item.tone}" data-activity="${item.moduleId}">
@@ -172,26 +155,15 @@ export function DashboardOverview(store, options = {}) {
 
       ${kpiCards}
 
-      <div class="dashboard-split">
-        <section class="panel">
-          <header class="panel__header">
-            <h2>Accesos rápidos</h2>
-            <p class="panel__subtitle">Atajos sugeridos para tu rol.</p>
-          </header>
-          <div class="panel__body">
-            <div class="quick-grid">${quickCards}</div>
-          </div>
-        </section>
-        <section class="panel">
-          <header class="panel__header">
-            <h2>Actividad reciente</h2>
-            <p class="panel__subtitle">Datos simulados para probar la interfaz.</p>
-          </header>
-          <div class="panel__body">
-            <ol class="activity-list">${activityRows}</ol>
-          </div>
-        </section>
-      </div>
+      <section class="panel">
+        <header class="panel__header">
+          <h2>Actividad reciente</h2>
+          <p class="panel__subtitle">Datos simulados para probar la interfaz.</p>
+        </header>
+        <div class="panel__body">
+          <ol class="activity-list">${activityRows}</ol>
+        </div>
+      </section>
 
       <section class="panel">
         <header class="panel__header">
@@ -227,11 +199,9 @@ export function DashboardOverview(store, options = {}) {
     if (globalThis.location) globalThis.location.hash = `#/${moduleId}`;
   }
 
-  root.querySelectorAll('[data-quick-action], [data-attention]').forEach((button) => {
+  root.querySelectorAll('[data-attention]').forEach((button) => {
     button.addEventListener('click', () => {
-      const moduleId =
-        button.getAttribute('data-quick-action') || button.getAttribute('data-attention');
-      navigate(moduleId);
+      navigate(button.getAttribute('data-attention'));
     });
   });
 

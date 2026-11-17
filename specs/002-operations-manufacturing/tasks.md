@@ -306,17 +306,29 @@
 
 **Propósito**: Cerrar los hallazgos del feedback sobre IDs AC, roles y consistencia sitio–especificación, y mejorar la experiencia navegable con datos de demostración.
 
-- [X] T097 [P] Auditar la tabla de AC de `spec.md`: confirmar 40 IDs únicos, añadir la columna "Historia" y documentar que AC-04..AC-07/AC-20 son US-08 mientras AC-08..AC-14 son la base US-01..US-05/FR-06 (AC-34..AC-36), y AC-37..AC-40 son US-11
+- [X] T097 [P] Auditar la tabla de AC de `spec.md`: confirmar los IDs únicos (40 en su momento, 43 tras Fase 17), añadir la columna "Historia" y documentar que AC-04..AC-07/AC-20 son US-08 mientras AC-08..AC-14 son la base US-01..US-05/FR-06 (AC-34..AC-36), y AC-37..AC-40 son US-11
 - [X] T098 [P] [FR-13] Formalizar en `spec.md` los cuatro roles simulados (Jefa de Planta, Supervisor, Planificador, Operador), la matriz `MODULE_ACCESS` y el panel `RoleAccessPanel`, añadiendo permisos de planta para Supervisor en `src/data/fixtures/plant-performance.js`, `role_permissions`, `contracts/plant-performance.md` y `data-model.md`
 - [X] T099 [P] [FR-13] Unificar la etiqueta visible "Operador" en `src/domain/access-control.js`, `src/components/PlantPerformancePanel.js`, `src/components/SupervisorLinePanel.js` y `src/manufacturing-main.js`, conservando "operario" sólo como término de RR.HH. en documentación
 - [X] T100 [P] [FR-13] Añadir navegación por hash en `src/manufacturing-main.js` (`#/dashboard`, `#/plant`, etc.), breadcrumb, agrupación de módulos en la barra lateral y respeto de permisos al abrir un módulo por URL (AC-35)
-- [X] T101 [P] [FR-13] Crear `src/data/fixtures/dashboard-demo.js` con accesos rápidos por rol, actividad reciente y avisos de demostración; mostrarlos en `src/components/DashboardOverview.js` sin mutar el snapshot (AC-36)
+- [X] T101 [P] [FR-13] Crear `src/data/fixtures/dashboard-demo.js` con actividad reciente y avisos de demostración; mostrarlos en `src/components/DashboardOverview.js` sin mutar el snapshot (AC-36)
 - [X] T102 [P] [FR-13] Añadir transiciones suaves, animación de entrada, estados de foco y `prefers-reduced-motion` en `src/styles/manufacturing.css`
 - [X] T103 [P] [FR-13] Añadir `tests/unit/dashboard-demo.test.js` y `tests/integration/dashboard-shell.test.js`, y ejecutar regresión de `tests/integration/plant-scheduling-panels.test.js` y `tests/unit/operations-store.test.js`
 - [X] T104 Actualizar `README.md` con roles, módulos, datos simulados, navegación por hash y comandos de validación; T002 cerrado por configuración jsdom por suite; T084 sigue como deuda heredada de 001
 - [X] T105 Ajustar `.prettierrc.json` con `endOfLine: "auto"` para validar el formato en checkouts Windows y Unix sin normalizar archivos no relacionados, y volver a ejecutar el gate
 
 **Punto de control**: sin IDs AC duplicados ni cruzados, roles y terminología alineados, navegación profunda y demo visual verificadas, formato validado en ambos sistemas de archivos; T002 está cerrado; T084 permanece como deuda heredada documentada.
+
+## Fase 17: Usabilidad de captura, tablero y contadores (2026-11-17)
+
+**Propósito**: eliminar la fricción de los campos numéricos, permitir mover órdenes arrastrando en el kanban, impedir acumulados sobre el planificado y quitar la navegación redundante del panel inicial.
+
+- [X] T106 [P] Crear `src/components/numeric-field.js` y migrar los campos de BOM, órdenes, consumo, salida, umbral y contador a texto decimal con punto/coma, dos decimales y errores inline, preservando la validación nativa de listas desplegables (AC-44)
+- [X] T107 [P] [FR-03] Añadir drag & drop nativo al tablero de órdenes, validando cada destino con `canTransition` y conservando los botones del detalle como alternativa accesible (AC-42)
+- [X] T108 [P] [FR-07] Añadir `validateCumulative`, aplicar el techo `quantity_planned` en `#applyShiftCounter` y evitar que `completeOperation` sobrescriba `quantity_completed` (AC-43)
+- [X] T109 [P] [FR-13] Eliminar la sección "Accesos rápidos", sus fixtures y estilos del panel inicial; actualizar documentación y pruebas (AC-36)
+- [X] T110 Añadir pruebas unitarias/de integración y ejecutar `npm test -- --run`, `npm run lint`, `npm run format:check` y `npm run build`
+
+**Punto de control**: la captura directa funciona con coma decimal, el kanban solo acepta transiciones válidas, el acumulado se rechaza sin mutar estado y el panel inicial ya no duplica la navegación lateral.
 
 ---
 
@@ -338,6 +350,7 @@
 - **Pulido (Fase 14)**: depende de todas las historias deseadas.
 - **Remediación (Fase 15)**: depende de Fase 2 y de las historias que toca cada tarea (US-08, US-09, US-11); T096 debe completarse antes de ejecutar el gate de calidad de T088.
 - **Consolidación UX (Fase 16)**: depende de Fases 2, 10 y 14; no modifica el snapshot `v2`; actualiza los contratos documentales de roles y preserva la deuda heredada T084.
+- **Usabilidad (Fase 17)**: depende de Fases 2, 3, 6 y 16; reutiliza la máquina de estados y el store sin introducir campos nuevos ni cambiar el snapshot `v2`.
 
 ### Dependencias dentro de cada historia
 
