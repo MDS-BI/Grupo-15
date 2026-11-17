@@ -222,7 +222,7 @@ Rol funcional: **instantánea congelada** de las operaciones de la ruta para una
 | planned_time_minutes | numeric(10,2) | — | No | ≥ 0; estándar congelado |
 | actual_time_minutes | numeric(12,2) | — | Sí | ≥ 0; **tiempo efectivo** (sin atrasos) para trazabilidad de desempeño real |
 | delay_time_minutes | numeric(12,2) | — | No | `default 0`; ≥ 0; suma de atrasos justificados de la operación (derivada y persistida al cerrar) |
-| quantity_completed | numeric(14,4) | — | No | `default 0`; ≥ 0; **acumulado por operación a través de todos los turnos, no se reinicia** |
+| quantity_completed | numeric(14,4) | — | No | `default 0`; ≥ 0; ≤ `production_orders.quantity_planned`; **acumulado por operación a través de todos los turnos, no se reinicia** |
 | scrap_quantity | numeric(14,4) | — | No | `default 0`; ≥ 0 |
 | operator_id | uuid | FK → (usuarios/operadores) | Sí | **sensible**: métricas por persona; ver §7 |
 | started_at | timestamp | — | Sí | se fija al primer `Iniciar`; se conserva entre pausas/reinicios |

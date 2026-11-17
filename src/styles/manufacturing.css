@@ -484,7 +484,14 @@ button {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  min-height: 90px;
   padding: 0 0.6rem 0.6rem;
+  border-radius: 6px;
+}
+
+.kanban-col__body.is-drop-target {
+  background: var(--erp-soft);
+  box-shadow: inset 0 0 0 2px var(--erp-accent);
 }
 
 .order-card {
@@ -496,7 +503,20 @@ button {
   border: 1px solid var(--erp-border);
   border-radius: 8px;
   background: var(--erp-surface);
+  cursor: grab;
   text-align: left;
+  transition:
+    border-color 160ms var(--erp-ease),
+    box-shadow 160ms var(--erp-ease),
+    opacity 160ms var(--erp-ease);
+}
+
+.order-card:active {
+  cursor: grabbing;
+}
+
+.order-card.is-dragging {
+  opacity: 0.55;
 }
 
 .order-card.is-active {
@@ -937,7 +957,7 @@ button {
   margin-bottom: 0.75rem;
 }
 
-.counter-row input[type='number'] {
+.counter-row input[data-role='counter-input'] {
   width: 90px;
   padding: 0.35rem 0.5rem;
   border: 1px solid var(--erp-border);
@@ -1336,7 +1356,6 @@ button {
 .sidebar__btn,
 .role-select-card,
 .role-card,
-.quick-card,
 .attention-card,
 .kpi-card,
 .topbar__brand {
@@ -1505,8 +1524,7 @@ input:focus-visible,
   text-align: left;
 }
 
-.attention-card:hover,
-.quick-card:hover {
+.attention-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 18px rgba(16, 24, 40, 0.12);
 }
@@ -1524,8 +1542,7 @@ input:focus-visible,
 }
 
 .attention-card__label,
-.attention-card__hint,
-.quick-card__hint {
+.attention-card__hint {
   color: var(--erp-text-muted);
   font-size: 0.85rem;
 }
@@ -1534,50 +1551,6 @@ input:focus-visible,
   font-size: 1.6rem;
   font-weight: 700;
   line-height: 1.1;
-}
-
-.dashboard-split {
-  display: grid;
-  grid-template-columns: minmax(320px, 1fr) minmax(320px, 1fr);
-  gap: 1rem;
-  align-items: start;
-}
-
-.quick-grid {
-  display: grid;
-  gap: 0.7rem;
-}
-
-.quick-card {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0.2rem 0.75rem;
-  padding: 0.9rem 1rem;
-  border: 1px solid var(--erp-border);
-  border-radius: 8px;
-  background: var(--erp-surface);
-  text-align: left;
-}
-
-.quick-card__tag {
-  grid-column: 1 / -1;
-  color: var(--erp-accent);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.quick-card__title {
-  font-weight: 600;
-}
-
-.quick-card__go {
-  grid-column: 2;
-  grid-row: 2 / span 2;
-  align-self: center;
-  color: var(--erp-accent);
-  font-size: 1.3rem;
 }
 
 .activity-list {
@@ -1678,10 +1651,6 @@ input:focus-visible,
 }
 
 @media (max-width: 980px) {
-  .dashboard-split {
-    grid-template-columns: 1fr;
-  }
-
   .topbar__breadcrumb {
     display: none;
   }
@@ -1707,7 +1676,6 @@ input:focus-visible,
   .sidebar__btn,
   .role-select-card,
   .role-card,
-  .quick-card,
   .attention-card,
   .kpi-card,
   .topbar__brand,

@@ -68,6 +68,27 @@ describe('ManufacturingStore - US-06 turnos y atrasos', () => {
     expect(store.activeShiftFor('poo_3003_1')).toBeNull();
   });
 
+  it('rechaza contadores que superan la cantidad planificada', () => {
+    store.startShift('poo_3003_1', { operator_id: 'emp_op_03' });
+    store.adjustShiftCounter('poo_3003_1', 99);
+
+    expect(() => store.adjustShiftCounter('poo_3003_1', 2)).toThrow(/superar/);
+    expect(() => store.setShiftCounter('poo_3003_1', 101)).toThrow(/superar/);
+    expect(store.activeShiftFor('poo_3003_1').quantity_counted).toBe(99);
+    expect(
+      store.productionOrderOperations.find((op) => op.id === 'poo_3003_1').quantity_completed,
+    ).toBe(99);
+  });
+
+  it('conserva el acumulado al completar una operación', () => {
+    const opId = 'poo_3001_1';
+    const before = store.productionOrderOperations.find((op) => op.id === opId).quantity_completed;
+    store.completeOperation(opId, { actual_time_minutes: 10, quantity_completed: 0 });
+    expect(store.productionOrderOperations.find((op) => op.id === opId).quantity_completed).toBe(
+      before,
+    );
+  });
+
   it('finaliza con atraso abierto y permite corregirlo después', () => {
     const result = store.finishOperation('poo_3002_2', { now: '2026-10-17T12:00:00Z' });
     expect(result.openDelays.map((delay) => delay.id)).toEqual(['od_1001']);

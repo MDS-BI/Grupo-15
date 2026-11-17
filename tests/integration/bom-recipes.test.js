@@ -63,7 +63,13 @@ describe('Autoría de recetas BOM', () => {
 
     setValue('.modal [name="product_name"]', 'Mesa Industrial');
     setValue('.modal [data-material-row] [name="material_product_id"]', 'comp_tubo');
-    setValue('.modal [data-material-row] [name="material_quantity"]', '2');
+    const form = document.querySelector('.modal [data-role="form"]');
+    expect(form.noValidate).toBe(false);
+    const quantity = form.querySelector('[name="material_quantity"]');
+    expect(quantity.type).toBe('text');
+    expect(quantity.hasAttribute('required')).toBe(false);
+    expect(quantity.getAttribute('aria-required')).toBe('true');
+    setValue('.modal [data-material-row] [name="material_quantity"]', '2,5');
     setValue('.modal [data-station-row] [name="station_work_center_id"]', 'wc_corte');
     setValue('.modal [data-station-row] [name="station_setup"]', '5');
     setValue('.modal [data-station-row] [name="station_time"]', '3');
@@ -74,7 +80,7 @@ describe('Autoría de recetas BOM', () => {
     const bom = store.activeBoms().find((item) => item.product_id === product.id);
     expect(bom).toBeTruthy();
     expect(store.bomMaterials(bom.id)).toHaveLength(1);
-    expect(store.bomMaterials(bom.id)[0].quantity_per_unit).toBe(2);
+    expect(store.bomMaterials(bom.id)[0].quantity_per_unit).toBe(2.5);
     const stations = store.bomStations(bom.id);
     expect(stations).toHaveLength(1);
     expect(stations[0].work_center_id).toBe('wc_corte');

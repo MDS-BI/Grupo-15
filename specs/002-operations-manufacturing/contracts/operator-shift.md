@@ -75,8 +75,9 @@ Todas las acciones validan primero, mutan después y emiten un único evento `ch
 ### `adjustShiftCounter(operationId, delta)` / `setShiftCounter(operationId, value)`
 1. Rechaza valores no numéricos, `NaN`, `Infinity` o resultados `< 0`.
 2. Ajusta `production_shifts.quantity_counted` y aplica el mismo delta a `production_order_operations.quantity_completed` (nunca `< 0`).
-3. Conserva el último valor válido si la validación falla; la UI muestra el error inline.
-4. Devuelve `{ shiftQuantity, cumulativeQuantity }`.
+3. Rechaza el ajuste si el acumulado resultante supera `production_orders.quantity_planned`.
+4. Conserva el último valor válido si la validación falla; la UI muestra el error inline.
+5. Devuelve `{ shiftQuantity, cumulativeQuantity }`.
 
 ### Consultas
 - `activeShiftFor(operationId)` → turno `in_progress` o `null`.
@@ -100,7 +101,7 @@ Todas las acciones validan primero, mutan después y emiten un único evento `ch
 | Botón `Finalizar atraso` | Atraso abierto | Cierra el atraso y recalcula el tiempo efectivo. |
 | Aviso de atraso abierto | Operación `completed` con atraso `open` | Muestra *Abierto — pendiente de corrección* y abre `DelayCorrectionDialog`. |
 | Contador de turno | Siempre visible | `+`, `−`, edición directa y `Fijar`; rechaza negativos/no numéricos con error inline; muestra el último valor válido. |
-| Contador acumulado | Siempre visible | Solo lectura; refleja `quantity_completed` y se actualiza en el mismo evento. |
+| Contador acumulado | Siempre visible | Solo lectura; refleja `quantity_completed / quantity_planned`, se actualiza en el mismo evento y deshabilita `+` al alcanzar el techo. |
 | Resumen | Operación y orden | Tiempo total, tiempo de atrasos, piezas del turno, piezas acumuladas y avance de la orden. |
 
 ### Accesibilidad y consistencia

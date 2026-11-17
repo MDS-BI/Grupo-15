@@ -9,6 +9,7 @@ import {
   openDelayOf,
   sumClosedDelayMinutes,
   validateCounter,
+  validateCumulative,
 } from '../../src/domain/shift-tracking.js';
 
 const closed = (minutes) => ({ status: 'closed', duration_minutes: minutes });
@@ -53,6 +54,13 @@ describe('shift-tracking', () => {
     expect(validateCounter(0)).toBe(0);
     expect(() => validateCounter(-1)).toThrow(/negativo/);
     expect(() => validateCounter('abc')).toThrow(/número válido/);
+  });
+
+  it('valida el acumulado contra la cantidad planificada', () => {
+    expect(validateCumulative(100, 100)).toBe(100);
+    expect(() => validateCumulative(101, 100)).toThrow(/superar/);
+    expect(() => validateCumulative(-1, 100)).toThrow(/negativo/);
+    expect(() => validateCumulative(1, null)).toThrow(/planificada/);
   });
 
   it('impide iniciar turno sobre operación cerrada o con turno activo', () => {

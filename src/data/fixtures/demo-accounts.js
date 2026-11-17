@@ -17,6 +17,7 @@ export const DEMO_ACCOUNTS = Object.freeze([
     password: 'Pl4nta2026',
     role: USER_ROLES.PLANT_MANAGER,
   }),
+  Object.freeze({ username: 'usuario', password: 'usuario', role: USER_ROLES.PLANT_MANAGER }),
 ]);
 
 export function authenticate(username, password) {

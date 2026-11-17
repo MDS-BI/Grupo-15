@@ -5,6 +5,7 @@
 
 import { escapeHtml, el, fmtNumber, fmtPercent, ORDER_STATUS_LABEL } from './format.js';
 import { downloadCsv, printReport } from '../data/exporters/plant-report.js';
+import { decimalInput, parseDecimal } from './numeric-field.js';
 
 const PERIODS = {
   october: { from: '2026-10-01', to: '2026-10-31', label: 'Octubre 2026' },
@@ -169,7 +170,7 @@ export function PlantPerformancePanel(store, options = {}) {
               </select>
             </label>
             <label>Umbral
-              <input name="threshold" type="number" step="0.01" min="0" required />
+              ${decimalInput({ name: 'threshold', required: true, min: 0, label: 'El umbral' })}
             </label>
             <label>Comparación
               <select name="comparison">
@@ -232,7 +233,11 @@ export function PlantPerformancePanel(store, options = {}) {
       try {
         store.setIndicatorThreshold({
           indicator: dataForm.get('indicator'),
-          threshold: dataForm.get('threshold'),
+          threshold: parseDecimal(dataForm.get('threshold'), {
+            required: true,
+            min: 0,
+            label: 'El umbral',
+          }),
           comparison: dataForm.get('comparison'),
         });
         render();

@@ -99,6 +99,15 @@ describe('Ingreso genérico y roles de administrador', () => {
     expect(document.body.textContent).toContain('Entrar como');
   });
 
+  it('entra con la cuenta usuario y obtiene permisos de administrador', async () => {
+    await boot();
+    submitLogin('usuario', 'usuario');
+
+    expect(document.querySelector('[data-role="login-form"]')).toBeNull();
+    expect(document.querySelector('[data-module="admin-roles"]')).toBeTruthy();
+    expect(localStorage.getItem('erp.manufacturing.role')).toBe('plant_manager');
+  });
+
   it('vuelve al login al cerrar sesión', async () => {
     await boot();
     const account = accountFor('planner');

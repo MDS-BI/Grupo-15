@@ -91,6 +91,24 @@ export function validateCounter(value) {
   return num;
 }
 
+export function validateCumulative(value, planned) {
+  const num = Number(value);
+  const maximum = Number(planned);
+  if (!Number.isFinite(num)) {
+    throw new Error('El contador acumulado debe ser un número válido.');
+  }
+  if (!Number.isFinite(maximum) || maximum < 0) {
+    throw new Error('La cantidad planificada de la orden no es válida.');
+  }
+  if (num < 0) {
+    throw new Error('El contador acumulado no puede ser negativo.');
+  }
+  if (num > maximum) {
+    throw new Error(`El contador acumulado no puede superar la cantidad planificada (${maximum}).`);
+  }
+  return num;
+}
+
 /**
  * Guarda de inicio de turno.
  * @param {import('./types.js').ProductionOrderOperation|null} operation

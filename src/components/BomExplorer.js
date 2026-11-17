@@ -4,6 +4,7 @@
  */
 
 import { fmtNumber, escapeHtml, el } from './format.js';
+import { decimalInput, parseDecimal } from './numeric-field.js';
 
 const MODIFY_FIELDS = [
   ['material_quantity', 'Cantidad de un material'],
@@ -256,8 +257,8 @@ export function BomExplorer(store) {
           <option value="">Añadir material…</option>
           ${addableMaterials}
         </select>
-        <input name="quantity_per_unit" type="number" min="0.0001" step="0.0001" placeholder="Cant./unidad" required />
-        <input name="scrap_percentage" type="number" min="0" step="0.01" placeholder="Merma %" value="0" />
+        ${decimalInput({ name: 'quantity_per_unit', placeholder: 'Cant./unidad', required: true, min: 0.01, label: 'La cantidad por unidad' })}
+        ${decimalInput({ name: 'scrap_percentage', placeholder: 'Merma %', value: '0', min: 0, label: 'La merma' })}
         <button type="submit" class="btn btn--primary">Añadir</button>
       </form>
       <p class="form-error" data-role="error" role="alert"></p>`;
@@ -270,8 +271,13 @@ export function BomExplorer(store) {
       try {
         store.addBomComponent(bom.id, {
           component_product_id: data.get('component_product_id'),
-          quantity_per_unit: Number(data.get('quantity_per_unit')),
-          scrap_percentage: Number(data.get('scrap_percentage')) || 0,
+          quantity_per_unit: parseDecimal(data.get('quantity_per_unit'), {
+            required: true,
+            min: 0.01,
+            label: 'La cantidad por unidad',
+          }),
+          scrap_percentage:
+            parseDecimal(data.get('scrap_percentage'), { min: 0, label: 'La merma' }) ?? 0,
         });
         renderAll();
       } catch (err) {
@@ -361,8 +367,16 @@ export function BomExplorer(store) {
   function parseMaterialsFromForm(form) {
     return [...form.querySelectorAll('[data-material-row]')].map((row) => ({
       component_product_id: row.querySelector('[name="material_product_id"]').value,
-      quantity_per_unit: Number(row.querySelector('[name="material_quantity"]').value),
-      scrap_percentage: Number(row.querySelector('[name="material_scrap"]').value) || 0,
+      quantity_per_unit: parseDecimal(row.querySelector('[name="material_quantity"]').value, {
+        required: true,
+        min: 0.01,
+        label: 'La cantidad por unidad',
+      }),
+      scrap_percentage:
+        parseDecimal(row.querySelector('[name="material_scrap"]').value, {
+          min: 0,
+          label: 'La merma',
+        }) ?? 0,
     }));
   }
 
@@ -370,8 +384,16 @@ export function BomExplorer(store) {
     return [...form.querySelectorAll('[data-station-row]')].map((row) => ({
       work_center_id: row.querySelector('[name="station_work_center_id"]').value,
       description: row.querySelector('[name="station_description"]').value,
-      setup_time_minutes: Number(row.querySelector('[name="station_setup"]').value) || 0,
-      run_time_per_unit_minutes: Number(row.querySelector('[name="station_time"]').value),
+      setup_time_minutes:
+        parseDecimal(row.querySelector('[name="station_setup"]').value, {
+          min: 0,
+          label: 'El alistamiento',
+        }) ?? 0,
+      run_time_per_unit_minutes: parseDecimal(row.querySelector('[name="station_time"]').value, {
+        required: true,
+        min: 0.01,
+        label: 'El tiempo estimado por unidad',
+      }),
     }));
   }
 
@@ -389,8 +411,8 @@ export function BomExplorer(store) {
           <option value="">Material…</option>
           ${materialOptions([])}
         </select>
-        <input name="material_quantity" type="number" min="0.0001" step="0.0001" placeholder="Cant./unidad" required />
-        <input name="material_scrap" type="number" min="0" step="0.01" placeholder="Merma %" value="0" />
+        ${decimalInput({ name: 'material_quantity', placeholder: 'Cant./unidad', required: true, min: 0.01, label: 'La cantidad por unidad' })}
+        ${decimalInput({ name: 'material_scrap', placeholder: 'Merma %', value: '0', min: 0, label: 'La merma' })}
         <button type="button" class="btn btn--tiny btn--danger" data-remove-row>Quitar</button>`;
       wrapper.querySelector('[data-remove-row]').addEventListener('click', () => wrapper.remove());
       materialsEl.appendChild(wrapper);
@@ -407,8 +429,8 @@ export function BomExplorer(store) {
           ${stationOptions()}
         </select>
         <input name="station_description" type="text" placeholder="Descripción (opcional)" />
-        <input name="station_setup" type="number" min="0" step="0.01" placeholder="Alistamiento min" value="0" />
-        <input name="station_time" type="number" min="0.0001" step="0.01" placeholder="Tiempo estimado min/u" required />
+        ${decimalInput({ name: 'station_setup', placeholder: 'Alistamiento min', value: '0', min: 0, label: 'El alistamiento' })}
+        ${decimalInput({ name: 'station_time', placeholder: 'Tiempo estimado min/u', required: true, min: 0.01, label: 'El tiempo estimado por unidad' })}
         <button type="button" class="btn btn--tiny btn--danger" data-remove-row>Quitar</button>`;
       wrapper.querySelector('[data-remove-row]').addEventListener('click', () => wrapper.remove());
       stationsEl.appendChild(wrapper);
@@ -443,7 +465,7 @@ export function BomExplorer(store) {
             <input name="effective_from" type="date" value="${new Date().toISOString().slice(0, 10)}" required />
           </label>
           <label>Cantidad base
-            <input name="base_quantity" type="number" min="0.0001" step="0.0001" value="1" required />
+            ${decimalInput({ name: 'base_quantity', value: '1', required: true, min: 0.01, label: 'La cantidad base' })}
           </label>
         </div>
         <fieldset class="recipe-fieldset">
@@ -478,7 +500,11 @@ export function BomExplorer(store) {
           code: data.get('code'),
           version: data.get('version'),
           effective_from: data.get('effective_from'),
-          base_quantity: Number(data.get('base_quantity')),
+          base_quantity: parseDecimal(data.get('base_quantity'), {
+            required: true,
+            min: 0.01,
+            label: 'La cantidad base',
+          }),
           notes: data.get('notes'),
           materials: parseMaterialsFromForm(form),
           stations: parseStationsFromForm(form),
@@ -512,10 +538,10 @@ export function BomExplorer(store) {
       if (field === 'remove_material') return target;
       if (field === 'material_scrap') {
         return `${target}<label>Nueva merma (%)
-          <input name="change_value" data-role="change-value" type="number" min="0" step="0.01" required /></label>`;
+           ${decimalInput({ name: 'change_value', extra: 'data-role="change-value"', required: true, min: 0, label: 'La merma' })}</label>`;
       }
       return `${target}<label>Nueva cantidad por unidad
-        <input name="change_value" data-role="change-value" type="number" min="0.0001" step="0.0001" required /></label>`;
+         ${decimalInput({ name: 'change_value', extra: 'data-role="change-value"', required: true, min: 0.01, label: 'La cantidad por unidad' })}</label>`;
     }
 
     if (field === 'add_material') {
@@ -527,10 +553,10 @@ export function BomExplorer(store) {
           </select>
         </label>
         <label>Cantidad por unidad
-          <input name="change_value" data-role="change-value" type="number" min="0.0001" step="0.0001" required />
+          ${decimalInput({ name: 'change_value', extra: 'data-role="change-value"', required: true, min: 0.01, label: 'La cantidad por unidad' })}
         </label>
         <label>Merma (%)
-          <input name="scrap" type="number" min="0" step="0.01" value="0" />
+          ${decimalInput({ name: 'scrap', value: '0', min: 0, label: 'La merma' })}
         </label>`;
     }
 
@@ -549,10 +575,10 @@ export function BomExplorer(store) {
       if (field === 'remove_station') return target;
       if (field === 'station_setup') {
         return `${target}<label>Nuevo tiempo de alistamiento (min)
-          <input name="change_value" data-role="change-value" type="number" min="0" step="0.01" required /></label>`;
+           ${decimalInput({ name: 'change_value', extra: 'data-role="change-value"', required: true, min: 0, label: 'El alistamiento' })}</label>`;
       }
       return `${target}<label>Nuevo tiempo estimado por unidad (min)
-        <input name="change_value" data-role="change-value" type="number" min="0.0001" step="0.01" required /></label>`;
+         ${decimalInput({ name: 'change_value', extra: 'data-role="change-value"', required: true, min: 0.01, label: 'El tiempo estimado por unidad' })}</label>`;
     }
 
     if (field === 'add_station') {
@@ -573,10 +599,10 @@ export function BomExplorer(store) {
           <input name="description" type="text" placeholder="Operación" />
         </label>
         <label>Tiempo de alistamiento (min)
-          <input name="setup" type="number" min="0" step="0.01" value="0" />
+          ${decimalInput({ name: 'setup', value: '0', min: 0, label: 'El alistamiento' })}
         </label>
         <label>Tiempo estimado por unidad (min)
-          <input name="change_value" data-role="change-value" type="number" min="0.0001" step="0.01" required />
+          ${decimalInput({ name: 'change_value', extra: 'data-role="change-value"', required: true, min: 0.01, label: 'El tiempo estimado por unidad' })}
         </label>`;
     }
 
@@ -592,7 +618,7 @@ export function BomExplorer(store) {
     }
     if (field === 'base_quantity') {
       return `<label>Nueva cantidad base
-        <input name="change_value" data-role="change-value" type="number" min="0.0001" step="0.0001" required />
+        ${decimalInput({ name: 'change_value', extra: 'data-role="change-value"', required: true, min: 0.01, label: 'La cantidad base' })}
       </label>`;
     }
     if (field === 'product_name') {
@@ -672,23 +698,30 @@ export function BomExplorer(store) {
         return;
       }
 
+      const decimal = (label, options = {}) =>
+        parseDecimal(value, { required: true, label, ...options });
+
       try {
         switch (selectedField) {
           case 'material_quantity':
             store.updateBomComponent(bom.id, targetValue, {
-              quantity_per_unit: Number(value),
+              quantity_per_unit: decimal('La cantidad por unidad', { min: 0.01 }),
             });
             break;
           case 'material_scrap':
             store.updateBomComponent(bom.id, targetValue, {
-              scrap_percentage: Number(value),
+              scrap_percentage: decimal('La merma', { min: 0 }),
             });
             break;
           case 'add_material':
             store.addBomComponent(bom.id, {
               component_product_id: targetValue,
-              quantity_per_unit: Number(value),
-              scrap_percentage: Number(form.querySelector('[name="scrap"]').value) || 0,
+              quantity_per_unit: decimal('La cantidad por unidad', { min: 0.01 }),
+              scrap_percentage:
+                parseDecimal(form.querySelector('[name="scrap"]').value, {
+                  min: 0,
+                  label: 'La merma',
+                }) ?? 0,
             });
             break;
           case 'remove_material':
@@ -702,20 +735,24 @@ export function BomExplorer(store) {
             break;
           case 'station_time':
             store.updateRoutingOperationForBom(bom.id, targetValue, {
-              run_time_per_unit_minutes: Number(value),
+              run_time_per_unit_minutes: decimal('El tiempo estimado por unidad', { min: 0.01 }),
             });
             break;
           case 'station_setup':
             store.updateRoutingOperationForBom(bom.id, targetValue, {
-              setup_time_minutes: Number(value),
+              setup_time_minutes: decimal('El alistamiento', { min: 0 }),
             });
             break;
           case 'add_station':
             store.addRoutingOperationForBom(bom.id, {
               work_center_id: targetValue,
               description: form.querySelector('[name="description"]').value,
-              setup_time_minutes: Number(form.querySelector('[name="setup"]').value) || 0,
-              run_time_per_unit_minutes: Number(value),
+              setup_time_minutes:
+                parseDecimal(form.querySelector('[name="setup"]').value, {
+                  min: 0,
+                  label: 'El alistamiento',
+                }) ?? 0,
+              run_time_per_unit_minutes: decimal('El tiempo estimado por unidad', { min: 0.01 }),
             });
             break;
           case 'remove_station':
@@ -737,7 +774,9 @@ export function BomExplorer(store) {
             store.updateBomRecipe(bom.id, { effective_from: value });
             break;
           case 'base_quantity':
-            store.updateBomRecipe(bom.id, { base_quantity: Number(value) });
+            store.updateBomRecipe(bom.id, {
+              base_quantity: decimal('La cantidad base', { min: 0.01 }),
+            });
             break;
           case 'code':
             store.updateBomRecipe(bom.id, { code: value });

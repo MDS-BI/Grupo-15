@@ -40,10 +40,11 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 - Registro de turno del operador: inicio/fin de la orden activa con un solo botón, tiempo real, justificación de atrasos con motivos predefinidos o personalizados, y contador de piezas del turno.
 - **Supervisión de operaciones en línea (HU-04 / US-07)**: semáforo de estado en tiempo real por línea/máquina (*En operación, En pausa, En fallo, Cambio de formato*), asignación de operarios a máquinas para el turno (`shift_assignments` con puente `ext_hr_employee_id`), revisión y aprobación de cierres de turno (`supervisor_validated = true`), y escalamiento inmediato de incidentes a mantenimiento (`maintenance_tickets` con `escalated_to_maint = true`).
 - Consumo real (`material_consumption`) vs. teórico, y salida de bien terminado (`production_output`) con merma.
-- Panel con KPIs, tablero kanban, trazabilidad plan-vs-real y estado de calidad derivado.
+- Panel con KPIs, tablero kanban, trazabilidad plan-vs-real y estado de calidad derivado. El tablero permite arrastrar tarjetas entre columnas válidas, respetando la máquina de estados.
+- La captura de datos numéricos admite escritura directa con punto o coma decimal y un máximo de dos decimales, sin flechas de precisión que bloqueen el formulario.
 - **Panel de desempeño de planta (US-08 / Jefa de Planta)**: carga por centro, OEE y paradas acumuladas por período, umbrales críticos con alarmas, reprogramación y cancelación de órdenes, exportación del reporte consolidado a PDF y Excel, y permisos por rol simulados.
 - **Gestión de mantenimiento y disponibilidad de máquinas (US-09 / HU-06)**: bandeja de tickets escalados, toma de intervención con técnico asignado, historial y desgaste por máquina, órdenes de mantenimiento preventivo, registro de tiempos reales de parada y restablecimiento del semáforo del centro de trabajo.
-- **Acceso por rol y navegación**: ingreso genérico con credenciales simuladas, filtrado de la navegación según permisos, navegación por hash (deep links y botón atrás), panel de acceso por rol, datos de roles restringidos a la Jefa de Planta y datos simulados para probar accesos rápidos, estados y formularios sin backend.
+- **Acceso por rol y navegación**: ingreso genérico con credenciales simuladas, filtrado de la navegación según permisos, navegación por hash (deep links y botón atrás), panel de acceso por rol, datos de roles restringidos a la Jefa de Planta y datos simulados para probar estados y formularios sin backend.
 
 **Límites**: sin backend, sin MRP automático, sin MES en tiempo real. Las entidades de frontera (`products`, `warehouses`, `units_of_measure`, `companies`, `sales_orders`, `quality_inspections`, `hr_employees`) se consumen como datos simulados de solo lectura.
 
@@ -84,6 +85,7 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 - Soportar MTO (`sales_order_id` con `make_to_order=true`) o stock (`sales_order_id = null`).
 - Al liberar, congelar BOM/ruta y generar una `production_order_operations` por cada paso de ruta.
 - Transiciones: `planned → released → in_progress → completed`, `cancelled` lateral desde no-terminales.
+- El tablero kanban permite arrastrar una orden a la columna de un estado siguiente válido; los saltos inválidos se ignoran sin mutar la orden.
 
 ### FR-04: Ejecución en Piso (US-04)
 - Operaciones: `pending → in_progress → paused → completed`. `started_at` al iniciar; `completed_at` al completar.
@@ -116,6 +118,7 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 - Registrar cada atraso de la operación activa con motivo, inicio, fin y duración; pausar el tiempo de trabajo efectivo mientras el atraso esté en curso y reanudarlo al finalizarlo.
 - Permitir finalizar la operación aunque exista un atraso en curso; el atraso permanece abierto para su corrección posterior y no bloquea el cierre.
 - Mantener dos contadores de piezas: uno del turno actual (se reinicia al iniciar cada turno) y uno acumulado por operación (`quantity_completed`, no se reinicia); permitir incrementar, decrementar y fijar manualmente ambos, rechazando valores negativos o no numéricos y conservando el último valor válido.
+- Rechazar cualquier ajuste que deje `quantity_completed` por encima de `production_orders.quantity_planned`, mostrando el error inline y sin mutar turno ni operación. La finalización de la operación no sobrescribe el acumulado registrado.
 - Presentar un resumen por operación y orden con tiempo total, tiempo de atrasos justificados y piezas del turno y acumuladas; conservar estado, tiempos, atrasos y contadores ante recarga o interrupción de la sesión.
 
 </details>
@@ -209,7 +212,7 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 - Filtrar la navegación lateral y el panel "Acceso por rol" según la matriz `MODULE_ACCESS`; denegar módulos no permitidos aunque se acceda por URL.
 - Exponer las tarjetas con nombre, descripción y acceso por rol solo en `#/admin/roles`, permitido únicamente para la Jefa de Planta (`isAdmin`).
 - Sincronizar el módulo activo con el hash (`#/dashboard`, `#/plant`, etc.) para soportar enlaces profundos y el botón atrás del navegador.
-- Usar datos simulados deterministas para accesos rápidos por rol y actividad reciente, identificados como datos de demostración y sin mutar el snapshot de manufactura.
+- Usar datos simulados deterministas para la actividad reciente, identificados como datos de demostración y sin mutar el snapshot de manufactura. La navegación lateral es el único acceso directo a los módulos por rol.
 - Aplicar etiqueta "Operador" de forma consistente en selector global, panel de planta, estación y supervisión.
 
 </details>
@@ -254,12 +257,15 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 | AC-33 | US-10 | Las fechas asignadas y sus modificaciones permanecen guardadas al volver a abrir el sistema | Verificado |
 | AC-34 | FR-13 | El selector global filtra navegación y módulos por rol, incluido Supervisor, con denegación por URL | Verificado |
 | AC-35 | FR-13 | El hash mantiene el módulo activo y responde a enlaces profundos y navegación atrás | Verificado |
-| AC-36 | FR-13 | El panel inicial muestra datos simulados por rol, accesos rápidos y la etiqueta Operador de forma consistente | Verificado |
+| AC-36 | FR-13 | El panel inicial muestra actividad simulada y la etiqueta Operador de forma consistente, sin sección de accesos rápidos | Verificado |
 | AC-37 | US-11 | El panel muestra tiempos estándar por operación y totales por ruta (`setup + run × cantidad`) sin mutar rutas ni operaciones | Verificado |
 | AC-38 | US-11 | La carga proyectada y la utilización por centro se calculan para el período seleccionado contra capacidad nominal diaria, sin aplicar `efficiency_factor` | Verificado |
 | AC-39 | US-11 | El centro con mayor utilización proyectada se resalta como cuello de botella; en empate se usa mayor carga absoluta | Verificado |
 | AC-40 | US-11 | Las sugerencias de reasignación o cambio de secuencia son solo lectura y no modifican rutas, operaciones ni asignaciones | Verificado |
 | AC-41 | FR-13 | El ingreso es genérico, valida credenciales simuladas y los datos de roles solo son visibles para la Jefa de Planta en `#/admin/roles` | Verificado |
+| AC-42 | FR-03 | El tablero permite arrastrar órdenes solo a estados siguientes válidos, sin mutar ante saltos inválidos | Verificado |
+| AC-43 | FR-07 | El acumulado de Estación se rechaza cuando supera la cantidad planificada, sin mutar turno ni operación | Verificado |
+| AC-44 | FR-01 a FR-13 | Los campos numéricos aceptan punto o coma decimal y hasta dos decimales, sin flechas de precisión y con errores inline para valores inválidos | Verificado |
 
 > **Nota de numeración**: los IDs AC son anclas históricas estables; no se renombran al añadir historias. La columna "Historia" disambigúa los rangos: AC-04..AC-07 y AC-20 pertenecen a US-08, AC-08..AC-14 a la base US-01..US-05/FR-06, y AC-37..AC-40 a US-11. No existen IDs duplicados ni un mismo criterio asignado a dos historias.
 

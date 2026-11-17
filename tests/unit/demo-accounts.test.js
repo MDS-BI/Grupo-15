@@ -3,8 +3,11 @@ import { DEMO_ACCOUNTS, authenticate } from '../../src/data/fixtures/demo-accoun
 import { ROLE_ORDER, USER_ROLES, isAdmin } from '../../src/domain/access-control.js';
 
 describe('Cuentas de demostración', () => {
-  it('define una cuenta por rol simulado', () => {
-    expect(DEMO_ACCOUNTS.map((account) => account.role).sort()).toEqual([...ROLE_ORDER].sort());
+  it('cubre todos los roles simulados con usuarios únicos', () => {
+    expect(new Set(DEMO_ACCOUNTS.map((account) => account.role))).toEqual(new Set(ROLE_ORDER));
+    expect(new Set(DEMO_ACCOUNTS.map((account) => account.username)).size).toBe(
+      DEMO_ACCOUNTS.length,
+    );
     for (const account of DEMO_ACCOUNTS) {
       expect(account.username).toBeTruthy();
       expect(account.password).toBeTruthy();
@@ -25,6 +28,12 @@ describe('Cuentas de demostración', () => {
     expect(authenticate('desconocido', 'Pl4nta2026')).toBeNull();
     expect(authenticate('', '')).toBeNull();
     expect(authenticate(null, null)).toBeNull();
+  });
+
+  it('autentica la cuenta administrativa usuario', () => {
+    const role = authenticate('usuario', 'usuario');
+    expect(role).toBe(USER_ROLES.PLANT_MANAGER);
+    expect(isAdmin(role)).toBe(true);
   });
 
   it('reserva los datos de roles para la Jefa de Planta', () => {
