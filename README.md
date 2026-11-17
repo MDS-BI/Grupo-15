@@ -1,78 +1,70 @@
-# NOTA: Editar readme con informacion del grupo y modulo
+# Módulo de Operaciones / Manufactura (ERP)
 
-# ERP Software Base Module (Vite + Vanilla JS)
+Prototipo frontend del módulo de manufactura del Grupo 15. El flujo cubre BOM y rutas, órdenes de producción, ejecución en piso, turno del operador, supervisión de línea, panel de desempeño de planta, mantenimiento, planificación y balance de líneas.
 
-Módulo: Manufactura y producción
+## Integrantes
 
-Integrantes del grupo: 
-  Trujillo Peñaloza Julián Alberto (@JualTrupe)
-  Rivas Merino Sebastián Matías (@SebastianRivasprg)
-  Espinoza Sepúlveda Carlos Gonzalo (@carlos-277)
-  Concha Barra Maite Valentina (@maiteval)
-  Mogster Carrasco Maximiliano (@maximilianMC)
-  Durán Lara Liang Giuliana Martina (@Lia-dl)
+- Trujillo Peñaloza Julián Alberto (@JualTrupe)
+- Rivas Merino Sebastián Matías (@SebastianRivasprg)
+- Espinoza Sepúlveda Carlos Gonzalo (@carlos-277)
+- Concha Barra Maite Valentina (@maiteval)
+- Mogster Carrasco Maximiliano (@maximilianMC)
+- Durán Lara Liang Giuliana Martina (@Lia-dl)
 
-Minimal single-page app serving as an Enterprise Resource Planning (ERP) software base module. It provides the common foundation for building custom ERP modules: master data management (Entities) and linked transactional documents (Documents) with create/edit/delete/search, validation, and browser localStorage persistence — using Vite and vanilla HTML, CSS, and JavaScript.
-
-The user interface is fully in **Spanish** (default terms: Entidad / Documento; module name: Módulo Base ERP), including labels, validation messages, empty states, and dialogs.
-
-Entities carry standard ERP master-data fields (name, code, tax ID, email, phone, address, category, target date, credit limit, payment terms). Documents use series + folio numbering and carry a monetary breakdown (subtotal, discount, tax, total), currency, payment terms, notes, quantity, dates, and status.
-
-The app presents itself as a coherent ERP workspace:
-
-- **Workspace shell** — every screen lives inside a branded chrome: a top bar with a logo (an SVG monogram derived from the module name) and module name, plus a persistent sidebar of module buttons (Panel, Entidades, Documentos, Búsqueda). The active module is highlighted (`aria-current="page"`), and the sidebar collapses to an icon rail on narrow viewports.
-- **Home dashboard** — the entry screen offers quick-action buttons for key ERP tasks (new entity, new document, open management areas, find records) and live statistic cards showing record counts.
-- **Design tokens** — styling is driven by CSS custom properties in `src/styles.css`, so branding changes apply globally.
-
-## Setup
-
-Install dependencies and run the dev server:
+## Ejecutar
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open http://localhost:5173 (or the URL Vite prints).
+Abre la URL que muestra Vite (normalmente http://localhost:5173).
 
-## Tests
+| Comando | Propósito |
+|---|---|
+| `npm run dev` | Servidor de desarrollo |
+| `npm run build` | Build de producción |
+| `npm run preview` | Vista previa del build |
+| `npm test -- --run` | Pruebas unitarias y de integración |
+| `npm run lint` | ESLint |
+| `npm run format:check` | Verificación de formato |
 
-Run the full test suite (unit + integration) with:
+## Roles simulados
 
-```bash
-npm test
-```
+El ingreso muestra cuatro roles. El selector de la barra superior permite cambiar de rol sin recargar, y la navegación lateral se filtra con `src/domain/access-control.js`.
 
-Or a one-off run without watch mode:
+| Rol | Módulos principales |
+|---|---|
+| Jefa de Planta | Panel, BOM, Órdenes, Estación, Supervisión, Planta, Planificación, Balance, Mantenimiento, Roles |
+| Supervisor de línea | Panel, Órdenes, Estación, Supervisión, Planta, Mantenimiento, Roles |
+| Planificador | Panel, BOM, Órdenes, Planta, Planificación, Balance, Roles |
+| Operador de Máquina | Panel, Estación, Planta, Mantenimiento, Roles |
 
-```bash
-npx vitest run
-```
+La etiqueta visible es **Operador de Máquina** (o **Operador** en selectores compactos). No hay autenticación real: es una simulación para demostrar permisos.
 
-## Building Custom Modules
+## Navegación
 
-Custom ERP modules built on this base define:
+- El módulo activo se sincroniza con el hash (`#/dashboard`, `#/plant`, `#/scheduling`, ...), por lo que funcionan enlaces profundos y el botón atrás del navegador.
+- Si un rol abre por URL un módulo no permitido, la app lo redirige a su módulo de inicio.
+- El panel **Roles** muestra las páginas disponibles para cada rol.
+- El panel inicial ofrece accesos rápidos por rol, avisos de situación (alarmas, tickets, cierres y atrasos) y actividad reciente simulada.
 
-- What an **Entity** represents (e.g., customer, product, asset) plus domain-specific fields.
-- What a **Document** represents (e.g., order, invoice, contract).
-- Module-specific labels and validation rules.
+## Datos simulados
 
-The base module handles identity generation, timestamps, referential integrity between entities and documents, cascade deletion, navigation, and search. See `specs/001-erp-base-module/` for the full specification.
+- `src/data/fixtures/`: maestros, BOM, rutas, órdenes, turnos, atrasos, asignaciones, mantenimiento y umbrales.
+- `src/data/fixtures/dashboard-demo.js`: accesos rápidos y actividad reciente del inicio; no se persisten.
+- `src/data/persistence.js`: snapshot vigente `erp.manufacturing.v2`, con migración desde `v1`.
+- El rol activo se guarda por separado en `erp.manufacturing.role`.
 
-## Tailoring via Configuration
+## Estructura
 
-All tailoring lives in one place: the `userConfig` object at the top of `src/module-config.js`. Developers edit this single export; no core code changes are required. Available knobs:
+- `src/domain/`: lógica pura (BOM, capacidades, turnos, semáforo, mantenimiento, OEE, fechas y control de acceso).
+- `src/data/`: fixtures, store, adaptadores y exportadores.
+- `src/components/`: vistas de cada historia de usuario.
+- `src/styles/manufacturing.css`: tokens, layout, estados accesibles y transiciones con `prefers-reduced-motion`.
+- `specs/002-operations-manufacturing/`: especificación, plan, contratos y tareas.
 
-- `moduleName` — display name shown in the top bar, dashboard, and document title; also derives the logo monogram.
-- `labels` — rename Entity/Document terms across every screen, including sidebar buttons, quick actions, forms, and messages. Spanish articles and agreements (el/la, seleccionado/a) are derived from the first word of each configured term.
-- `customFields` — declare extra fields per record type with `target` (`entity` or `document`), `key`, `label`, `type` (`text`, `number`, `date`, or `select`), optional `required`, and `options` for selects. Keys must not collide with base field names (see `specs/001-erp-base-module/data-model.md`). Values persist alongside records and appear in search results.
-- `statusLifecycle` — restrict document statuses to a configured list of `statuses` with permitted `transitions` between them. Without it, status stays a free-form field.
-- `theme.accentColor` — a hex color (e.g., `"#0f62fe"`) applied across the shell as highlights and primary controls. Invalid values fall back to the default.
+## Deuda conocida
 
-If the configuration is invalid (unknown types, bad keys, transitions referencing unknown statuses, non-hex accent colors), the app shows the problems in a banner and falls back to defaults instead of breaking.
-
-## Notes
-
-- Data is persisted to `localStorage` under the keys `erp_base_module:entities` and `erp_base_module:documents`.
-- Deleting an entity also deletes its documents (cascade).
-- This project intentionally uses vanilla HTML, CSS, and JavaScript for simplicity.
+- `T002`: Vitest no configura jsdom globalmente; las suites que necesitan DOM crean su propio `JSDOM`.
+- `T084`: 12 suites heredadas de `001-erp-base-module` importan `src/app.js`, `src/storage.js` y `src/module-config.js`, que no existen en este módulo. Están documentadas en `specs/002-operations-manufacturing/tasks.md`.

@@ -163,6 +163,13 @@ export class ManufacturingStore extends EventTarget {
     for (const [key, dataKey] of Object.entries(assignments)) {
       if (Array.isArray(snapshot.data[dataKey])) this[key] = clone(snapshot.data[dataKey]);
     }
+
+    for (const permission of plantFx.rolePermissions) {
+      const exists = this.rolePermissions.some(
+        (row) => row.role === permission.role && row.action === permission.action,
+      );
+      if (!exists) this.rolePermissions.push(clone(permission));
+    }
   }
 
   #resetInventory() {
@@ -1640,7 +1647,7 @@ export class ManufacturingStore extends EventTarget {
     const workCenter = this.workCenterById(workCenterId);
     if (!workCenter) throw new Error(`Centro de trabajo no encontrado: ${workCenterId}`);
     const employee = this.hrEmployees.find((row) => row.ext_hr_employee_id === ext_hr_employee_id);
-    if (!employee) throw new Error('El operario no existe en el puente de RR.HH.');
+    if (!employee) throw new Error('El operador no existe en el puente de RR.HH.');
     const candidate = { work_center_id: workCenterId, ext_hr_employee_id, shift_band };
     const previous = this.shiftAssignments.find(
       (assignment) =>
@@ -1650,7 +1657,7 @@ export class ManufacturingStore extends EventTarget {
     );
     const others = this.shiftAssignments.filter((assignment) => assignment !== previous);
     if (!canAssignOperator(others, candidate)) {
-      throw new Error('El operario ya está asignado a otra franja en el mismo turno.');
+      throw new Error('El operador ya está asignado a otra franja en el mismo turno.');
     }
     if (previous) previous.active = false;
     const assignment = {

@@ -48,6 +48,7 @@ const ACTIONS = [
 
 const ALLOWED = {
   plant_manager: ACTIONS,
+  supervisor: ['view_plant_panel', 'change_priority', 'cancel_order', 'export_report'],
   planner: ['view_plant_panel', 'change_priority', 'export_report'],
   operator: ['view_plant_panel'],
 };

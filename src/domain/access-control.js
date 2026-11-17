@@ -20,17 +20,33 @@ export const ROLE_ORDER = Object.freeze([
 export const DEFAULT_ROLE = USER_ROLES.PLANT_MANAGER;
 
 export const ROLE_LABELS = Object.freeze({
-  operator: 'Operario',
+  operator: 'Operador de Máquina',
   supervisor: 'Supervisor de línea',
   planner: 'Planificador',
-  plant_manager: 'Jefe de planta',
+  plant_manager: 'Jefa de Planta',
 });
 
 export const ROLE_DESCRIPTIONS = Object.freeze({
   operator: 'Registra turnos, reporta atrasos y consulta el desempeño de planta.',
-  supervisor: 'Monitorea la línea, asigna operarios y valida cierres de producción.',
+  supervisor: 'Monitorea la línea, asigna operadores y valida cierres de producción.',
   planner: 'Gestiona BOM, planifica órdenes y equilibra la carga de los centros.',
   plant_manager: 'Supervisa toda la operación, umbrales, reportes y equipo.',
+});
+
+export const MODULE_GROUPS = Object.freeze([
+  {
+    label: 'Operación',
+    modules: ['dashboard', 'orders', 'operator', 'supervision', 'maintenance'],
+  },
+  { label: 'Planificación', modules: ['bom', 'scheduling', 'line-balance', 'plant'] },
+  { label: 'Sistema', modules: ['roles'] },
+]);
+
+export const ROLE_HOME_MODULE = Object.freeze({
+  operator: 'operator',
+  supervisor: 'supervision',
+  planner: 'scheduling',
+  plant_manager: 'dashboard',
 });
 
 /**
@@ -71,4 +87,14 @@ export function isModuleAllowed(role, moduleId) {
  */
 export function modulesForRole(role, modules = []) {
   return modules.filter((module) => isModuleAllowed(role, module.id));
+}
+
+/**
+ * @param {string} role
+ * @returns {string}
+ */
+export function homeModuleForRole(role) {
+  const normalized = normalizeRole(role);
+  const home = ROLE_HOME_MODULE[normalized];
+  return isModuleAllowed(normalized, home) ? home : 'dashboard';
 }

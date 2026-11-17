@@ -1,6 +1,6 @@
 # Especificación: Módulo de Operaciones / Manufactura (ERP)
 
-**Rama**: `002-operations-manufacturing` | **Fecha**: 2026-10-31 | **Actualizado**: 2026-11-03
+**Rama**: `002-operations-manufacturing` | **Fecha**: 2026-10-31 | **Actualizado**: 2026-11-17
 **Datos maestros**: [data-model.md](data-model.md) | **Plan**: [plan.md](plan.md) | **Tareas**: [tasks.md](tasks.md)
 
 ---
@@ -43,6 +43,7 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 - Panel con KPIs, tablero kanban, trazabilidad plan-vs-real y estado de calidad derivado.
 - **Panel de desempeño de planta (US-08 / Jefa de Planta)**: carga por centro, OEE y paradas acumuladas por período, umbrales críticos con alarmas, reprogramación y cancelación de órdenes, exportación del reporte consolidado a PDF y Excel, y permisos por rol simulados.
 - **Gestión de mantenimiento y disponibilidad de máquinas (US-09 / HU-06)**: bandeja de tickets escalados, toma de intervención con técnico asignado, historial y desgaste por máquina, órdenes de mantenimiento preventivo, registro de tiempos reales de parada y restablecimiento del semáforo del centro de trabajo.
+- **Acceso por rol y navegación**: selección de rol al entrar, filtrado de la navegación según permisos, navegación por hash (deep links y botón atrás), panel de acceso por rol y datos simulados para probar accesos rápidos, estados y formularios sin backend.
 
 **Límites**: sin backend, sin MRP automático, sin MES en tiempo real. Las entidades de frontera (`products`, `warehouses`, `units_of_measure`, `companies`, `sales_orders`, `quality_inspections`, `hr_employees`) se consumen como datos simulados de solo lectura.
 
@@ -56,6 +57,8 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 | **Ingeniero de Producción (`@JualTrupe`)** | Configura rutas de fabricación y tiempos estándar, analiza el balance de líneas y evalúa informes de materiales para optimizar tiempos, reducir mermas y encontrar rutas óptimas. |
 | **Encargado de Mantenimiento (`@SebastianRivasprg`)** | Atiende incidentes críticos escalados desde piso (`fault`), analiza historial operativo y evalúa desgaste en maquinaria para programar mantenimientos preventivos, registra tiempos de parada por mantención y restablece la disponibilidad operativa de las máquinas. |
 | **Planificador (`@maiteval`)** |  Organiza y calendariza las órdenes de producción, asignando fechas planificadas de inicio y término a las tareas. Coordina la secuencia de fabricación según las prioridades y plazos de entrega, consulta el estado de las órdenes y ajusta la programación cuando existen atrasos o cambios en la producción, buscando optimizar los tiempos y cumplir con las fechas de entrega establecidas. |
+
+> **Convención de roles simulados**: la interfaz usa cuatro etiquetas de rol —Jefa de Planta, Supervisor de Operaciones/Línea, Planificador y Operador de Máquina—. "Operario" en textos de asignación de RR.HH. es sinónimo de Operador; la etiqueta visible preferida es **Operador**. Las responsabilidades de Ingeniería de Producción y Mantenimiento se ejercen, en la demo, desde los roles Planificador y Supervisor/Jefa de Planta respectivamente, sin crear credenciales adicionales.
 
 ## 4. Requisitos Funcionales
 
@@ -141,7 +144,7 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 - **Gestión de órdenes**: Filtrar órdenes por `status` y `priority`, cambiar la prioridad de órdenes `planned` y cancelar órdenes con confirmación explícita, conservando los registros de ejecución.
 - **Centros desactivados**: Bloquear la programación de órdenes nuevas sobre centros de trabajo desactivados.
 - **Exportación**: Exportar el reporte consolidado del período (OEE, paradas, cumplimiento y alarmas activas) en PDF y Excel, generado localmente con datos mock y sin dependencias externas: Excel mediante descarga CSV/SpreadsheetML y PDF mediante una vista imprimible con `window.print()`.
-- **Permisos por rol**: Definir permisos por rol (Jefa de Planta, Planificador, Operador) con un selector de rol simulado, sin autenticación real; la interfaz oculta o bloquea las acciones no permitidas.
+- **Permisos por rol**: Definir permisos por rol (Jefa de Planta, Supervisor de Operaciones/Línea, Planificador, Operador de Máquina) con un selector de rol simulado, sin autenticación real; la interfaz oculta o bloquea las acciones no permitidas. El Supervisor puede consultar el panel, cambiar prioridades y exportar; no puede modificar umbrales. Jefa de Planta tiene todos los permisos; Planificador puede cambiar prioridades y exportar; Operador solo consulta.
 - **Ética de datos**: Agregar siempre por centro de trabajo y operación, sin ranking entre operadores; todo detalle por persona lleva la etiqueta *solo contexto operativo — no evaluación de desempeño*.
 - **Rendimiento**: Responder en menos de 100 ms con el dataset de volumen (500 órdenes, BOM de 4 niveles).
 
@@ -197,43 +200,60 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 </details>
 
 
+<details open>
+<summary><strong>FR-13: Acceso por rol, navegación y datos de demostración</strong></summary>
+
+- Mostrar una pantalla de ingreso con los cuatro roles simulados y persistir el rol activo en `erp.manufacturing.role`.
+- Filtrar la navegación lateral y el panel "Acceso por rol" según la matriz `MODULE_ACCESS`; denegar módulos no permitidos aunque se acceda por URL.
+- Sincronizar el módulo activo con el hash (`#/dashboard`, `#/plant`, etc.) para soportar enlaces profundos y el botón atrás del navegador.
+- Usar datos simulados deterministas para accesos rápidos por rol y actividad reciente, identificados como datos de demostración y sin mutar el snapshot de manufactura.
+- Aplicar etiqueta "Operador" de forma consistente en selector global, panel de planta, estación y supervisión.
+
+</details>
+
+
 ## 5. Criterios de Aceptación
 
-| ID | Criterio | Estado |
-|---|---|---|
-| AC-01 | Árbol BOM multi-nivel con ≥4 niveles y ciclo detectado | Implementado |
-| AC-02 | Ruta con secuencia estrictamente creciente y tiempo estándar calculado | Implementado |
-| AC-03 | Liberación congela BOM/ruta y genera operaciones; MTO/stock soportado | Implementado |
-| AC-04 | Tablero de carga por centro con OEE (Disponibilidad × Rendimiento × Calidad) y paradas acumuladas por período, derivados y no persistidos | Verificado |
-| AC-05 | Umbrales de alarma configurables, persistidos en el snapshot y evaluados de inmediato | Verificado |
-| AC-06 | Reprogramación de prioridad y cancelación con confirmación, conservando registros de ejecución | Verificado |
-| AC-07 | Exportación del reporte consolidado a PDF y Excel (sin dependencias externas) y permisos por rol simulados | Verificado |
-| AC-08 | Máquinas de estados validadas; rechazo de transiciones inversas | Implementado |
-| AC-09 | Ejecución con tiempos reales; avance automático del estado de orden | Implementado |
-| AC-10 | Consumo teórico vs. real con flags de discrepancia; uso no planificado permitido | Implementado |
-| AC-11 | Salida con merma, salidas parciales, inventario simulado actualizado | Implementado |
-| AC-12 | Panel con KPIs y utilización por centro de trabajo | Implementado |
-| AC-13 | Calidad derivada desde `quality_inspections` (solo lectura) | Implementado |
-| AC-14 | Pruebas unitarias del dominio y del store pasan; build exitoso | Verificado |
-| AC-15 | Inicio/fin de la operación activa con un único botón alterno y confirmación, tiempo real registrado y sin doble cierre | Verificado |
-| AC-16 | Atrasos justificados con motivos predefinidos o personalizados; tiempo efectivo pausado y cierre permitido con atraso abierto para corrección posterior | Verificado |
-| AC-17 | Dos contadores de piezas (turno y acumulado) incrementables, ajustables y validados; totales conservados al finalizar y recargar | Verificado |
-| AC-18 | Semáforo en vivo por línea/máquina (*En operación, En pausa, En fallo, Cambio de formato*) y registro de asignación de operario (`ext_hr_employee_id`) en `shift_assignments` | Verificado |
-| AC-19 | Aprobación de cierre de turno (`supervisor_validated = true`) tras verificar atrasos cerrados, y disparo de ticket urgente (`escalated_to_maint = true`) hacia `maintenance_tickets` pasando la máquina a *En fallo* | Verificado |
-| AC-20 | Carga por centro destacada sobre la capacidad efectiva y bloqueo de programación en centros desactivados | Verificado |
-| AC-21 | Bandeja de tickets escalados con prioridad, estado, centro y evento de parada vinculado, ordenada por prioridad y antigüedad | Verificado |
-| AC-22 | Toma de intervención con técnico asignado y bloqueo de dos intervenciones simultáneas sobre el mismo centro de trabajo | Verificado |
-| AC-23 | Historial por máquina con paradas acumuladas e indicador derivado de desgaste que sustenta la orden preventiva | Verificado |
-| AC-24 | Cierre de intervención con tiempo real de parada registrado y restablecimiento del semáforo fuera de *En fallo* | Verificado |
-| AC-25 | Ticket resuelto sin reapertura; nueva incidencia genera un ticket vinculado al evento correspondiente | Verificado |
-| AC-26 | Tickets, intervenciones, tiempos de parada y órdenes preventivas conservados en el snapshot tras recargar | Verificado |
-| AC-27 | Tiempos de mantenimiento agregados por centro, sin rankings ni evaluación de desempeño de técnicos | Verificado |
-| AC-28 | El sistema permite consultar las órdenes de producción existentes y visualizar sus datos principales | Verificado |
-| AC-29 | El planificador puede asignar fechas planificadas de inicio y término a una orden de producción | Verificado |
-| AC-30 | El planificador puede modificar las fechas planificadas de una orden existente | Verificado |
-| AC-31 | El sistema impide asignar una fecha de término anterior a la fecha de inicio | Verificado |
-| AC-32 | El sistema permite visualizar las órdenes según sus fechas planificadas y estados | Verificado |
-| AC-33 | Las fechas asignadas y sus modificaciones permanecen guardadas al volver a abrir el sistema | Verificado |
+| ID | Historia | Criterio | Estado |
+|---|---|---|---|
+| AC-01 | US-01 | Árbol BOM multi-nivel con ≥4 niveles y ciclo detectado | Implementado |
+| AC-02 | US-02 | Ruta con secuencia estrictamente creciente y tiempo estándar calculado | Implementado |
+| AC-03 | US-03 | Liberación congela BOM/ruta y genera operaciones; MTO/stock soportado | Implementado |
+| AC-04 | US-08 | Tablero de carga por centro con OEE (Disponibilidad × Rendimiento × Calidad) y paradas acumuladas por período, derivados y no persistidos | Verificado |
+| AC-05 | US-08 | Umbrales de alarma configurables, persistidos en el snapshot y evaluados de inmediato | Verificado |
+| AC-06 | US-08 | Reprogramación de prioridad y cancelación con confirmación, conservando registros de ejecución | Verificado |
+| AC-07 | US-08 | Exportación del reporte consolidado a PDF y Excel (sin dependencias externas) y permisos por rol simulados | Verificado |
+| AC-08 | US-04 | Máquinas de estados validadas; rechazo de transiciones inversas | Implementado |
+| AC-09 | US-04 | Ejecución con tiempos reales; avance automático del estado de orden | Implementado |
+| AC-10 | US-05 | Consumo teórico vs. real con flags de discrepancia; uso no planificado permitido | Implementado |
+| AC-11 | US-05 | Salida con merma, salidas parciales, inventario simulado actualizado | Implementado |
+| AC-12 | Base | Panel con KPIs y utilización por centro de trabajo | Implementado |
+| AC-13 | Base | Calidad derivada desde `quality_inspections` (solo lectura) | Implementado |
+| AC-14 | Base | Pruebas unitarias del dominio y del store pasan; build exitoso | Verificado |
+| AC-15 | US-06 | Inicio/fin de la operación activa con un único botón alterno y confirmación, tiempo real registrado y sin doble cierre | Verificado |
+| AC-16 | US-06 | Atrasos justificados con motivos predefinidos o personalizados; tiempo efectivo pausado y cierre permitido con atraso abierto para corrección posterior | Verificado |
+| AC-17 | US-06 | Dos contadores de piezas (turno y acumulado) incrementables, ajustables y validados; totales conservados al finalizar y recargar | Verificado |
+| AC-18 | US-07 | Semáforo en vivo por línea/máquina (*En operación, En pausa, En fallo, Cambio de formato*) y registro de asignación de operario (`ext_hr_employee_id`) en `shift_assignments` | Verificado |
+| AC-19 | US-07 | Aprobación de cierre de turno (`supervisor_validated = true`) tras verificar atrasos cerrados, y disparo de ticket urgente (`escalated_to_maint = true`) hacia `maintenance_tickets` pasando la máquina a *En fallo* | Verificado |
+| AC-20 | US-08 | Carga por centro destacada sobre la capacidad efectiva y bloqueo de programación en centros desactivados | Verificado |
+| AC-21 | US-09 | Bandeja de tickets escalados con prioridad, estado, centro y evento de parada vinculado, ordenada por prioridad y antigüedad | Verificado |
+| AC-22 | US-09 | Toma de intervención con técnico asignado y bloqueo de dos intervenciones simultáneas sobre el mismo centro de trabajo | Verificado |
+| AC-23 | US-09 | Historial por máquina con paradas acumuladas e indicador derivado de desgaste que sustenta la orden preventiva | Verificado |
+| AC-24 | US-09 | Cierre de intervención con tiempo real de parada registrado y restablecimiento del semáforo fuera de *En fallo* | Verificado |
+| AC-25 | US-09 | Ticket resuelto sin reapertura; nueva incidencia genera un ticket vinculado al evento correspondiente | Verificado |
+| AC-26 | US-09 | Tickets, intervenciones, tiempos de parada y órdenes preventivas conservados en el snapshot tras recargar | Verificado |
+| AC-27 | US-09 | Tiempos de mantenimiento agregados por centro, sin rankings ni evaluación de desempeño de técnicos | Verificado |
+| AC-28 | US-10 | El sistema permite consultar las órdenes de producción existentes y visualizar sus datos principales | Verificado |
+| AC-29 | US-10 | El planificador puede asignar fechas planificadas de inicio y término a una orden de producción | Verificado |
+| AC-30 | US-10 | El planificador puede modificar las fechas planificadas de una orden existente | Verificado |
+| AC-31 | US-10 | El sistema impide asignar una fecha de término anterior a la fecha de inicio | Verificado |
+| AC-32 | US-10 | El sistema permite visualizar las órdenes según sus fechas planificadas y estados | Verificado |
+| AC-33 | US-10 | Las fechas asignadas y sus modificaciones permanecen guardadas al volver a abrir el sistema | Verificado |
+| AC-34 | FR-13 | El selector global filtra navegación y módulos por rol, incluido Supervisor, con denegación por URL | Verificado |
+| AC-35 | FR-13 | El hash mantiene el módulo activo y responde a enlaces profundos y navegación atrás | Verificado |
+| AC-36 | FR-13 | El panel inicial muestra datos simulados por rol, accesos rápidos y la etiqueta Operador de forma consistente | Verificado |
+
+> **Nota de numeración**: los IDs AC son anclas históricas estables; no se renombran al añadir historias. La columna "Historia" disambigúa los rangos: AC-04..AC-07 y AC-20 pertenecen a US-08, mientras que AC-08..AC-14 corresponden a la base US-01..US-05/FR-06. No existen IDs duplicados ni un mismo criterio asignado a dos historias.
 
 ## 6. Entidades Clave
 
@@ -261,7 +281,7 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 
 - El snapshot local se mantiene versionado con `erp.manufacturing.v2` como versión vigente desde US-08; `erp.manufacturing.v1` se migra automáticamente. Cualquier cambio de forma incrementa la versión y se valida al hidratar.
 - `maintenance_tickets`, las órdenes preventivas, `threshold_settings` y `role_permissions` se modelan como entidades locales del módulo y ya están descritas en `data-model.md` §3.19–3.22.
-- Los roles (Jefa de Planta, Planificador, Operador, Encargado de Mantenimiento) son simulados con un selector; no existe autenticación real.
+- Los roles simulados con selector son Jefa de Planta, Supervisor de Operaciones/Línea, Planificador y Operador de Máquina; no existe autenticación real. La etiqueta visible es "Operador" en toda la interfaz.
 - La exportación a PDF y Excel se genera localmente con los datos mock, sin backend ni servicios externos.
 - Los catálogos de RR.HH., calidad y ventas son datos simulados de solo lectura.
 - Los tiempos de turno y de parada se derivan de marcas de tiempo persistidas, no de temporizadores en memoria.
@@ -290,3 +310,4 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 - **Estado**: `ManufacturingStore` en memoria con `EventTarget` para re-render reactivo y snapshot versionado en `localStorage` (`erp.manufacturing.v2`, con migración desde `v1`) para sobrevivir recargas.
 - **Puentes Inter-Modulares (US-07 / HU-04)**: `ext_hr_employee_id` consume catálogo simulado de operarios de RR.HH. (`src/data/fixtures/hr-employees.js`) y el escalamiento genera registros en `maintenance_tickets` consumibles por la vista de Mantenimiento (HU-06).
 - **Ética**: agregación por centro/operación, sin rankings individuales; tiempos y asignaciones como dato de coordinación operativa.
+- **Navegación**: `src/domain/access-control.js` es la fuente única de roles, etiquetas y matriz de módulos; `src/manufacturing-main.js` sincroniza rol y hash; `src/data/fixtures/dashboard-demo.js` contiene sólo datos de demostración para el inicio.

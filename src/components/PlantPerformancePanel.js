@@ -29,18 +29,19 @@ const PRIORITY_LABEL = { low: 'Baja', normal: 'Normal', high: 'Alta' };
 
 /**
  * @param {import('../data/ManufacturingStore.js').ManufacturingStore} store
+ * @param {{role?: string}} [options]
  * @returns {HTMLElement}
  */
-export function PlantPerformancePanel(store) {
+export function PlantPerformancePanel(store, options = {}) {
   let periodKey = 'october';
-  let role = 'plant_manager';
+  let role = options.role || 'plant_manager';
 
   const root = el(`
     <section class="view">
       <header class="view__header">
         <div>
           <h1>Desempeño de Planta</h1>
-          <p class="view__subtitle">Indicadores agregados por período. Solo contexto operacional — no evaluación de desempeño.</p>
+          <p class="view__subtitle">Indicadores agregados por período. El rol global fija el valor inicial; puedes simular otros permisos aquí. Solo contexto operacional — no evaluación de desempeño.</p>
         </div>
         <div class="inline-actions">
           <label class="inline-field">Período
@@ -52,9 +53,10 @@ export function PlantPerformancePanel(store) {
           </label>
           <label class="inline-field">Rol simulado
             <select data-role="role">
-              <option value="plant_manager">Jefe de planta</option>
+              <option value="plant_manager">Jefa de Planta</option>
+              <option value="supervisor">Supervisor de línea</option>
               <option value="planner">Planificador</option>
-              <option value="operator">Operario</option>
+              <option value="operator">Operador de Máquina</option>
             </select>
           </label>
           <button type="button" class="btn" data-export="csv">Exportar CSV</button>
@@ -299,6 +301,7 @@ export function PlantPerformancePanel(store) {
       else printReport(report);
     });
   }
+  roleEl.value = role;
   store.addEventListener('change', render);
   render();
   return root;

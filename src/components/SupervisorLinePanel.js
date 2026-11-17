@@ -1,6 +1,6 @@
 /**
  * @file Panel del supervisor de línea (US-07): semáforo en vivo, asignación de
- * operarios, validación de cierres y escalamiento de incidentes.
+ * operadores, validación de cierres y escalamiento de incidentes.
  */
 
 import { escapeHtml, el, fmtNumber } from './format.js';
@@ -29,14 +29,14 @@ export function SupervisorLinePanel(store) {
       <div data-role="lights"></div>
       <div class="panel-grid">
         <article class="panel">
-          <header class="panel__header"><h3>Asignar operario</h3></header>
+          <header class="panel__header"><h3>Asignar operador</h3></header>
           <form class="stack-form" data-role="assign-form">
             <label>Centro de trabajo
               <select name="work_center_id">${store.workCenters
                 .map((wc) => `<option value="${wc.id}">${escapeHtml(wc.name)}</option>`)
                 .join('')}</select>
             </label>
-            <label>Operario (RR.HH.)
+            <label>Operador (RR.HH.)
               <select name="ext_hr_employee_id">${store.hrEmployees
                 .filter((employee) => employee.role === 'operator')
                 .map(
@@ -76,7 +76,7 @@ export function SupervisorLinePanel(store) {
         <header class="panel__header"><h2>Semáforo de planta</h2></header>
         <div class="table-wrap">
           <table class="data-table">
-            <thead><tr><th>Centro</th><th>Estado</th><th>Operario asignado</th><th>Operación activa</th><th>Alerta</th></tr></thead>
+            <thead><tr><th>Centro</th><th>Estado</th><th>Operador asignado</th><th>Operación activa</th><th>Alerta</th></tr></thead>
             <tbody>
               ${rows
                 .map(({ work_center, status, assignment, active_operation }) => {
