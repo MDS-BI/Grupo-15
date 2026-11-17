@@ -45,15 +45,19 @@ export function BomExplorer(store) {
       <div class="bom-layout">
         <aside class="panel panel--side">
           <header class="panel__header"><h2>Recetas / Listas de Materiales</h2></header>
-          <ul class="bom-list" data-role="bom-list"></ul>
+          <div class="panel__body">
+            <ul class="bom-list" data-role="bom-list"></ul>
+          </div>
         </aside>
         <div class="panel panel--main">
           <header class="panel__header">
             <h2 data-role="bom-title">—</h2>
             <p class="panel__subtitle" data-role="bom-meta"></p>
           </header>
-          <div class="bom-tree" data-role="tree"></div>
-          <div class="bom-editor" data-role="editor"></div>
+          <div class="panel__body">
+            <div class="bom-tree" data-role="tree"></div>
+            <div class="bom-editor" data-role="editor"></div>
+          </div>
         </div>
       </div>
       <div class="modal-root" data-role="modal-root"></div>

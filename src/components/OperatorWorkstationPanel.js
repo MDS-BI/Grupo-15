@@ -109,58 +109,64 @@ export function OperatorWorkstationPanel(store) {
             <h2>${escapeHtml(order ? order.order_number : operation.production_order_id)} · ${escapeHtml(workCenter ? workCenter.name : operation.work_center_id)}</h2>
             <p class="panel__subtitle">${escapeHtml(store.productById(order?.product_id)?.name || '')}</p>
           </header>
-          <div class="operator-summary">
-            <div class="mini-stat"><span class="mini-stat__value" data-role="timer">${fmtNumber(timerMinutes, 2)} min</span><span class="mini-stat__label">Tiempo efectivo del turno</span></div>
-            <div class="mini-stat"><span class="mini-stat__value">${fmtNumber(operation.planned_time_minutes)}</span><span class="mini-stat__label">Tiempo planificado</span></div>
-            <div class="mini-stat"><span class="mini-stat__value">${fmtNumber(operation.delay_time_minutes || 0, 2)}</span><span class="mini-stat__label">Atrasos cerrados</span></div>
-            <div class="mini-stat"><span class="mini-stat__value">${fmtNumber(operation.quantity_completed)} / ${fmtNumber(order ? order.quantity_planned : 0)}</span><span class="mini-stat__label">Avance acumulado</span></div>
+          <div class="panel__body">
+            <div class="operator-summary">
+              <div class="mini-stat"><span class="mini-stat__value" data-role="timer">${fmtNumber(timerMinutes, 2)} min</span><span class="mini-stat__label">Tiempo efectivo del turno</span></div>
+              <div class="mini-stat"><span class="mini-stat__value">${fmtNumber(operation.planned_time_minutes)}</span><span class="mini-stat__label">Tiempo planificado</span></div>
+              <div class="mini-stat"><span class="mini-stat__value">${fmtNumber(operation.delay_time_minutes || 0, 2)}</span><span class="mini-stat__label">Atrasos cerrados</span></div>
+              <div class="mini-stat"><span class="mini-stat__value">${fmtNumber(operation.quantity_completed)} / ${fmtNumber(order ? order.quantity_planned : 0)}</span><span class="mini-stat__label">Avance acumulado</span></div>
+            </div>
+            <div class="detail-actions">
+              <button type="button" class="btn btn--primary" data-role="toggle" aria-pressed="${operation.status === 'in_progress'}" ${operation.status === 'completed' ? 'disabled' : ''}>${toggleText}</button>
+            </div>
+            <p class="form-error" data-role="error" role="alert"></p>
           </div>
-          <div class="detail-actions">
-            <button type="button" class="btn btn--primary" data-role="toggle" aria-pressed="${operation.status === 'in_progress'}" ${operation.status === 'completed' ? 'disabled' : ''}>${toggleText}</button>
-          </div>
-          <p class="form-error" data-role="error" role="alert"></p>
         </article>
 
         <article class="panel">
           <header class="panel__header"><h3>Contadores</h3></header>
-          <div class="counter-row">
-            <span>Turno: <strong data-role="shift-counter">${fmtNumber(shift ? shift.quantity_counted : 0)}</strong></span>
-            <button type="button" class="btn btn--tiny" data-counter="dec">−</button>
-            <input type="number" min="0" step="1" data-role="counter-input" value="${shift ? shift.quantity_counted : 0}" ${shift ? '' : 'disabled'} />
-            <button type="button" class="btn btn--tiny" data-counter="inc">+</button>
-            <button type="button" class="btn btn--tiny" data-role="set-counter" ${shift ? '' : 'disabled'}>Fijar</button>
+          <div class="panel__body">
+            <div class="counter-row">
+              <span>Turno: <strong data-role="shift-counter">${fmtNumber(shift ? shift.quantity_counted : 0)}</strong></span>
+              <button type="button" class="btn btn--tiny" data-counter="dec">−</button>
+              <input type="number" min="0" step="1" data-role="counter-input" value="${shift ? shift.quantity_counted : 0}" ${shift ? '' : 'disabled'} />
+              <button type="button" class="btn btn--tiny" data-counter="inc">+</button>
+              <button type="button" class="btn btn--tiny" data-role="set-counter" ${shift ? '' : 'disabled'}>Fijar</button>
+            </div>
+            <p class="counter-row">Acumulado: <strong data-role="cumulative-counter">${fmtNumber(operation.quantity_completed)}</strong></p>
           </div>
-          <p class="counter-row">Acumulado: <strong data-role="cumulative-counter">${fmtNumber(operation.quantity_completed)}</strong></p>
         </article>
 
         <article class="panel">
           <header class="panel__header"><h3>Atrasos justificados</h3></header>
-          <div class="table-wrap">
-            <table class="data-table data-table--compact">
-              <thead><tr><th>Motivo</th><th>Inicio</th><th>Duración</th><th>Estado</th></tr></thead>
-              <tbody>${delayRows || '<tr><td colspan="4" class="empty-cell">Sin atrasos.</td></tr>'}</tbody>
-            </table>
-          </div>
-          <div class="stack-form">
-            <label>Motivo
-              <select data-role="delay-reason" ${shift ? '' : 'disabled'}>
-                <option value="">Selecciona…</option>${reasonOptions}
-                <option value="__custom">Nuevo motivo…</option>
-              </select>
-            </label>
-            <label>Motivo personalizado
-              <input type="text" data-role="custom-label" placeholder="Etiqueta del motivo" />
-            </label>
-            <label>Nota
-              <input type="text" data-role="delay-note" placeholder="Detalle opcional" />
-            </label>
-            <div class="detail-actions">
-              <button type="button" class="btn" data-role="start-delay" ${shift && !openDelay ? '' : 'disabled'}>Registrar atraso</button>
-              <button type="button" class="btn btn--primary" data-role="close-delay" ${openDelay ? '' : 'disabled'}>Finalizar atraso</button>
-              <button type="button" class="btn" data-role="correct-delay" ${operation.status === 'completed' && openDelay ? '' : 'disabled'}>Corregir atraso abierto</button>
+          <div class="panel__body">
+            <div class="table-wrap">
+              <table class="data-table data-table--compact">
+                <thead><tr><th>Motivo</th><th>Inicio</th><th>Duración</th><th>Estado</th></tr></thead>
+                <tbody>${delayRows || '<tr><td colspan="4" class="empty-cell">Sin atrasos.</td></tr>'}</tbody>
+              </table>
             </div>
+            <div class="stack-form">
+              <label>Motivo
+                <select data-role="delay-reason" ${shift ? '' : 'disabled'}>
+                  <option value="">Selecciona…</option>${reasonOptions}
+                  <option value="__custom">Nuevo motivo…</option>
+                </select>
+              </label>
+              <label>Motivo personalizado
+                <input type="text" data-role="custom-label" placeholder="Etiqueta del motivo" />
+              </label>
+              <label>Nota
+                <input type="text" data-role="delay-note" placeholder="Detalle opcional" />
+              </label>
+              <div class="detail-actions">
+                <button type="button" class="btn" data-role="start-delay" ${shift && !openDelay ? '' : 'disabled'}>Registrar atraso</button>
+                <button type="button" class="btn btn--primary" data-role="close-delay" ${openDelay ? '' : 'disabled'}>Finalizar atraso</button>
+                <button type="button" class="btn" data-role="correct-delay" ${operation.status === 'completed' && openDelay ? '' : 'disabled'}>Corregir atraso abierto</button>
+              </div>
+            </div>
+            <p class="form-error" data-role="delay-error" role="alert"></p>
           </div>
-          <p class="form-error" data-role="delay-error" role="alert"></p>
         </article>
       </div>`;
 

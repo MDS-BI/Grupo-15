@@ -91,7 +91,9 @@ export function ProductionOrders(store) {
     const order = store.orderById(selectedOrderId);
     if (!order) {
       detailEl.innerHTML = `<header class="panel__header"><h2>Detalle</h2></header>
-        <p class="empty-note">Selecciona una orden.</p>`;
+        <div class="panel__body">
+          <p class="empty-note">Selecciona una orden.</p>
+        </div>`;
       return;
     }
     const product = store.productById(order.product_id);
@@ -160,39 +162,41 @@ export function ProductionOrders(store) {
         <h2>${escapeHtml(order.order_number)} ${orderStatusBadge(order.status)}</h2>
         <p class="panel__subtitle">${escapeHtml(product ? product.name : order.product_id)}</p>
       </header>
-      <dl class="detail-list">
-        <div><dt>Planificado</dt><dd>${fmtNumber(order.quantity_planned)} u</dd></div>
-        <div><dt>Producido</dt><dd>${fmtNumber(produced)} u</dd></div>
-        <div><dt>Merma</dt><dd>${fmtNumber(scrap)} u</dd></div>
-        <div><dt>Yield</dt><dd>${fmtPercent(yieldRatio)}</dd></div>
-        <div><dt>Scrap rate</dt><dd>${fmtPercent(scrapRate)}</dd></div>
-        <div><dt>Calidad (derivada)</dt><dd><span class="badge badge--qc-${quality}">${QUALITY_LABEL[quality]}</span></dd></div>
-        <div><dt>Tiempo plan / real</dt><dd>${fmtNumber(plannedTotal)} / ${fmtNumber(actualTotal)} min</dd></div>
-        <div><dt>Origen</dt><dd>${order.sales_order_id ? `MTO (${escapeHtml(order.sales_order_id)})` : 'Stock'}</dd></div>
-      </dl>
-      <div class="detail-actions">${actions}</div>
+      <div class="panel__body">
+        <dl class="detail-list">
+          <div><dt>Planificado</dt><dd>${fmtNumber(order.quantity_planned)} u</dd></div>
+          <div><dt>Producido</dt><dd>${fmtNumber(produced)} u</dd></div>
+          <div><dt>Merma</dt><dd>${fmtNumber(scrap)} u</dd></div>
+          <div><dt>Yield</dt><dd>${fmtPercent(yieldRatio)}</dd></div>
+          <div><dt>Scrap rate</dt><dd>${fmtPercent(scrapRate)}</dd></div>
+          <div><dt>Calidad (derivada)</dt><dd><span class="badge badge--qc-${quality}">${QUALITY_LABEL[quality]}</span></dd></div>
+          <div><dt>Tiempo plan / real</dt><dd>${fmtNumber(plannedTotal)} / ${fmtNumber(actualTotal)} min</dd></div>
+          <div><dt>Origen</dt><dd>${order.sales_order_id ? `MTO (${escapeHtml(order.sales_order_id)})` : 'Stock'}</dd></div>
+        </dl>
+        <div class="detail-actions">${actions}</div>
 
-      <header class="panel__header"><h3>Operaciones</h3></header>
-      <div class="table-wrap">
-        <table class="data-table data-table--compact">
-          <thead><tr><th>#</th><th>Centro</th><th>Estado</th><th>Plan</th><th>Real</th><th></th></tr></thead>
-          <tbody>${opRows || '<tr><td colspan="6" class="empty-cell">Sin operaciones.</td></tr>'}</tbody>
-        </table>
-      </div>
+        <header class="panel__header"><h3>Operaciones</h3></header>
+        <div class="table-wrap">
+          <table class="data-table data-table--compact">
+            <thead><tr><th>#</th><th>Centro</th><th>Estado</th><th>Plan</th><th>Real</th><th></th></tr></thead>
+            <tbody>${opRows || '<tr><td colspan="6" class="empty-cell">Sin operaciones.</td></tr>'}</tbody>
+          </table>
+        </div>
 
-      <header class="panel__header"><h3>Consumo plan-vs-real</h3></header>
-      <div class="table-wrap">
-        <table class="data-table data-table--compact">
-          <thead><tr><th>Componente</th><th>Teórico</th><th>Real</th><th>Varianza</th></tr></thead>
-          <tbody>${varianceRows || '<tr><td colspan="4" class="empty-cell">Sin consumo registrado.</td></tr>'}</tbody>
-        </table>
-      </div>
+        <header class="panel__header"><h3>Consumo plan-vs-real</h3></header>
+        <div class="table-wrap">
+          <table class="data-table data-table--compact">
+            <thead><tr><th>Componente</th><th>Teórico</th><th>Real</th><th>Varianza</th></tr></thead>
+            <tbody>${varianceRows || '<tr><td colspan="4" class="empty-cell">Sin consumo registrado.</td></tr>'}</tbody>
+          </table>
+        </div>
 
-      <div class="detail-actions">
-        <button type="button" class="btn btn--small" data-role="consume">Registrar Consumo</button>
-        <button type="button" class="btn btn--small btn--primary" data-role="output">Registrar Salida</button>
-        <button type="button" class="btn btn--small" data-role="open-operator">Estación del operador</button>
-        <button type="button" class="btn btn--small" data-role="open-supervisor">Supervisión de línea</button>
+        <div class="detail-actions">
+          <button type="button" class="btn btn--small" data-role="consume">Registrar Consumo</button>
+          <button type="button" class="btn btn--small btn--primary" data-role="output">Registrar Salida</button>
+          <button type="button" class="btn btn--small" data-role="open-operator">Estación del operador</button>
+          <button type="button" class="btn btn--small" data-role="open-supervisor">Supervisión de línea</button>
+        </div>
       </div>`;
 
     detailEl.querySelectorAll('[data-transition]').forEach((btn) => {

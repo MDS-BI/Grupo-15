@@ -129,16 +129,18 @@ export function MaintenancePanel(store) {
           <h2>Bandeja de tickets</h2>
           <span class="panel__subtitle" data-role="ticket-count"></span>
         </header>
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Código</th><th>Centro</th><th>Prioridad</th><th>Estado</th>
-                <th>Creado</th><th>Evento de parada</th><th>Acción</th>
-              </tr>
-            </thead>
-            <tbody data-role="ticket-list"></tbody>
-          </table>
+        <div class="panel__body">
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Código</th><th>Centro</th><th>Prioridad</th><th>Estado</th>
+                  <th>Creado</th><th>Evento de parada</th><th>Acción</th>
+                </tr>
+              </thead>
+              <tbody data-role="ticket-list"></tbody>
+            </table>
+          </div>
         </div>
       </section>
 
@@ -152,7 +154,9 @@ export function MaintenancePanel(store) {
           <h2>Órdenes de mantenimiento preventivo</h2>
           <button type="button" class="btn btn--small btn--primary" data-preventive-create>Programar preventiva</button>
         </header>
-        <div data-role="preventive-list"></div>
+        <div class="panel__body">
+          <div data-role="preventive-list"></div>
+        </div>
       </section>
 
       <div class="modal-root" data-role="modal-root"></div>
@@ -251,7 +255,9 @@ export function MaintenancePanel(store) {
     const ticket = selectedTicketId ? ticketById(selectedTicketId) : null;
     if (!ticket) {
       detailEl.innerHTML = `<header class="panel__header"><h2>Detalle del ticket</h2></header>
-        <p class="empty-note">Selecciona un ticket de la bandeja para ver su detalle.</p>`;
+        <div class="panel__body">
+          <p class="empty-note">Selecciona un ticket de la bandeja para ver su detalle.</p>
+        </div>`;
       return;
     }
     detailEl.innerHTML = `
@@ -259,36 +265,40 @@ export function MaintenancePanel(store) {
         <h2>${escapeHtml(ticket.ticket_code)} ${ticketStatusBadge(ticket.ticket_status)}</h2>
         <p class="panel__subtitle">${escapeHtml(workCenterName(ticket.work_center_id))}</p>
       </header>
-      <dl class="detail-list">
-        <div><dt>Prioridad</dt><dd>${priorityBadge(ticket.priority)}</dd></div>
-        <div><dt>Origen</dt><dd>${ticket.escalated_to_maint ? 'Escalado desde piso' : 'Registro manual'}</dd></div>
-        <div><dt>Creado</dt><dd>${fmtDateTime(ticket.created_at)}</dd></div>
-        <div><dt>Evento de parada</dt><dd>${escapeHtml(ticket.operation_delay_id || '—')}</dd></div>
-        <div><dt>Técnico</dt><dd>${escapeHtml(ticket.technician_ext_hr_employee_id || '—')}</dd></div>
-        <div><dt>Inicio intervención</dt><dd>${fmtDateTime(ticket.intervention_started_at)}</dd></div>
-        <div><dt>Inicio parada</dt><dd>${fmtDateTime(ticket.downtime_started_at)}</dd></div>
-        <div><dt>Fin parada</dt><dd>${fmtDateTime(ticket.downtime_ended_at)}</dd></div>
-        <div><dt>Parada total</dt><dd>${
-          ticket.downtime_minutes === null ? '—' : `${fmtNumber(ticket.downtime_minutes, 2)} min`
-        }</dd></div>
-        <div><dt>Resuelto</dt><dd>${fmtDateTime(ticket.resolved_at)}</dd></div>
-      </dl>
-      <p class="maintenance-description">${escapeHtml(ticket.description)}</p>
-      ${
-        ticket.resolution_notes
-          ? `<p class="maintenance-description"><strong>Notas de cierre:</strong> ${escapeHtml(
-              ticket.resolution_notes,
-            )}</p>`
-          : ''
-      }
-      <div class="detail-actions">${actionButton(ticket)}</div>`;
+      <div class="panel__body">
+        <dl class="detail-list">
+          <div><dt>Prioridad</dt><dd>${priorityBadge(ticket.priority)}</dd></div>
+          <div><dt>Origen</dt><dd>${ticket.escalated_to_maint ? 'Escalado desde piso' : 'Registro manual'}</dd></div>
+          <div><dt>Creado</dt><dd>${fmtDateTime(ticket.created_at)}</dd></div>
+          <div><dt>Evento de parada</dt><dd>${escapeHtml(ticket.operation_delay_id || '—')}</dd></div>
+          <div><dt>Técnico</dt><dd>${escapeHtml(ticket.technician_ext_hr_employee_id || '—')}</dd></div>
+          <div><dt>Inicio intervención</dt><dd>${fmtDateTime(ticket.intervention_started_at)}</dd></div>
+          <div><dt>Inicio parada</dt><dd>${fmtDateTime(ticket.downtime_started_at)}</dd></div>
+          <div><dt>Fin parada</dt><dd>${fmtDateTime(ticket.downtime_ended_at)}</dd></div>
+          <div><dt>Parada total</dt><dd>${
+            ticket.downtime_minutes === null ? '—' : `${fmtNumber(ticket.downtime_minutes, 2)} min`
+          }</dd></div>
+          <div><dt>Resuelto</dt><dd>${fmtDateTime(ticket.resolved_at)}</dd></div>
+        </dl>
+        <p class="maintenance-description">${escapeHtml(ticket.description)}</p>
+        ${
+          ticket.resolution_notes
+            ? `<p class="maintenance-description"><strong>Notas de cierre:</strong> ${escapeHtml(
+                ticket.resolution_notes,
+              )}</p>`
+            : ''
+        }
+        <div class="detail-actions">${actionButton(ticket)}</div>
+      </div>`;
   }
 
   function renderHistory() {
     const workCenterId = selectedWorkCenterId();
     if (!workCenterId) {
       historyEl.innerHTML = `<header class="panel__header"><h2>Historial y desgaste</h2></header>
-        <p class="empty-note">Sin centros de trabajo disponibles.</p>`;
+        <div class="panel__body">
+          <p class="empty-note">Sin centros de trabajo disponibles.</p>
+        </div>`;
       return;
     }
     const history = store.maintenanceHistoryForWorkCenter(workCenterId);
@@ -319,26 +329,28 @@ export function MaintenancePanel(store) {
             .join('')}
         </select>
       </header>
-      <p class="context-note">Indicadores agregados por máquina · solo contexto operativo, no evaluación de desempeño.</p>
-      <dl class="detail-list">
-        <div><dt>Fallas resueltas</dt><dd>${fmtNumber(wear.failure_count)}</dd></div>
-        <div><dt>Parada acumulada</dt><dd>${fmtNumber(wear.total_downtime_minutes, 2)} min</dd></div>
-        <div><dt>MTTR</dt><dd>${fmtNumber(wear.mttr_minutes, 2)} min</dd></div>
-        <div><dt>Desgaste</dt><dd><span class="wear wear--${wear.wear_level}">${
-          WEAR_LABEL[wear.wear_level] || wear.wear_level
-        }</span></dd></div>
-      </dl>
-      <div class="table-wrap">
-        <table class="data-table data-table--compact">
-          <thead><tr><th>Ticket</th><th>Resuelto</th><th>Parada</th><th>Causa</th></tr></thead>
-          <tbody>${
-            rows ||
-            '<tr><td colspan="4" class="empty-cell">Sin fallos resueltos en esta máquina.</td></tr>'
-          }</tbody>
-        </table>
-      </div>
-      <div class="detail-actions">
-        <button type="button" class="btn btn--small" data-preventive-create data-center="${workCenterId}">Programar preventiva</button>
+      <div class="panel__body">
+        <p class="context-note">Indicadores agregados por máquina · solo contexto operativo, no evaluación de desempeño.</p>
+        <dl class="detail-list">
+          <div><dt>Fallas resueltas</dt><dd>${fmtNumber(wear.failure_count)}</dd></div>
+          <div><dt>Parada acumulada</dt><dd>${fmtNumber(wear.total_downtime_minutes, 2)} min</dd></div>
+          <div><dt>MTTR</dt><dd>${fmtNumber(wear.mttr_minutes, 2)} min</dd></div>
+          <div><dt>Desgaste</dt><dd><span class="wear wear--${wear.wear_level}">${
+            WEAR_LABEL[wear.wear_level] || wear.wear_level
+          }</span></dd></div>
+        </dl>
+        <div class="table-wrap">
+          <table class="data-table data-table--compact">
+            <thead><tr><th>Ticket</th><th>Resuelto</th><th>Parada</th><th>Causa</th></tr></thead>
+            <tbody>${
+              rows ||
+              '<tr><td colspan="4" class="empty-cell">Sin fallos resueltos en esta máquina.</td></tr>'
+            }</tbody>
+          </table>
+        </div>
+        <div class="detail-actions">
+          <button type="button" class="btn btn--small" data-preventive-create data-center="${workCenterId}">Programar preventiva</button>
+        </div>
       </div>`;
   }
 

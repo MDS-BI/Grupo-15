@@ -155,59 +155,69 @@ export function PlantPerformancePanel(store, options = {}) {
       <div class="panel-grid">
         <article class="panel">
           <header class="panel__header"><h3>Alertas de umbral</h3></header>
-          <ul class="alarm-list">${alarmRows}</ul>
+          <div class="panel__body">
+            <ul class="alarm-list">${alarmRows}</ul>
+          </div>
         </article>
         <article class="panel">
           <header class="panel__header"><h3>Configurar umbral</h3></header>
-          <form class="stack-form" data-role="threshold-form">
-            <label>Indicador
-              <select name="indicator">
-                <option value="load">Carga máxima</option>
-                <option value="oee">OEE promedio</option>
-                <option value="downtime">Paradas acumuladas</option>
-                <option value="fulfillment">Cumplimiento</option>
-              </select>
-            </label>
-            <label>Umbral
-              <input name="threshold" type="number" step="0.01" min="0" required />
-            </label>
-            <label>Comparación
-              <select name="comparison">
-                <option value="gt">Al superar (gt)</option>
-                <option value="lt">Al caer bajo (lt)</option>
-              </select>
-            </label>
-            <p class="form-error" data-role="threshold-error" role="alert"></p>
-            <button type="submit" class="btn btn--primary" ${canSetThreshold ? '' : 'disabled'}>Guardar umbral</button>
-            <p class="empty-note">${canSetThreshold ? '' : 'El rol simulado no puede modificar umbrales.'}</p>
-          </form>
+          <div class="panel__body">
+            <form class="stack-form" data-role="threshold-form">
+              <label>Indicador
+                <select name="indicator">
+                  <option value="load">Carga máxima</option>
+                  <option value="oee">OEE promedio</option>
+                  <option value="downtime">Paradas acumuladas</option>
+                  <option value="fulfillment">Cumplimiento</option>
+                </select>
+              </label>
+              <label>Umbral
+                <input name="threshold" type="number" step="0.01" min="0" required />
+              </label>
+              <label>Comparación
+                <select name="comparison">
+                  <option value="gt">Al superar (gt)</option>
+                  <option value="lt">Al caer bajo (lt)</option>
+                </select>
+              </label>
+              <p class="form-error" data-role="threshold-error" role="alert"></p>
+              <button type="submit" class="btn btn--primary" ${canSetThreshold ? '' : 'disabled'}>Guardar umbral</button>
+              <p class="empty-note">${canSetThreshold ? '' : 'El rol simulado no puede modificar umbrales.'}</p>
+            </form>
+          </div>
         </article>
       </div>
       <article class="panel">
         <header class="panel__header"><h3>Carga y OEE por centro</h3></header>
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead><tr><th>Centro</th><th>Carga / capacidad (min)</th><th>Utilización</th><th>OEE</th></tr></thead>
-            <tbody>${centerRows}</tbody>
-          </table>
+        <div class="panel__body">
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>Centro</th><th>Carga / capacidad (min)</th><th>Utilización</th><th>OEE</th></tr></thead>
+              <tbody>${centerRows}</tbody>
+            </table>
+          </div>
         </div>
       </article>
       <article class="panel">
         <header class="panel__header"><h3>Paradas por motivo</h3></header>
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead><tr><th>Motivo</th><th>Minutos</th></tr></thead>
-            <tbody>${downtimeRows}</tbody>
-          </table>
+        <div class="panel__body">
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>Motivo</th><th>Minutos</th></tr></thead>
+              <tbody>${downtimeRows}</tbody>
+            </table>
+          </div>
         </div>
       </article>
       <article class="panel">
         <header class="panel__header"><h3>Acciones sobre órdenes</h3></header>
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead><tr><th>Orden</th><th>Estado</th><th>Prioridad</th><th></th></tr></thead>
-            <tbody>${orderRows || '<tr><td colspan="4" class="empty-cell">Sin órdenes accionables.</td></tr>'}</tbody>
-          </table>
+        <div class="panel__body">
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>Orden</th><th>Estado</th><th>Prioridad</th><th></th></tr></thead>
+              <tbody>${orderRows || '<tr><td colspan="4" class="empty-cell">Sin órdenes accionables.</td></tr>'}</tbody>
+            </table>
+          </div>
         </div>
       </article>`;
 

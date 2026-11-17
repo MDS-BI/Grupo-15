@@ -30,35 +30,39 @@ export function SupervisorLinePanel(store) {
       <div class="panel-grid">
         <article class="panel">
           <header class="panel__header"><h3>Asignar operador</h3></header>
-          <form class="stack-form" data-role="assign-form">
-            <label>Centro de trabajo
-              <select name="work_center_id">${store.workCenters
-                .map((wc) => `<option value="${wc.id}">${escapeHtml(wc.name)}</option>`)
-                .join('')}</select>
-            </label>
-            <label>Operador (RR.HH.)
-              <select name="ext_hr_employee_id">${store.hrEmployees
-                .filter((employee) => employee.role === 'operator')
-                .map(
-                  (employee) =>
-                    `<option value="${employee.ext_hr_employee_id}">${escapeHtml(employee.name)}</option>`,
-                )
-                .join('')}</select>
-            </label>
-            <label>Franja
-              <select name="shift_band">
-                <option value="morning">Mañana</option>
-                <option value="afternoon">Tarde</option>
-                <option value="night">Noche</option>
-              </select>
-            </label>
-            <p class="form-error" data-role="assign-error" role="alert"></p>
-            <button type="submit" class="btn btn--primary">Asignar</button>
-          </form>
+          <div class="panel__body">
+            <form class="stack-form" data-role="assign-form">
+              <label>Centro de trabajo
+                <select name="work_center_id">${store.workCenters
+                  .map((wc) => `<option value="${wc.id}">${escapeHtml(wc.name)}</option>`)
+                  .join('')}</select>
+              </label>
+              <label>Operador (RR.HH.)
+                <select name="ext_hr_employee_id">${store.hrEmployees
+                  .filter((employee) => employee.role === 'operator')
+                  .map(
+                    (employee) =>
+                      `<option value="${employee.ext_hr_employee_id}">${escapeHtml(employee.name)}</option>`,
+                  )
+                  .join('')}</select>
+              </label>
+              <label>Franja
+                <select name="shift_band">
+                  <option value="morning">Mañana</option>
+                  <option value="afternoon">Tarde</option>
+                  <option value="night">Noche</option>
+                </select>
+              </label>
+              <p class="form-error" data-role="assign-error" role="alert"></p>
+              <button type="submit" class="btn btn--primary">Asignar</button>
+            </form>
+          </div>
         </article>
         <article class="panel">
           <header class="panel__header"><h3>Cierres pendientes de validación</h3></header>
-          <div data-role="closures"></div>
+          <div class="panel__body">
+            <div data-role="closures"></div>
+          </div>
         </article>
       </div>
       <div class="modal-root" data-role="modal-root"></div>
@@ -74,28 +78,30 @@ export function SupervisorLinePanel(store) {
     lightsEl.innerHTML = `
       <div class="panel">
         <header class="panel__header"><h2>Semáforo de planta</h2></header>
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead><tr><th>Centro</th><th>Estado</th><th>Operador asignado</th><th>Operación activa</th><th>Alerta</th></tr></thead>
-            <tbody>
-              ${rows
-                .map(({ work_center, status, assignment, active_operation }) => {
-                  const employee = assignment
-                    ? store.hrEmployees.find(
-                        (row) => row.ext_hr_employee_id === assignment.ext_hr_employee_id,
-                      )
-                    : null;
-                  return `<tr data-wc="${work_center.id}">
-                    <td>${escapeHtml(work_center.name)}</td>
-                    <td><span class="badge badge--light-${status}" data-light="${work_center.id}">${LIGHT_LABEL[status] || status}</span></td>
-                    <td>${employee ? escapeHtml(employee.name) : '—'}</td>
-                    <td>${active_operation ? escapeHtml(active_operation.id) : '—'}</td>
-                    <td><button type="button" class="btn btn--tiny btn--danger" data-escalate="${work_center.id}">Escalar incidente</button></td>
-                  </tr>`;
-                })
-                .join('')}
-            </tbody>
-          </table>
+        <div class="panel__body">
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>Centro</th><th>Estado</th><th>Operador asignado</th><th>Operación activa</th><th>Alerta</th></tr></thead>
+              <tbody>
+                ${rows
+                  .map(({ work_center, status, assignment, active_operation }) => {
+                    const employee = assignment
+                      ? store.hrEmployees.find(
+                          (row) => row.ext_hr_employee_id === assignment.ext_hr_employee_id,
+                        )
+                      : null;
+                    return `<tr data-wc="${work_center.id}">
+                      <td>${escapeHtml(work_center.name)}</td>
+                      <td><span class="badge badge--light-${status}" data-light="${work_center.id}">${LIGHT_LABEL[status] || status}</span></td>
+                      <td>${employee ? escapeHtml(employee.name) : '—'}</td>
+                      <td>${active_operation ? escapeHtml(active_operation.id) : '—'}</td>
+                      <td><button type="button" class="btn btn--tiny btn--danger" data-escalate="${work_center.id}">Escalar incidente</button></td>
+                    </tr>`;
+                  })
+                  .join('')}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>`;
 

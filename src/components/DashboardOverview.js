@@ -178,14 +178,18 @@ export function DashboardOverview(store, options = {}) {
             <h2>Accesos rápidos</h2>
             <p class="panel__subtitle">Atajos sugeridos para tu rol.</p>
           </header>
-          <div class="quick-grid">${quickCards}</div>
+          <div class="panel__body">
+            <div class="quick-grid">${quickCards}</div>
+          </div>
         </section>
         <section class="panel">
           <header class="panel__header">
             <h2>Actividad reciente</h2>
             <p class="panel__subtitle">Datos simulados para probar la interfaz.</p>
           </header>
-          <ol class="activity-list">${activityRows}</ol>
+          <div class="panel__body">
+            <ol class="activity-list">${activityRows}</ol>
+          </div>
         </section>
       </div>
 
@@ -194,19 +198,21 @@ export function DashboardOverview(store, options = {}) {
           <h2>Utilización por Centro de Trabajo</h2>
           <p class="panel__subtitle">Carga pendiente vs. capacidad diaria efectiva (operations no completadas).</p>
         </header>
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Centro de Trabajo</th>
-                <th>Carga Pendiente</th>
-                <th>Capacidad/día</th>
-                <th>Operaciones</th>
-                <th>Utilización</th>
-              </tr>
-            </thead>
-            <tbody>${capacityRows}</tbody>
-          </table>
+        <div class="panel__body">
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Centro de Trabajo</th>
+                  <th>Carga Pendiente</th>
+                  <th>Capacidad/día</th>
+                  <th>Operaciones</th>
+                  <th>Utilización</th>
+                </tr>
+              </thead>
+              <tbody>${capacityRows}</tbody>
+            </table>
+          </div>
         </div>
       </section>
     </section>`;

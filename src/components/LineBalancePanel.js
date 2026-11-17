@@ -104,13 +104,15 @@ export function LineBalancePanel(store) {
           <h3>Carga por centro · ${escapeHtml(period.label)}</h3>
           <p class="panel__subtitle" data-unscheduled>Órdenes sin fechas excluidas: ${unscheduled.length} (${escapeHtml(unscheduledText)})</p>
         </header>
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead>
-              <tr><th>Centro</th><th>Carga (min)</th><th>Capacidad (min)</th><th>Utilización</th><th>Setup estándar</th><th>Run estándar /u</th></tr>
-            </thead>
-            <tbody>${rows}</tbody>
-          </table>
+        <div class="panel__body">
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr><th>Centro</th><th>Carga (min)</th><th>Capacidad (min)</th><th>Utilización</th><th>Setup estándar</th><th>Run estándar /u</th></tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
         </div>
       </article>
       <article class="panel">
@@ -127,11 +129,13 @@ export function LineBalancePanel(store) {
             </select>
           </label>
         </header>
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead><tr><th>Centro</th><th>Carga de la orden (min)</th><th>Utilización del período</th></tr></thead>
-            <tbody>${orderRows || '<tr><td colspan="3" class="empty-cell">Sin orden seleccionada.</td></tr>'}</tbody>
-          </table>
+        <div class="panel__body">
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>Centro</th><th>Carga de la orden (min)</th><th>Utilización del período</th></tr></thead>
+              <tbody>${orderRows || '<tr><td colspan="3" class="empty-cell">Sin orden seleccionada.</td></tr>'}</tbody>
+            </table>
+          </div>
         </div>
       </article>`;
 

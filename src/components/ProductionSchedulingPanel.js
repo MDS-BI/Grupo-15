@@ -28,33 +28,35 @@ export function ProductionSchedulingPanel(store) {
         </div>
       </header>
       <article class="panel">
-        <div class="filter-row">
-          <label class="inline-field">Estado
-            <select data-role="filter-status">
-              <option value="">Abiertas</option>
-              <option value="planned">Planificada</option>
-              <option value="released">Liberada</option>
-              <option value="in_progress">En Proceso</option>
-              <option value="completed">Completada</option>
-              <option value="cancelled">Cancelada</option>
-            </select>
-          </label>
-          <label class="inline-field">Desde
-            <input type="date" data-role="filter-from" />
-          </label>
-          <label class="inline-field">Hasta
-            <input type="date" data-role="filter-to" />
-          </label>
+        <div class="panel__body">
+          <div class="filter-row">
+            <label class="inline-field">Estado
+              <select data-role="filter-status">
+                <option value="">Abiertas</option>
+                <option value="planned">Planificada</option>
+                <option value="released">Liberada</option>
+                <option value="in_progress">En Proceso</option>
+                <option value="completed">Completada</option>
+                <option value="cancelled">Cancelada</option>
+              </select>
+            </label>
+            <label class="inline-field">Desde
+              <input type="date" data-role="filter-from" />
+            </label>
+            <label class="inline-field">Hasta
+              <input type="date" data-role="filter-to" />
+            </label>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr><th>Orden</th><th>Producto</th><th>Estado</th><th>Prioridad</th><th>Inicio</th><th>Término</th><th></th></tr>
+              </thead>
+              <tbody data-role="rows"></tbody>
+            </table>
+          </div>
+          <p class="empty-note" data-role="empty" hidden>Sin órdenes para los filtros seleccionados.</p>
         </div>
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead>
-              <tr><th>Orden</th><th>Producto</th><th>Estado</th><th>Prioridad</th><th>Inicio</th><th>Término</th><th></th></tr>
-            </thead>
-            <tbody data-role="rows"></tbody>
-          </table>
-        </div>
-        <p class="empty-note" data-role="empty" hidden>Sin órdenes para los filtros seleccionados.</p>
       </article>
     </section>`);
 
