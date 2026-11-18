@@ -42,12 +42,12 @@ export function DashboardOverview(store, options = {}) {
         <div class="kpi-card__breakdown">${activeByStatus}</div>
       </article>
       <article class="kpi-card">
-        <span class="kpi-card__label">Scrap rate</span>
+        <span class="kpi-card__label">Tasa de merma</span>
         <span class="kpi-card__value">${fmtPercent(kpis.scrapRate)}</span>
         <span class="kpi-card__hint">${fmtNumber(kpis.totalScrap)} unidades de merma</span>
       </article>
       <article class="kpi-card">
-        <span class="kpi-card__label">Completion / Yield</span>
+        <span class="kpi-card__label">Cumplimiento / Rendimiento</span>
         <span class="kpi-card__value">${fmtPercent(kpis.completionRate)}</span>
         <span class="kpi-card__hint">${fmtNumber(kpis.totalProduced)} unidades producidas</span>
       </article>
@@ -119,9 +119,9 @@ export function DashboardOverview(store, options = {}) {
       return `
       <tr>
         <td>${escapeHtml(workCenter.name)}</td>
-        <td>${fmtNumber(loadMinutes)} min</td>
-        <td>${fmtNumber(workCenter.capacity_per_day_minutes * workCenter.efficiency_factor)} min</td>
-        <td>${fmtNumber(pendingOperations)}</td>
+        <td class="num">${fmtNumber(loadMinutes)} min</td>
+        <td class="num">${fmtNumber(workCenter.capacity_per_day_minutes * workCenter.efficiency_factor)} min</td>
+        <td class="num">${fmtNumber(pendingOperations)}</td>
         <td class="cell--bar">
           <div class="bar ${over ? 'bar--over' : ''}">
             <div class="bar__fill" style="width:${pct}%"></div>
@@ -142,13 +142,8 @@ export function DashboardOverview(store, options = {}) {
         <span class="demo-tag">${escapeHtml(DEMO_NOTICE.title)}</span>
       </header>
 
-      <section class="context-banner">
-        <div>
-          <p class="context-banner__kicker">Rol activo · ${escapeHtml(DEMO_NOTICE.detail)}</p>
-          <h2>${escapeHtml(roleLabel)}</h2>
-          <p>${escapeHtml(roleDescription)}</p>
-        </div>
-        <span class="role-badge">${escapeHtml(roleLabel)}</span>
+      <section class="context-banner" aria-label="Contexto del panel">
+        <p class="context-banner__line"><strong>${escapeHtml(roleLabel)}</strong> · ${escapeHtml(roleDescription)}</p>
       </section>
 
       <section class="attention-grid" aria-label="Situación actual">${attentionCards}</section>
@@ -173,9 +168,9 @@ export function DashboardOverview(store, options = {}) {
             <thead>
               <tr>
                 <th>Centro de Trabajo</th>
-                <th>Carga Pendiente</th>
-                <th>Capacidad/día</th>
-                <th>Operaciones</th>
+                <th class="num">Carga Pendiente</th>
+                <th class="num">Capacidad/día</th>
+                <th class="num">Operaciones</th>
                 <th>Utilización</th>
               </tr>
             </thead>

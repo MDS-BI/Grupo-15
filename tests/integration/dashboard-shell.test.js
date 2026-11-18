@@ -66,7 +66,9 @@ describe('Panel inicial con datos de demostración', () => {
     });
     document.body.appendChild(view);
 
-    expect(document.querySelector('.role-badge').textContent).toBe('Operador de Máquina');
+    expect(document.querySelector('.context-banner__line').textContent).toContain(
+      'Operador de Máquina',
+    );
     expect(document.querySelector('[data-attention="supervision"]')).toBeNull();
     expect(document.querySelector('[data-attention="scheduling"]')).toBeNull();
     expect(document.body.textContent).not.toContain('Operario');

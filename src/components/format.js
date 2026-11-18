@@ -38,6 +38,14 @@ export const ORDER_STATUS_LABEL = {
   cancelled: 'Cancelada',
 };
 
+/** Etiquetas en español para las prioridades de orden. */
+export const PRIORITY_LABEL = {
+  high: 'Alta',
+  normal: 'Normal',
+  urgent: 'Urgente',
+  low: 'Baja',
+};
+
 /** Etiquetas en español para los estados de operación. */
 export const OP_STATUS_LABEL = {
   pending: 'Pendiente',

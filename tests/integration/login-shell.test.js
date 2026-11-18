@@ -20,6 +20,11 @@ async function boot() {
   await import('../../src/manufacturing-main.js');
 }
 
+async function enter(username, password) {
+  submitLogin(username, password);
+  await vi.waitFor(() => expect(document.querySelector('.shell')).toBeTruthy());
+}
+
 beforeEach(() => {
   dom = new JSDOM('<!doctype html><html><body><div id="app"></div></body></html>', {
     url: 'http://localhost/',
@@ -62,6 +67,7 @@ describe('Ingreso genérico y roles de administrador', () => {
     submitLogin('jefa.planta', 'incorrecta');
 
     const error = document.querySelector('[data-role="login-error"]');
+
     expect(error.hidden).toBe(false);
     expect(error.textContent).toBe('Usuario o contraseña incorrectos');
     expect(document.querySelector('[data-role="login-form"]')).toBeTruthy();
@@ -71,11 +77,11 @@ describe('Ingreso genérico y roles de administrador', () => {
   it('entra con credenciales válidas y oculta los datos de roles al no administrador', async () => {
     await boot();
     const account = accountFor('operator');
-    submitLogin(account.username, account.password);
+    await enter(account.username, account.password);
 
     expect(document.querySelector('.shell')).toBeTruthy();
     expect(document.querySelector('[data-module="admin-roles"]')).toBeNull();
-    expect(localStorage.getItem('erp.manufacturing.role')).toBe('operator');
+    expect(localStorage.getItem('erp.manufacturing.role')).toBe('operator|operator');
 
     globalThis.location.hash = '#/admin-roles';
     dom.window.dispatchEvent(new dom.window.Event('hashchange'));
@@ -88,7 +94,7 @@ describe('Ingreso genérico y roles de administrador', () => {
   it('permite a la Jefa de Planta consultar los datos de roles', async () => {
     await boot();
     const account = accountFor('plant_manager');
-    submitLogin(account.username, account.password);
+    await enter(account.username, account.password);
 
     const adminButton = document.querySelector('[data-module="admin-roles"]');
     expect(adminButton).toBeTruthy();
@@ -101,21 +107,61 @@ describe('Ingreso genérico y roles de administrador', () => {
 
   it('entra con la cuenta usuario y obtiene permisos de administrador', async () => {
     await boot();
-    submitLogin('usuario', 'usuario');
+    await enter('usuario', 'usuario');
 
     expect(document.querySelector('[data-role="login-form"]')).toBeNull();
     expect(document.querySelector('[data-module="admin-roles"]')).toBeTruthy();
-    expect(localStorage.getItem('erp.manufacturing.role')).toBe('plant_manager');
+    expect(localStorage.getItem('erp.manufacturing.role')).toBe('plant_manager|plant_manager');
   });
 
   it('vuelve al login al cerrar sesión', async () => {
     await boot();
     const account = accountFor('planner');
-    submitLogin(account.username, account.password);
+    await enter(account.username, account.password);
 
-    document.querySelector('.topbar__logout').click();
+    document.querySelector('[data-role="user-menu-toggle"]').click();
+    document.querySelector('[data-logout]').click();
 
     expect(document.querySelector('[data-role="login-form"]')).toBeTruthy();
     expect(localStorage.getItem('erp.manufacturing.role')).toBeNull();
+  });
+
+  it('permite a la Jefa de Planta ver como otro rol y volver sin cambiar el rol real', async () => {
+    await boot();
+    await enter('jefa.planta', 'Pl4nta2026');
+
+    document.querySelector('[data-role="user-menu-toggle"]').click();
+    const select = document.querySelector('[data-role="role-select"]');
+    select.value = 'operator';
+    select.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+
+    expect(document.querySelector('[data-role="viewing-as"]').textContent).toContain(
+      'Viendo como: Operador de Máquina',
+    );
+    expect(document.querySelector('[data-role="user-menu-toggle"]')).toBeTruthy();
+    expect(localStorage.getItem('erp.manufacturing.role')).toBe('plant_manager|operator');
+    expect(document.querySelector('[data-module="scheduling"]')).toBeNull();
+
+    document.querySelector('[data-role="user-menu-toggle"]').click();
+    const restored = document.querySelector('[data-role="role-select"]');
+    restored.value = 'plant_manager';
+    restored.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+
+    expect(document.querySelector('[data-role="viewing-as"]')).toBeNull();
+    expect(document.querySelector('[data-module="scheduling"]')).toBeTruthy();
+    expect(localStorage.getItem('erp.manufacturing.role')).toBe('plant_manager|plant_manager');
+  });
+
+  it('no ofrece cambio de rol a un usuario no administrador', async () => {
+    await boot();
+    const account = accountFor('supervisor');
+    await enter(account.username, account.password);
+
+    document.querySelector('[data-role="user-menu-toggle"]').click();
+
+    expect(document.querySelector('[data-role="role-select"]')).toBeNull();
+    document.querySelector('[data-module="roles"]').click();
+    expect(document.querySelectorAll('[data-select-role]')).toHaveLength(0);
+    expect(document.body.textContent).toContain('Páginas disponibles');
   });
 });
