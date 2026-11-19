@@ -1,6 +1,6 @@
 # Modelo de Datos: Módulo de Operaciones / Manufactura (ERP)
 
-**Rama**: `002-operations-manufacturing` | **Fecha**: 2026-10-21 | **Actualizado**: 2026-11-03
+**Rama**: `002-operations-manufacturing` | **Fecha**: 2026-10-21 | **Actualizado**: 2026-11-18
 **Fuente base**: `erp_data_model.md` — Módulo 7: Operaciones / Manufactura e integraciones cruzadas.
 **Documento relacionado**: [plan.md](plan.md)
 
@@ -151,6 +151,7 @@ Rol funcional: recurso de capacidad donde se ejecutan las operaciones. Es el eje
 | company_id | uuid | FK → companies.id | No | — |
 | code | string | — | No | único por empresa |
 | name | string | — | No | no vacío |
+| station_type | enum | — | No | `corte` \| `soldadura` \| `pintura` \| `armado` \| `calidad`; restringe reasignaciones US-11 |
 | warehouse_id | uuid | FK → warehouses.id | Sí | bodega WIP por defecto |
 | capacity_per_day_minutes | numeric(10,2) | — | No | > 0; capacidad nominal diaria |
 | efficiency_factor | numeric(5,4) | — | No | `default 1.0`; rango `(0, 1]` |
@@ -604,6 +605,7 @@ erDiagram
         uuid id PK
         uuid company_id FK
         string code
+        string station_type
         numeric capacity_per_day_minutes
         numeric efficiency_factor
     }
@@ -804,12 +806,16 @@ erDiagram
 | `quality` | `quantity_completed`, `scrap_quantity` | Proporción conforme de la producción; componente del OEE. |
 | `oee` | `availability × performance × quality` | Eficiencia global del centro en el período. |
 | `load` | `Σ planned_time_minutes`, `capacity_per_day_minutes × efficiency_factor` | Carga del centro frente a su capacidad efectiva. |
-| `utilization` | `Σ planned_time_minutes`, `capacity_per_day_minutes` | Uso de la capacidad nominal; base del cuello de botella. |
-| `bottleneck` | `utilization` por centro | Centro que limita la velocidad de la línea (mayor utilización; desempate por carga). |
+| `utilization` | `Σ planned_time_minutes`, `días hábiles × capacity_per_day_minutes × efficiency_factor` | Uso de la capacidad efectiva del período; base del cuello de botella. |
+| `bottleneck` | `utilization` por centro | Centro con utilización ≥ 95% que limita la línea; desempate por utilización, carga e id. La alerta superior solo se activa si existe al menos un centro en este estado. |
 
 **Reglas**
 - `availability`, `performance` y `quality` se acotan a `[0, 1]`; `oee` nunca supera `1`.
 - `load` puede superar `1` para señalar sobrecarga; el panel debe destacarlo.
+- `capacity_minutes(work_center, period) = business_days(period) × capacity_per_day_minutes × efficiency_factor`; los días hábiles excluyen sábados y domingos.
+- Los estados de utilización son Normal (`< 0.75`) en verde, Ajustada (`0.75–0.949`) en ámbar y Cuello crítico / Sobrecarga (`≥ 0.95`) en rojo. Si ningún centro llega al 95%, la vista muestra “Línea balanceada · Sin cuellos de botella críticos”.
+- Las reasignaciones sugeridas requieren el mismo `station_type` en origen y destino. La demo tiene 5 tipos y 6 estaciones físicas (Soldadura 1 y Soldadura 2).
+- No existe `lineBalanceRequest`: la aceptación de una sugerencia es simulada, solo marca la fila en la vista y no escribe en `erp.manufacturing.v2`.
 - Los indicadores se calculan por centro de trabajo y período; nunca por operador.
 - `detectBottlenecks` devuelve una lista ordenada, no un ranking de personas.
 
@@ -883,3 +889,4 @@ erDiagram
 - `threshold_settings`: `(company_id, indicator)` único; `oee | load | fulfillment` ⇒ `threshold ∈ [0, 1]`; `downtime` ⇒ `threshold ≥ 0` y `comparison = gt`.
 - `role_permissions`: `(company_id, role, action)` único; `plant_manager` ⇒ todas las acciones permitidas; `supervisor` y `planner` ⇒ `view_plant_panel`, `change_priority`, `export_report`; `operator` ⇒ solo `view_plant_panel`.
 - Los valores de OEE, carga, utilización y cuello de botella son derivados y no se persisten en ninguna colección.
+- `work_centers.station_type` es obligatorio y limita las reasignaciones de US-11 a pares del mismo tipo; las confirmaciones de la vista no generan registros.

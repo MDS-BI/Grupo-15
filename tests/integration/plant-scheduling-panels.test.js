@@ -70,7 +70,7 @@ describe('Panel de desempeño de planta (US-08)', () => {
     expect(document.body.textContent).toContain('no evaluación de desempeño');
     expect(document.body.textContent).not.toMatch(/ranking/i);
     expect(document.querySelector('[data-kpi="load"]').textContent).toContain('%');
-    expect(document.querySelectorAll('[data-wc]')).toHaveLength(5);
+    expect(document.querySelectorAll('[data-wc]')).toHaveLength(6);
 
     change('[data-role="role"]', 'operator');
     expect(
@@ -104,7 +104,7 @@ describe('Panel de desempeño de planta (US-08)', () => {
 describe('Planificación de producción (US-10)', () => {
   it('filtra, guarda fechas y muestra errores de rango', () => {
     document.body.appendChild(ProductionSchedulingPanel(store));
-    expect(document.querySelector('[data-summary="planned"]').textContent).toBe('Planificadas: 6');
+    expect(document.querySelector('[data-summary="planned"]').textContent).toBe('Planificadas: 7');
 
     change('[data-role="filter-status"]', 'planned');
     expect(document.querySelectorAll('tr[data-order]')).toHaveLength(1);
@@ -132,7 +132,7 @@ describe('Balance de líneas (US-11)', () => {
     document.body.appendChild(LineBalancePanel(store));
     expect(document.body.textContent).toContain('no evaluación de desempeño');
     expect(document.body.textContent).not.toMatch(/ranking/i);
-    expect(document.querySelectorAll('[data-wc]')).toHaveLength(5);
+    expect(document.querySelectorAll('[data-wc]')).toHaveLength(6);
     expect(document.querySelectorAll('[data-wc].is-bottleneck')).toHaveLength(1);
     expect(document.querySelector('[data-bottleneck]').textContent).toContain('Cuello de botella:');
     expect(document.querySelector('[data-unscheduled]').textContent).toContain(
@@ -140,7 +140,115 @@ describe('Balance de líneas (US-11)', () => {
     );
 
     change('[data-role="order-select"]', 'po_3004');
-    expect(document.querySelectorAll('[data-order-wc]')).toHaveLength(5);
+    expect(document.querySelectorAll('[data-order-wc]')).toHaveLength(6);
     expect(document.querySelector('[data-order-wc="wc_corte"]')).toBeTruthy();
+  });
+
+  it('muestra KPIs, semáforo, holgura y barras de utilización', () => {
+    document.body.appendChild(LineBalancePanel(store));
+    expect(document.querySelector('[data-kpi="avg-utilization"]').textContent).toContain('%');
+    expect(document.querySelector('[data-kpi="top-center"]').textContent).toContain(
+      'Estación de Soldadura',
+    );
+    expect(document.querySelector('[data-kpi="top-center"]').textContent).toContain('Cuello');
+    expect(document.querySelector('[data-kpi="balance-efficiency"]').textContent).toContain('%');
+    expect(document.querySelector('[data-kpi="free-capacity"]').textContent).toContain(' h');
+
+    const soldaRow = document.querySelector('[data-wc="wc_solda"]');
+    expect(soldaRow.classList.contains('is-bottleneck')).toBe(true);
+    expect(soldaRow.textContent).toContain('8.690 min');
+    expect(soldaRow.textContent).toContain('144,8 h');
+    expect(document.querySelector('[data-wc="wc_corte"]').dataset.status).toBe('normal');
+    expect(document.querySelector('[data-wc="wc_pintura"]').dataset.status).toBe('tight');
+    expect(document.querySelectorAll('.bar__fill').length).toBe(6);
+    expect(document.querySelectorAll('.balance-chart__fill').length).toBe(6);
+    expect(document.querySelectorAll('.balance-chart__ref').length).toBe(6);
+  });
+
+  it('abre un popover compacto con las órdenes del centro al hacer clic en una fila', () => {
+    document.body.appendChild(LineBalancePanel(store));
+    expect(document.querySelector('[data-role="center-orders"]')).toBeNull();
+
+    click('[data-wc="wc_solda"]');
+    const popover = document.querySelector('[data-role="center-popover"]');
+    expect(popover).toBeTruthy();
+    expect(popover.style.left).toMatch(/px$/);
+    expect(popover.style.top).toMatch(/px$/);
+    expect(popover.textContent).toContain('Órdenes de Estación de Soldadura 1');
+    expect(popover.textContent).toContain('Carga en el centro');
+    expect(popover.textContent).toContain('OP-3003');
+    expect(popover.textContent).toContain('OP-3007');
+    expect(popover.textContent).not.toContain('OP-3001');
+    expect(popover.querySelectorAll('[data-center-popover-order]')).toHaveLength(2);
+    expect(popover.querySelector('[data-center-popover-order="po_3007"]').textContent).toContain(
+      '%',
+    );
+    expect(document.querySelector('[data-wc="wc_solda"]').classList.contains('is-selected')).toBe(
+      true,
+    );
+    expect(
+      document.querySelector('[data-order-wc="wc_solda"]').classList.contains('is-selected'),
+    ).toBe(true);
+
+    click('[data-role="close-popover"]');
+    expect(document.querySelector('[data-role="center-popover"]')).toBeNull();
+    expect(document.querySelector('[data-wc="wc_solda"]').classList.contains('is-selected')).toBe(
+      false,
+    );
+
+    click('[data-wc="wc_solda"]');
+    document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(document.querySelector('[data-role="center-popover"]')).toBeNull();
+
+    const row = document.querySelector('[data-wc="wc_solda"]');
+    row.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(document.querySelector('[data-role="center-popover"]').textContent).toContain(
+      'Estación de Soldadura 1',
+    );
+    document.body.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    expect(document.querySelector('[data-role="center-popover"]')).toBeNull();
+  });
+
+  it('ordena el detalle por orden según la secuencia de la ruta', () => {
+    document.body.appendChild(LineBalancePanel(store));
+    change('[data-role="order-select"]', 'po_3003');
+    const sequences = [...document.querySelectorAll('[data-order-wc]')].map(
+      (row) => row.dataset.sequence,
+    );
+    expect(sequences.slice(0, 3)).toEqual(['10', '20', '30']);
+    expect(document.querySelector('[data-order-wc="wc_solda"]').textContent).toContain('Sec. 20');
+  });
+
+  it('indica línea balanceada si ningún centro alcanza el umbral crítico', () => {
+    document.body.appendChild(LineBalancePanel(store));
+    change('[data-role="period"]', 'november');
+    expect(document.querySelector('[data-bottleneck]').textContent).toBe(
+      'Línea balanceada · Sin cuellos de botella críticos',
+    );
+    expect(document.querySelectorAll('[data-wc].is-bottleneck')).toHaveLength(0);
+    expect(document.querySelector('[data-role="balance-suggestions"]').textContent).toContain(
+      'Sin cuellos de botella críticos',
+    );
+  });
+
+  it('muestra la reasignación simulada sin registrar solicitudes', () => {
+    document.body.appendChild(LineBalancePanel(store));
+    expect(document.querySelector('[data-request]')).toBeTruthy();
+    expect(document.querySelector('[data-suggestion]').textContent).toContain(
+      'Reasignar 6.865 min de OP-3007 desde Estación de Soldadura 1 a Estación de Soldadura 2 · Sec. 20.',
+    );
+    const routingSnapshot = JSON.stringify(store.routingOperations);
+    const ordersSnapshot = JSON.stringify(store.productionOrders);
+
+    click('[data-request]');
+    expect(document.querySelector('[data-role="request-modal"]')).toBeTruthy();
+    fill('[data-role="request-form"] textarea', 'Mover carga al centro con holgura');
+    submit('[data-role="request-form"]');
+
+    expect(document.querySelector('[data-role="request-modal"]')).toBeNull();
+    expect(document.querySelector('[data-suggestion]').textContent).toContain('Solicitud simulada');
+    expect(store.lineBalanceRequestsFor).toBeUndefined();
+    expect(JSON.stringify(store.routingOperations)).toBe(routingSnapshot);
+    expect(JSON.stringify(store.productionOrders)).toBe(ordersSnapshot);
   });
 });

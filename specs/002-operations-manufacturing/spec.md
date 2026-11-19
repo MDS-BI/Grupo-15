@@ -1,6 +1,6 @@
 # Especificación: Módulo de Operaciones / Manufactura (ERP)
 
-**Rama**: `002-operations-manufacturing` | **Fecha**: 2026-10-31 | **Actualizado**: 2026-11-17
+**Rama**: `002-operations-manufacturing` | **Fecha**: 2026-10-31 | **Actualizado**: 2026-11-18
 **Datos maestros**: [data-model.md](data-model.md) | **Plan**: [plan.md](plan.md) | **Tareas**: [tasks.md](tasks.md)
 
 ---
@@ -194,13 +194,17 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 <details open>
 <summary><strong>FR-12: Balance de líneas (US-11)</strong></summary>
 
-**US-11**: Como Ingeniero de Producción, quiero consultar la utilización y la carga proyectada de cada centro de trabajo frente a su capacidad nominal, para identificar cuellos de botella, balancear la línea de producción, maximizar la eficiencia global de la línea y evaluar cómo optimizar las rutas de trabajo.
+**US-11**: Como Ingeniero de Producción, quiero consultar la utilización y la carga proyectada de cada centro de trabajo frente a su capacidad efectiva del período, para identificar cuellos críticos, balancear la línea de producción, maximizar la eficiencia global de la línea y evaluar cómo optimizar las rutas de trabajo, sin aplicar cambios reales desde esta vista.
 
 - **Analizar los tiempos estándar**: Medir y determinar los tiempos teóricos de cada preparación para cada paso de la fabricación.
-- **Identificar cuellos de botella**: Evaluar qué estaciones o máquinas tardan más tiempo en procesar un lote, detectando el punto crítico que limita la velocidad de la planta.
-- **Proponer ajustes (solo lectura)**: Señalar qué reasignaciones entre centros o cambios de secuencia reducirían el cuello de botella, sin mutar rutas ni operaciones en esta historia.
-- **Calcular y monitorear la capacidad nominal**: Comparar la demanda planificada frente a la capacidad nominal diaria (`capacity_per_day_minutes`); el `efficiency_factor` se reserva para la carga efectiva del panel de planta (US-08).
+- **Clasificar la utilización**: Normal (< 75%) en verde o saludable, con capacidad ociosa; Estación restrictiva / Ajustada (75 %–94 %) en ámbar, con mayor carga relativa sin sobrecarga; Cuello de botella / Sobrecarga (≥ 95 %) en rojo.
+- **Activar la alerta superior solo si existe al menos un centro con utilización ≥ 95 %**. Si ninguno alcanza ese umbral, la vista muestra exactamente “Línea balanceada · Sin cuellos de botella críticos”.
+- **Identificar cuellos de botella**: entre centros críticos gana la mayor utilización, luego la mayor carga absoluta y finalmente el identificador; nunca se muestra un ranking de personas.
+- **Proponer ajustes simulados**: solo se ofrecen cuando existe un cuello crítico. Las reasignaciones se permiten únicamente entre estaciones con el mismo `station_type`; la demo tiene 5 tipos y 6 estaciones físicas (Soldadura 1 y Soldadura 2). Ejemplo: “Reasignar 6.865 min de OP-3007 desde Estación de Soldadura 1 a Estación de Soldadura 2 · Sec. 20.”
+- **Aceptar de forma simulada**: la propuesta requiere confirmación explícita y marca la fila como `Solicitud simulada`; no se registra en el store, no se persiste y no muta rutas, operaciones ni asignaciones.
+- **Calcular y monitorear la capacidad del período**: Comparar la demanda planificada frente a la capacidad calculada como días hábiles del período × `capacity_per_day_minutes` × `efficiency_factor`. El factor de eficiencia también aplica aquí; la vista debe etiquetar la capacidad como efectiva del período.
 - **Recomendar mejoras de eficiencia**: Identificar oportunidades para reducir tiempos muertos y maximizar la tasa de salida, sin modificar la asignación de recursos ni el personal desde esta vista.
+- **Consultar órdenes por estación en un popover**: al activar una fila de “Carga por centro”, se abre una ventana compacta con las órdenes que consumen esa estación, la carga en el centro y el porcentaje de participación por orden. La sección independiente “Órdenes por centro” no forma parte de la vista.
 
 </details>
 
@@ -259,15 +263,15 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 | AC-35 | FR-13 | El hash mantiene el módulo activo y responde a enlaces profundos y navegación atrás | Verificado |
 | AC-36 | FR-13 | El panel inicial muestra actividad simulada y la etiqueta Operador de forma consistente, sin sección de accesos rápidos | Verificado |
 | AC-37 | US-11 | El panel muestra tiempos estándar por operación y totales por ruta (`setup + run × cantidad`) sin mutar rutas ni operaciones | Verificado |
-| AC-38 | US-11 | La carga proyectada y la utilización por centro se calculan para el período seleccionado contra capacidad nominal diaria, sin aplicar `efficiency_factor` | Verificado |
-| AC-39 | US-11 | El centro con mayor utilización proyectada se resalta como cuello de botella; en empate se usa mayor carga absoluta | Verificado |
-| AC-40 | US-11 | Las sugerencias de reasignación o cambio de secuencia son solo lectura y no modifican rutas, operaciones ni asignaciones | Verificado |
+| AC-39 | US-11 | La carga y la utilización se calculan para el período contra días hábiles × `capacity_per_day_minutes` × `efficiency_factor`; el estado es Normal (< 75 %) en verde, Ajustada (75 %–94 %) en ámbar o Cuello crítico (≥ 95 %) en rojo. La alerta superior se activa solo si algún centro alcanza el 95 %; si no, se muestra “Línea balanceada · Sin cuellos de botella críticos”. El cuello se desempata por mayor utilización, mayor carga y luego identificador | Verificado |
+| AC-40 | US-11 | Solo con cuello crítico se muestran propuestas de reasignación entre estaciones del mismo `station_type` o de revisión de secuencia; la aceptación explícita marca la fila como `Solicitud simulada`, sin registro en store, persistencia ni mutación de rutas, operaciones o asignaciones | Verificado |
 | AC-41 | FR-13 | El ingreso es genérico, valida credenciales simuladas y los datos de roles solo son visibles para la Jefa de Planta en `#/admin/roles` | Verificado |
 | AC-42 | FR-03 | El tablero permite arrastrar órdenes solo a estados siguientes válidos, sin mutar ante saltos inválidos | Verificado |
 | AC-43 | FR-07 | El acumulado de Estación se rechaza cuando supera la cantidad planificada, sin mutar turno ni operación | Verificado |
 | AC-44 | FR-01 a FR-13 | Los campos numéricos aceptan punto o coma decimal y hasta dos decimales, sin flechas de precisión y con errores inline para valores inválidos | Verificado |
+| AC-45 | US-11 | Al activar una fila de “Carga por centro” se abre un popover compacto centrado sobre esa sección, sin salirse del viewport, con las órdenes de la estación, la carga en el centro y la participación por orden; se cierra con botón, Escape, clic fuera o nueva activación, y no existe la sección “Órdenes por centro” | Verificado |
 
-> **Nota de numeración**: los IDs AC son anclas históricas estables; no se renombran al añadir historias. La columna "Historia" disambigúa los rangos: AC-04..AC-07 y AC-20 pertenecen a US-08, AC-08..AC-14 a la base US-01..US-05/FR-06, y AC-37..AC-40 a US-11. No existen IDs duplicados ni un mismo criterio asignado a dos historias.
+> **Nota de numeración**: los IDs AC son anclas históricas estables; no se renombran al añadir historias. La columna "Historia" disambigúa los rangos: AC-04..AC-07 y AC-20 pertenecen a US-08, AC-08..AC-14 a la base US-01..US-05/FR-06, y AC-37, AC-39, AC-40 y AC-45 a US-11. AC-38 fue retirado y su cobertura de carga/utilización se integró en AC-39. No existen IDs duplicados ni un mismo criterio asignado a dos historias.
 
 ## 6. Entidades Clave
 
@@ -283,7 +287,7 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 ## 7. Métricas de Éxito
 
 - **SC-01**: La Jefa de Planta obtiene la visión consolidada de carga, OEE, paradas y cumplimiento del período en menos de 1 minuto y sin salir del panel.
-- **SC-02**: El 100% de los centros con carga superior a su capacidad efectiva se resaltan y las alarmas por umbral se muestran al abrir el panel.
+- **SC-02**: El 100% de los centros con carga superior a su capacidad efectiva se resaltan y las alarmas por umbral se muestran al abrir el panel. Este resaltado pertenece a US-08; la alerta superior de US-11 usa regla propia de ≥ 95 % descrita en AC-39.
 - **SC-03**: El reporte consolidado se exporta en PDF y Excel con los datos del período seleccionado en menos de 10 segundos.
 - **SC-04**: Un Encargado de Mantenimiento identifica y toma el ticket urgente más antiguo en menos de 30 segundos desde que fue escalado.
 - **SC-05**: El 100% de las intervenciones cerradas registran su tiempo real de parada y dejan la máquina disponible (fuera de *En fallo*).
@@ -300,7 +304,7 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 - Los catálogos de RR.HH., calidad y ventas son datos simulados de solo lectura.
 - Los tiempos de turno y de parada se derivan de marcas de tiempo persistidas, no de temporizadores en memoria.
 - El OEE, la carga, la utilización, el cuello de botella y el indicador de desgaste son valores derivados y no se persisten.
-- `efficiency_factor` se aplica únicamente a la carga efectiva del panel de planta (US-08); el balance de líneas (US-11) usa capacidad nominal `capacity_per_day_minutes`.
+- `efficiency_factor` se aplica a la carga efectiva del panel de planta (US-08) y a la capacidad del período en el balance de líneas (US-11): días hábiles × `capacity_per_day_minutes` × `efficiency_factor`.
 
 ## 9. Artefactos Spec-Kit
 
@@ -314,7 +318,8 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 | `contracts/operator-shift.md` | `specs/002-operations-manufacturing/contracts/operator-shift.md` | Contrato de store/UI para operador (US-06) y supervisor de línea (US-07) |
 | `contracts/plant-performance.md` | `specs/002-operations-manufacturing/contracts/plant-performance.md` | Contrato de panel de planta, umbrales, permisos y exportación (US-08) |
 | `contracts/order-scheduling.md` | `specs/002-operations-manufacturing/contracts/order-scheduling.md` | Contrato de planificación y fechas planificadas (US-10) |
-| `contracts/line-balance.md` | `specs/002-operations-manufacturing/contracts/line-balance.md` | Contrato de balance de líneas y cuellos de botella (US-11) |
+| `contracts/maintenance.md` | `specs/002-operations-manufacturing/contracts/maintenance.md` | Contrato de tickets, intervenciones y disponibilidad (US-09) |
+| `contracts/line-balance.md` | `specs/002-operations-manufacturing/contracts/line-balance.md` | Contrato de balance de líneas, umbrales y sugerencias simuladas (US-11) |
 | `quickstart.md` | `specs/002-operations-manufacturing/quickstart.md` | Guía de ejecución y validación de las historias de usuario |
 | `tasks.md` | `specs/002-operations-manufacturing/tasks.md` | Tareas atómicas por fase e historia de usuario |
 

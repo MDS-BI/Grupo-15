@@ -1,6 +1,6 @@
 # Inicio Rápido: Módulo de Operaciones / Manufactura (ERP)
 
-**Rama**: `002-operations-manufacturing` | **Fecha**: 2026-11-03
+**Rama**: `002-operations-manufacturing` | **Fecha**: 2026-11-03 | **Actualizado**: 2026-11-18
 **Referencias**: [spec.md](spec.md), [plan.md](plan.md), [data-model.md](data-model.md), [contracts/operator-shift.md](contracts/operator-shift.md), [contracts/maintenance.md](contracts/maintenance.md), [contracts/plant-performance.md](contracts/plant-performance.md), [contracts/order-scheduling.md](contracts/order-scheduling.md), [contracts/line-balance.md](contracts/line-balance.md)
 
 ---
@@ -204,42 +204,44 @@ El módulo es frontend-only: no requiere backend ni variables de entorno. Los da
 
 | AC | Verificación |
 |---|---|
-| AC-28 | Paso 1: listado filtrable de órdenes. |
-| AC-29 | Paso 2: asignación y edición de fechas planificadas. |
-| AC-30 | Pasos 3–4: validación de rango y formato. |
-| AC-31 | Paso 3: rechazo de rango invertido sin mutar estado. |
-| AC-32 | Paso 8: persistencia de fechas. |
-| AC-33 | Paso 9: resumen de planificación y atrasos. |
+| AC-28 | Paso 1: consulta de órdenes y datos principales. |
+| AC-29 | Paso 2: asignación de fechas planificadas. |
+| AC-30 | Paso 2: modificación de fechas existentes. |
+| AC-31 | Paso 3: rechazo de rango invertido sin mutar estado; paso 4 rechaza fecha inexistente. |
+| AC-32 | Pasos 1 y 9: visualización por fechas/estados y resumen del período. |
+| AC-33 | Paso 8: persistencia de fechas tras recargar. |
 
 ---
 
 ## 15. Balance de líneas (US-11)
 
-1. Abra **Balance de líneas** y seleccione un período con órdenes planificadas.
-2. Confirme la tabla por centro: tiempo estándar, carga proyectada, capacidad nominal y utilización.
-3. Verifique que el **cuello de botella** es el centro con mayor utilización y que se anuncia con texto, no solo con color.
-4. Si hay órdenes sin fechas planificadas, confirme el aviso y el enlace a **Planificación**; no deben sumarse a la carga.
-5. Abra el detalle de una orden y compare el desglose por operación con la fila del centro.
-6. Recargue la página: el balance se recalcula desde el estado vigente y no se persiste ningún resultado.
-7. **Solución de problemas US-11**: si la tabla aparece vacía, revise que existan rutas con tiempos estándar y órdenes con fechas; si un centro muestra `—`, su capacidad nominal es `0` y debe corregirse en datos maestros.
+1. Abra **Balance de líneas** y seleccione un período con órdenes planificadas; en la demo use **Octubre 2026** (22 días hábiles).
+2. Confirme la tabla por centro: tiempo estándar, carga proyectada, días, eficiencia, capacidad efectiva del período y utilización.
+3. Verifique el semáforo: **Normal · verde** (< 75 %, capacidad ociosa), **Ajustada · ámbar** (75 %–94 %, mayor carga sin sobrecarga) y **Cuello crítico · rojo** (≥ 95 %). La alerta superior se activa solo si algún centro alcanza el 95 %; si ninguno lo hace, debe aparecer “Línea balanceada · Sin cuellos de botella críticos”.
+4. Revise el panel **Sugerencias de balanceo**: solo ofrece propuestas con cuello crítico. Las reasignaciones son únicamente entre estaciones del mismo tipo; en la demo se espera “Reasignar 6.865 min de OP-3007 desde Estación de Soldadura 1 a Estación de Soldadura 2 · Sec. 20.”
+5. Pulse **Solicitar**, añada una nota y confirme **Aceptar solicitud**: la fila pasa a `Solicitud simulada`. La nota no se envía, no se registra solicitud alguna y no cambian rutas, operaciones ni asignaciones.
+6. Si hay órdenes sin fechas planificadas, confirme el aviso y el enlace a **Planificación**; no deben sumarse a la carga.
+7. Haga clic (o pulse Enter/Espacio) en una fila de **Carga por centro**: se abre un popover compacto centrado sobre esa sección, sin salirse del viewport, con las órdenes de la estación, la carga en el centro y la participación por orden; se cierra con el botón, Escape, clic fuera o nueva activación. La sección “Órdenes por centro” ya no existe; el detalle de una orden sigue disponible para comparar su desglose por operación con la fila del centro.
+8. Recargue la página: el balance se recalcula desde el estado vigente y no aparece ningún registro de solicitudes porque la confirmación fue solo visual.
+9. **Solución de problemas US-11**: si la tabla aparece vacía, revise que existan rutas con tiempos estándar y órdenes con fechas; si un centro muestra `—`, su capacidad efectiva es `0` y debe corregirse en datos maestros.
 
 | AC | Verificación |
 |---|---|
 | AC-37 | Paso 2: tiempos estándar por operación y totales por ruta. |
-| AC-38 | Pasos 1–2: carga y utilización contra capacidad nominal, sin `efficiency_factor`. |
-| AC-39 | Paso 3: cuello de botella resaltado con texto y desempate por carga. |
-| AC-40 | Pasos 4–6: vista solo lectura; ninguna acción muta rutas ni asignaciones. |
+| AC-39 | Pasos 1–3: carga/utilización con días hábiles × `capacity_per_day_minutes` × `efficiency_factor`; semáforo verde/ámbar/rojo; alerta superior solo con algún centro ≥ 95 % y mensaje de línea balanceada en caso contrario. |
+| AC-40 | Pasos 4–5 y 8: propuestas solo con cuello crítico, reasignaciones del mismo `station_type`, confirmación simulada sin registro ni persistencia y sin mutación de datos maestros. |
+| AC-45 | Paso 7: popover compacto centrado sobre “Carga por centro” y limitado al viewport, con órdenes, carga en el centro y participación; cierre con botón, Escape, clic fuera o nueva activación; sin sección “Órdenes por centro”. |
 
 ---
 
 ## 16. Guion de demo (5 minutos)
 
-1. **Pedido ? orden** (30 s): cree una orden desde stock o MTO, libérela y abra su detalle.
+1. **Pedido → orden** (30 s): cree una orden desde stock o MTO, libérela y abra su detalle.
 2. **Fechas planificadas** (30 s): en **Planificación**, asigne inicio/término; pruebe un rango invertido y corrija.
 3. **Asignación y semáforo** (40 s): en **Supervisión**, asigne un operario y revise el semáforo por centro.
 4. **Turno del operador** (60 s): en **Estación**, inicie, ajuste contadores, registre un atraso y finalice con confirmación.
 5. **Cierre y escalamiento** (40 s): valide el cierre en **Supervisión**; escale un incidente y confirme el ticket urgente y el estado *En fallo*.
 6. **Mantenimiento** (50 s): tome el ticket más antiguo, resuélvalo con marcas de parada y confirme que la máquina sale de *En fallo*.
 7. **Panel de planta** (40 s): revise carga/OEE/paradas, cambie el rol simulado, ajuste un umbral y cancele una orden con motivo.
-8. **Balance de líneas** (30 s): identifique el cuello de botella y abra el detalle por orden.
-9. **Recarga** (20 s): recargue la página y confirme que turno, atrasos, asignaciones, umbrales y fechas persisten en `erp.manufacturing.v2`.
+8. **Balance de líneas** (45 s): identifique el cuello crítico (≥ 95 %), confirme la reasignación simulada Soldadura 1 → Soldadura 2 y abra el detalle por orden.
+9. **Recarga** (20 s): recargue la página, confirme que turno, atrasos, asignaciones, umbrales y fechas persisten en `erp.manufacturing.v2`, y que el balance se recalcula sin dejar solicitudes registradas.

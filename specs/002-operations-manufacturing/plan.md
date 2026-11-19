@@ -1,6 +1,6 @@
 # Implementation Plan: Operations & Manufacturing Module (ERP)
 
-**Branch**: `002-operations-manufacturing` | **Date**: 2026-10-21 | **Updated**: 2026-11-03
+**Branch**: `002-operations-manufacturing` | **Date**: 2026-10-21 | **Updated**: 2026-11-18
 **Spec**: `specs/002-operations-manufacturing/spec.md`
 **Input**: Feature specification and data contracts derived from `erp_data_model.md` (Module 7: Operations / Manufacturing) and `specs/002-operations-manufacturing/data-model.md`
 **Methodology**: Spec-Driven Development (Spec-Kit)
@@ -180,7 +180,7 @@ The module references, but does **not** own, the following boundary entities. Al
 **Goal**: Freeze `spec.md` and the type contracts before any UI is written.
 
 **Activities**
-- Author `spec.md` capturing the functional requirements (FR-UX-*, FR-BOM-*, FR-OPS-*) and the edge cases in §2, with explicit acceptance criteria.
+- Author `spec.md` capturing the functional requirements FR-01…FR-13 (US-01…US-11) and the edge cases in §2, with explicit acceptance criteria.
 - **Schema reconciliation**: verify every table/column against `erp_data_model.md` (Module 7) and `data-model.md`; log any divergence as an architectural decision (see §5.2) before freezing contracts.
 - Establish JSDoc typedefs/enums mirroring the schema exactly (as-built: `src/domain/types.js`; no TypeScript toolchain):
   - Enumerations: `ProductType`, `WarehouseType`, `BomStatus`, `RoutingStatus`, `ProductionOrderStatus`, `OperationStatus`, `Priority`, `DelayReasonOrigin`, `ShiftStatus`.
@@ -218,7 +218,7 @@ The module references, but does **not** own, the following boundary entities. Al
   - Orders + dispatch actions, status-transition guards, operation snapshot generation.
   - BOM/routing CRUD, tree assembly, explosion calculations.
   - Operation progress, consumption and output records.
-  - Shift tracking: `startShift`, `finishOperation`, `startDelay`, `closeDelay`, `correctOpenDelay`, `incrementCounter`, `setCounter`.
+  - Shift tracking: `startShift`, `finishOperation`, `startDelay`, `closeDelay`, `correctOpenDelay`, `adjustShiftCounter`, `setShiftCounter`.
   - Read-only boundary data (`products`, `warehouses`, `units_of_measure`, `sales_orders`, `quality_inspections`) loaded from fixtures.
   - Persistence: versioned `localStorage` snapshot written through on every mutation and rehydrated on boot; `erp.manufacturing.v1` for US-06/US-07 and `erp.manufacturing.v2` from US-08 onward (§10.6) with automatic migration. Fall back to fixtures when the snapshot is absent or invalid.
 - **Ports**: `InventoryPort` (stock debit/credit simulation) and `QualityPort` (read-only inspection lookup), both backed by mocks.
@@ -279,7 +279,7 @@ The module references, but does **not** own, the following boundary entities. Al
 
 **Deliverables**: `tasks.md` (Phase 3 of Spec-Kit), test suites, integration checklist, performance report, defense script.
 
-**Exit Criteria**: full suite green, integration checklist signed, performance budget met, demo rehearsed.
+**Exit Criteria**: module suites green (per AC-14), integration checklist signed, performance budget met, demo rehearsed; the 12 pre-existing `001-erp-base-module` suites are isolated from the default Vitest run and tracked as debt under T084.
 
 ---
 
@@ -409,7 +409,7 @@ Testable acceptance criteria and accountable owner.
 ```text
 specs/002-operations-manufacturing/
 ├── plan.md                        # This file
-├── spec.md                        # Functional specification + AC-01…AC-40
+├── spec.md                        # Functional specification + AC-01…AC-44 (AC-38 retired)
 ├── research.md                    # Phase 1 + incremental decisions
 ├── data-model.md                  # Data contracts (source of truth projection)
 ├── quickstart.md                  # Demo and validation flows
@@ -718,7 +718,7 @@ No hay violaciones que requieran justificación adicional.
 
 # 10. Plan Técnico Incremental — US-08 (Panel de Planta), US-10 (Planificación) y US-11 (Balance de Líneas)
 
-**Alcance**: FR-09 / US-08 (AC-04…AC-07 y AC-20), FR-11 / US-10 (AC-28…AC-33) y FR-12 / US-11 (AC-37…AC-40; se apoya en FR-02, FR-03, FR-09 y FR-11). No reabre ni rediseña US-01…US-07 ni US-09.
+**Alcance**: FR-09 / US-08 (AC-04…AC-07 y AC-20), FR-11 / US-10 (AC-28…AC-33) y FR-12 / US-11 (AC-37, AC-39, AC-40 y AC-45; AC-38 retirado y absorbido por AC-39; se apoya en FR-02, FR-03, FR-09 y FR-11). No reabre ni rediseña US-01…US-07 ni US-09.
 
 ## 10.1 Alcance y no objetivos
 
@@ -728,7 +728,8 @@ No hay violaciones que requieran justificación adicional.
 - Reprogramación de prioridad y cancelación de órdenes desde el panel, conservando los registros de ejecución.
 - Exportación local del reporte consolidado a PDF y Excel con datos mock.
 - Asignación y edición de fechas planificadas de inicio y término por orden, con validación `planned_end_date ≥ planned_start_date`.
-- Panel de balance de líneas: tiempos estándar, carga proyectada, utilización vs. capacidad nominal y detección de cuellos de botella.
+- Panel de balance de líneas: tiempos estándar, carga proyectada, utilización vs. capacidad efectiva del período, estados por umbral y cuellos críticos (`≥ 95%`).
+- Sugerencias simuladas de reasignación/secuencia con confirmación explícita: la reasignación solo cruza estaciones del mismo `station_type`; la confirmación marca la fila como `Solicitud simulada` sin registro, persistencia ni mutación.
 
 **No objetivos**
 - No hay backend, autenticación real ni motor de permisos del servidor; los roles y permisos son simulados con un selector.
@@ -753,7 +754,7 @@ No hay violaciones que requieran justificación adicional.
 | **Plataforma** | Navegador de escritorio moderno; usable hasta ancho de tablet. |
 | **Dependencias** | US-06/US-07 (paradas y turnos), US-03 (órdenes), US-02 (centros, rutas y tiempos estándar). |
 
-Incógnitas pendientes: ninguna. Decisiones registradas en [research.md](research.md) §5–§7 (D-17…D-27).
+Incógnitas pendientes: ninguna. Decisiones registradas en [research.md](research.md) §5–§7 (D-17…D-28).
 
 ## 10.3 Flujo de datos
 
@@ -768,10 +769,10 @@ US-08 ◄─────────────────┴──► compute
 
 US-10 ◄── production_orders.planned_start_date / planned_end_date (persistido en v2)
 
-US-11 ◄── work_centers.capacity_per_day_minutes
+US-11 ◄── work_centers.station_type / capacity_per_day_minutes / efficiency_factor
        ◄── routing_operations.setup_time_minutes / run_time_per_unit_minutes
-       ◄── production_orders.quantity_planned / planned_end_date
-       └──► utilización y cuello de botella (derivados, no persistidos)
+       ◄── production_orders.quantity_planned / planned_start_date / planned_end_date
+       └──► utilización, cuello de botella y sugerencias simuladas (derivados, no persistidos)
 ```
 
 ## 10.4 Modelo de datos y reglas
@@ -789,11 +790,12 @@ Entidades nuevas o ampliadas en [data-model.md](data-model.md):
 - `performance = quantity_completed / (run_time_per_unit_minutes × quantity_planned)` acotado a [0, 1].
 - `quality = quantity_completed / (quantity_completed + scrap_quantity)`.
 - `oee = availability × performance × quality`.
-- `load = Σ planned_time_minutes / (capacity_per_day_minutes × efficiency_factor)`.
-- `utilization = Σ planned_time_minutes / capacity_per_day_minutes`.
-- `bottleneck = work_center con mayor utilización proyectada` (empate: mayor carga absoluta).
+- `load = Σ planned_time_minutes / (capacity_per_day_minutes × efficiency_factor)` en el panel de planta.
+- `utilization = Σ planned_time_minutes / (días_hábiles_del_período × capacity_per_day_minutes × efficiency_factor)` en el balance de líneas.
+- `bottleneck = work_center con utilization ≥ 0.95`; desempate por utilización, carga absoluta e id.
+- `estado = normal (< 0.75) | ajustada (0.75–0.949) | cuello_crítico (≥ 0.95)`.
 
-> US-11 usa la **capacidad nominal** (`capacity_per_day_minutes` × días del período); el `efficiency_factor` solo se aplica a `load` en US-08. El panel de balance es de solo lectura y no muta rutas, operaciones ni órdenes.
+> US-11 aplica el mismo `efficiency_factor` que US-08, multiplicado por los días hábiles del período. El panel propone reasignaciones solo entre estaciones del mismo `station_type` y revisiones de secuencia. La alerta superior se activa únicamente con algún centro ≥ 95 %; si no, muestra “Línea balanceada · Sin cuellos de botella críticos”. Al confirmar, la fila se marca como `Solicitud simulada`: no se registra, persiste ni muta rutas, operaciones ni órdenes.
 
 > `downtime_minutes` tiene una sola definición para US-08/US-09: `Σ operation_delays.duration_minutes + Σ maintenance_tickets.downtime_minutes` del período, sin duplicar una misma parada. `actual_time_minutes` es el tiempo ejecutado observado y no se usa como multiplicador adicional del OEE.
 
@@ -816,13 +818,14 @@ Contratos completos en [contracts/plant-performance.md](contracts/plant-performa
 **Funciones puras** (`src/domain/line-balance.js`, nuevo)
 - `computeStandardTimes(routingOperations)`.
 - `computeProjectedLoad(orders, routingOperations, period)`.
-- `computeUtilization(load, workCenter)`.
+- `computeUtilization(loadByWorkCenter, workCenters, period)`.
 - `detectBottlenecks(utilizationByWorkCenter)`.
+- `buildLineBalanceSuggestions(balance, operationsByOrder)`.
 
 **Consultas del store**
 - `plantPerformanceFor(period)`, `loadByWorkCenterFor(period)`, `downtimesByReasonFor(period)`, `rolePermissionsFor(role)`.
 - `ordersForScheduling({ status, dateFrom, dateTo })`.
-- `lineBalanceFor(period)`, `lineBalanceForOrder(orderId)`, `capacityForPeriod(period)`.
+- `lineBalanceFor(period)` (incluye `suggestions` simuladas), `lineBalanceForOrder(orderId)`, `capacityForPeriod(period)`.
 
 **Acciones del store** (aditivas, validan antes de mutar y emiten un único `change`)
 - `setIndicatorThreshold({ indicator, threshold, comparison })`.
@@ -833,15 +836,15 @@ Contratos completos en [contracts/plant-performance.md](contracts/plant-performa
 **Contratos de UI**
 - `src/components/PlantPerformancePanel.js`: KPIs de carga/OEE/paradas/cumplimiento, alarmas de umbral, acciones de orden con confirmación, selector de rol y exportación.
 - `src/components/ProductionSchedulingPanel.js`: listado filtrable de órdenes, edición de fechas planificadas con validación inline y confirmación de guardado.
-- `src/components/LineBalancePanel.js`: tabla por centro con utilización vs. capacidad nominal, carga proyectada y cuello de botella resaltado.
+- `src/components/LineBalancePanel.js`: tabla por centro con utilización vs. capacidad efectiva del período, semáforo verde/ámbar/rojo, alerta superior solo con cuello ≥ 95 %, panel de sugerencias del mismo `station_type` y modal de confirmación simulada.
 - `src/data/exporters/plant-report.js`: generación local de PDF y Excel a partir del reporte consolidado.
 
 ## 10.6 Persistencia y migración
 
 - **Snapshot**: `erp.manufacturing.v2`, introducido en esta fase.
 - **Migración**: al hidratar, si existe `erp.manufacturing.v1` válido se copia su contenido y se inicializan `thresholdSettings` y `rolePermissions` con los valores por defecto de fixtures; se reescribe como `v2`. Si `v2` falta, está corrupto o es inválido, se cargan fixtures con advertencia visible.
-- **Extensiones posteriores**: US-09 añade `maintenanceTickets` y `preventiveMaintenanceOrders` a `v2`; US-10 no añade colecciones (usa campos existentes de `production_orders`); US-11 no persiste nada nuevo.
-- **Escritura**: write-through tras cada mutación del panel y de la planificación, sin bloquear la UI.
+- **Extensiones posteriores**: US-09 añade `maintenanceTickets` y `preventiveMaintenanceOrders` a `v2`; US-10 no añade colecciones (usa campos existentes de `production_orders`); US-11 no añade colecciones ni registros: el balance es derivado y la confirmación de sugerencias es solo visual.
+- **Escritura**: write-through tras cada mutación real del panel y de la planificación, sin bloquear la UI. Las confirmaciones simuladas de US-11 no escriben.
 - **Reset de demo**: elimina `v2` (y opcionalmente `v1`) y recarga fixtures.
 - Las colecciones nuevas son opcionales y tolerantes a ausencia; no se altera la forma de las colecciones existentes.
 
@@ -850,16 +853,16 @@ Contratos completos en [contracts/plant-performance.md](contracts/plant-performa
 **Unidad — dominio**
 - `tests/unit/plant-performance.test.js`: OEE, carga, paradas por motivo, umbrales y permisos.
 - `tests/unit/order-scheduling.test.js`: validación de fechas y órdenes no reprogramables.
-- `tests/unit/line-balance.test.js`: tiempos estándar, carga proyectada, utilización y cuello de botella.
+- `tests/unit/line-balance.test.js`: tiempos estándar, carga proyectada, utilización con eficiencia, umbrales, cuello de botella y sugerencias.
 
-**Unidad — store** (`tests/unit/manufacturing-store.test.js`, bloques aditivos)
+**Unidad — store** (`tests/unit/operations-store.test.js` y `tests/unit/manufacturing-store.test.js`, bloques aditivos)
 - Acciones de umbrales, prioridad, cancelación y fechas planificadas.
 - Migración `v1 → v2`, colecciones ausentes y no mutación ante error.
+- `buildLineBalanceSuggestions`: solo destinos del mismo `station_type`, redacción con nombres de estación y sin API de solicitudes en el store.
 
 **Integración jsdom**
-- `tests/integration/plant-performance-panel.test.js`: KPIs, alarmas, acciones y exportación simulada.
-- `tests/integration/order-scheduling.test.js`: edición de fechas, validación inline y recarga.
-- `tests/integration/line-balance-panel.test.js`: tabla por centro y cuello de botella.
+- `tests/integration/operations-panels.test.js`: KPIs, alarmas, acciones y exportación simulada.
+- `tests/integration/plant-scheduling-panels.test.js`: edición de fechas, validación inline, paneles de planta/balance, semáforo, alerta crítica, sugerencias del mismo `station_type` y confirmación simulada.
 
 **Regresión**
 - Ejecutar las suites existentes de US-01…US-09 para confirmar que las extensiones aditivas no alteran su comportamiento.
@@ -881,7 +884,7 @@ No hay violaciones que requieran justificación adicional.
 | R-17 | Umbrales o permisos perdidos al migrar | Migración `v1 → v2` con valores por defecto y validación de forma; prueba de round-trip. |
 | R-18 | Exportación PDF/Excel lenta o dependiente de servicios | Generación local con datos mock y límite de período; prueba de rendimiento. |
 | R-19 | Fechas planificadas inválidas por edición concurrente | Validación en dominio + store antes de mutar; mensaje inline y conservación del último valor válido. |
-| R-20 | Cuello de botella mal señalado por capacidad desactualizada | Recalcular con `capacity_per_day_minutes` (capacidad nominal) en cada render; `efficiency_factor` se reserva para la carga efectiva de US-08; prueba con escenario sembrado. |
+| R-20 | Cuello de botella mal señalado por capacidad desactualizada | Recalcular con días hábiles × `capacity_per_day_minutes` × `efficiency_factor` en cada render; exigir `utilization ≥ 0.95`; prueba con escenarios sembrados de 97%, 79% y 29%. |
 | R-21 | Permisos simulados tratados como seguridad real | Etiquetar el selector como simulación y no exponer datos sensibles; documentar que no hay autenticación. |
 
 ## 10.10 Fases de implementación (entrada para `/speckit.tasks`)
@@ -891,10 +894,10 @@ No hay violaciones que requieran justificación adicional.
 3. **Store US-08**: consultas, acciones de umbral/prioridad/cancelación y exportación del reporte.
 4. **UI US-08**: `PlantPerformancePanel.js`, ruta en el shell y estilos.
 5. **US-10**: validación de fechas, acción de store, `ProductionSchedulingPanel.js` y ruta.
-6. **US-11**: cálculos de balance, `LineBalancePanel.js`, escenario de cuello de botella y ruta.
+6. **US-11**: cálculos de balance, umbrales, `LineBalancePanel.js`, sugerencias del mismo `station_type` con modal de confirmación simulada, escenario de cuello crítico y ruta.
 7. **Verificación**: pruebas de integración de los tres paneles, regresión de US-01…US-09, rendimiento y guion de demo.
 
-**Criterio de salida**: AC-04…AC-07 y AC-20 verificados; AC-28…AC-33 verificados; suites de regresión verdes; snapshot migra sin pérdida; `npm run build` exitoso.
+**Criterio de salida**: AC-04…AC-07 y AC-20 verificados; AC-28…AC-33 verificados; AC-37, AC-39, AC-40 y AC-45 verificados (AC-38 retirado); suites de regresión del módulo verdes; snapshot migra sin pérdida; `npm run build` exitoso.
 
 ## 10.11 Trazabilidad de criterios de aceptación
 
@@ -906,11 +909,11 @@ No hay violaciones que requieran justificación adicional.
 | AC-07 Exportación PDF/Excel y permisos por rol | `src/data/exporters/plant-report.js` + `role_permissions` + `canPerformAction` |
 | AC-20 Carga sobre capacidad y centros desactivados | `computeLoadByWorkCenter` + validación de `work_centers.status` |
 | AC-28..AC-33 Planificación de fechas | `validatePlannedDates`, `updatePlannedDates`, `ProductionSchedulingPanel` |
-| FR-12 Balance de líneas | `computeStandardTimes`, `computeProjectedLoad`, `computeUtilization`, `detectBottlenecks` + `LineBalancePanel` |
+| FR-12 Balance de líneas | `computeStandardTimes`, `computeProjectedLoad`, `computeUtilization`, `detectBottlenecks`, `buildLineBalanceSuggestions` + `LineBalancePanel` |
 | AC-37 Tiempos estándar por operación y ruta | `computeStandardTimes` + `LineBalancePanel` |
-| AC-38 Carga/ utilización vs. capacidad nominal | `computeProjectedLoad`, `computeUtilization` + `LineBalancePanel` |
-| AC-39 Cuello de botella y desempate por carga | `detectBottlenecks` + escenario sembrado |
-| AC-40 Recomendaciones solo lectura | Contrato de UI de `LineBalancePanel` |
+| AC-39 Carga/utilización con eficiencia y cuello `≥ 95%` | `computeProjectedLoad`, `computeUtilization`, `detectBottlenecks` + escenario sembrado |
+| AC-40 Sugerencias simuladas del mismo tipo | `buildLineBalanceSuggestions` con `station_type` + badge local de `LineBalancePanel` |
+| AC-45 Popover de órdenes por centro | `centerPopoverMarkup` en `LineBalancePanel` + estilos `.center-popover` + prueba de integración |
 
 ## 10.12 Complexity Tracking (US-08 / US-10 / US-11)
 
@@ -921,3 +924,4 @@ No hay violaciones que requieran justificación adicional.
 | Permisos por rol persistidos en `v2` | Permite que la simulación de roles sobreviva recargas. | Solo en memoria perdería la configuración al recargar. |
 | Indicadores derivados (OEE, carga, utilización) | Evita datos obsoletos y mantiene una única fuente de cálculo. | Persistir métricas añade mantenimiento y riesgo de deriva. |
 | Exportación local | Cumple el alcance frontend-only sin backend ni servicios externos. | Depender de un servicio de reportes rompe el prototipo. |
+| Confirmación simulada de balance | Cumple AC-40 sin store, migración ni mutación de datos maestros. | Registrar o persistir solicitudes daría una trazabilidad que la historia no quiere. |

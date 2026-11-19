@@ -242,9 +242,9 @@ describe('ManufacturingStore - US-10 planificación', () => {
 
   it('resume y ordena las órdenes para calendarización', () => {
     expect(store.orderScheduleSummary('2026-11-01')).toEqual({
-      planned: 6,
+      planned: 7,
       unplanned: 0,
-      overdue: 2,
+      overdue: 3,
     });
     const openOrders = store.ordersForScheduling();
     expect(openOrders.map((order) => order.id)).not.toContain('po_3001');
@@ -271,14 +271,26 @@ describe('ManufacturingStore - US-10 planificación', () => {
 describe('ManufacturingStore - US-11 balance de líneas', () => {
   it('devuelve utilización, cuello de botella y detalle por orden', () => {
     const balance = store.lineBalanceFor({ from: '2026-10-01', to: '2026-10-31' });
-    expect(balance.utilization_by_work_center).toHaveLength(5);
+    expect(balance.utilization_by_work_center).toHaveLength(6);
     expect(balance.bottleneck).toBeTruthy();
     expect(balance.standard_times.wc_corte.operation_count).toBeGreaterThan(0);
+    expect(balance.suggestions[0].to_work_center_id).toBe('wc_solda_2');
 
     const detail = store.lineBalanceForOrder('po_3003');
     expect(detail.order.id).toBe('po_3003');
     expect(detail.load_by_work_center.wc_corte.load_minutes).toBeGreaterThan(0);
     expect(store.lineBalanceForOrder('no_existe')).toBeNull();
+  });
+
+  it('no registra solicitudes ni expone una API de aceptación', () => {
+    const balance = store.lineBalanceFor({ from: '2026-10-01', to: '2026-10-31' });
+    const routingSnapshot = JSON.stringify(store.routingOperations);
+    const ordersSnapshot = JSON.stringify(store.productionOrders);
+    expect(balance.suggestions.length).toBeGreaterThan(0);
+    expect(store.lineBalanceRequestsFor).toBeUndefined();
+    expect(store.acceptLineBalanceSuggestion).toBeUndefined();
+    expect(JSON.stringify(store.routingOperations)).toBe(routingSnapshot);
+    expect(JSON.stringify(store.productionOrders)).toBe(ordersSnapshot);
   });
 });
 

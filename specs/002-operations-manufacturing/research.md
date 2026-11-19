@@ -1,8 +1,8 @@
 # Investigación y Decisiones Técnicas (Fase 0)
 
-**Rama**: `002-operations-manufacturing` | **Fecha**: 2026-10-29
-**Entrada**: [spec.md](spec.md) (FR-07 / US-06), [data-model.md](data-model.md), [plan.md](plan.md)
-**Alcance**: resolver las incógnitas de diseño del registro de turno del operador antes de generar los contratos.
+**Rama**: `002-operations-manufacturing` | **Fecha**: 2026-10-29 | **Actualizado**: 2026-11-18
+**Entrada**: [spec.md](spec.md) (FR-07 a FR-12), [data-model.md](data-model.md), [plan.md](plan.md)
+**Alcance**: resolver las incógnitas de diseño de US-06 a US-11 antes de generar los contratos.
 
 ---
 
@@ -238,28 +238,36 @@ No quedan incógnitas bloqueantes para la Fase 1 de US-08.
 
 ### D-25 — Carga y utilización derivadas de estándares y órdenes
 
-- **Decisión**: `computeProjectedLoad` suma `planned_time_minutes` de las operaciones del período por centro; `computeUtilization` divide la carga entre `capacity_per_day_minutes` (capacidad nominal del período), sin aplicar `efficiency_factor`. Ambos valores se calculan bajo demanda y no se persisten.
-- **Razón**: el balance es un análisis, no un dato operativo; derivarlo evita desactualización y el criterio nominal es comparable entre centros y coherente con AC-38.
-- **Alternativas descartadas**: persistir carga por centro (se invalida con cada orden); aplicar `efficiency_factor` (mezcla la capacidad efectiva de US-08 con el análisis nominal de US-11 y rompe AC-38).
+- **Decisión**: `computeProjectedLoad` suma `planned_time_minutes` de las operaciones del período por centro; `computeUtilization` divide la carga entre días hábiles × `capacity_per_day_minutes` × `efficiency_factor`. Ambos valores se calculan bajo demanda y no se persisten; la UI etiqueta la capacidad como efectiva del período.
+- **Razón**: el balance es un análisis, no un dato operativo; derivarlo evita desactualización y usa la misma eficiencia declarada para cada centro en el período seleccionado.
+- **Alternativas descartadas**: persistir carga por centro (se invalida con cada orden); usar días calendario (sobreestima capacidad) o ignorar `efficiency_factor` (ignora la eficiencia configurada del centro).
 
 ### D-26 — Cuello de botella determinista
 
-- **Decisión**: `detectBottlenecks` marca el centro con mayor utilización proyectada; en empate, el de mayor carga absoluta. El resultado es una lista ordenada, no un ranking de personas.
-- **Razón**: criterio reproducible y testeable que responde a "qué estación limita la línea".
-- **Alternativas descartadas**: heurísticas con pesos configurables (complejidad sin requisito); ranking por operador (viola la ética de datos).
+- **Decisión**: `detectBottlenecks` solo marca como cuello de botella al centro con utilización ≥ 95%; por debajo de ese umbral la línea se considera balanceada. Entre centros críticos gana la mayor utilización, luego la mayor carga absoluta y finalmente el identificador ascendente. Los estados auxiliares son Normal (< 75%) y Ajustada (75–94%).
+- **Razón**: criterio reproducible y testeable que evita alarmas permanentes en líneas con holgura suficiente.
+- **Alternativas descartadas**: resaltar siempre el centro más cargado (genera falsos cuellos de botella); heurísticas con pesos configurables (complejidad sin requisito); ranking por operador (viola la ética de datos).
 
-### D-27 — Sin nuevas entidades ni persistencia
+### D-27 — Sin nuevas entidades persistentes ni registro de solicitudes
 
-- **Decisión**: US-11 solo consume `work_centers`, `routing_operations` y `production_orders`. No añade tablas, colecciones ni campos.
-- **Razón**: el análisis se deriva de datos existentes; mantenerlo sin persistencia reduce el riesgo de deriva.
-- **Alternativas descartadas**: guardar resultados de balance (datos obsoletos); crear una entidad de escenario (fuera de alcance).
+- **Decisión**: US-11 solo consume `work_centers` (incluido `station_type`), `routing_operations` y `production_orders`. El análisis se deriva bajo demanda y la aceptación de propuestas es solo feedback local en el panel; no se añaden tablas, campos ni claves al snapshot `v2`, y el store no guarda ni expone solicitudes.
+- **Razón**: el análisis se deriva de datos existentes; mantenerlo sin persistencia reduce el riesgo de deriva y evita una migración adicional.
+- **Alternativas descartadas**: guardar resultados de balance (datos obsoletos); registrar solicitudes en memoria (apariencia de trazabilidad inexistente); persistir solicitudes (fuera de alcance y requeriría nueva versión de snapshot).
+
+### D-28 — Sugerencias simuladas y restringidas por tipo
+
+- **Decisión**: `buildLineBalanceSuggestions` genera propuestas solo con cuello crítico. Las reasignaciones exigen el mismo `station_type` entre origen y destino; la demo tiene 5 tipos y 6 estaciones físicas (Soldadura 1 y Soldadura 2). La aceptación explícita marca la fila como `Solicitud simulada` en la UI, sin registro en store, sin persistencia y sin mutar rutas, operaciones ni asignaciones.
+- **Razón**: cumple AC-40 con una simulación verificable en pantalla y evita proponer movimientos imposibles entre tipos de estación distintos.
+- **Alternativas descartadas**: aplicar el cambio al aceptar (rompe el aislamiento de US-11); registrar la solicitud (el usuario quiere que no vaya a ninguna parte); cruzar tipos de estación (no es una reasignación válida).
 
 ### Incógnitas resueltas (US-11)
 
 | Incógnita | Resolución |
 |---|---|
-| ¿Qué datos alimentan el balance? | Centros, rutas y órdenes existentes (D-25). |
-| ¿Cómo se define el cuello de botella? | Mayor utilización proyectada con desempate por carga (D-26). |
-| ¿Se persiste algo? | No; todo es derivado (D-27). |
+| ¿Qué datos alimentan el balance? | Centros con `station_type`, rutas y órdenes existentes (D-25). |
+| ¿Cómo se define el cuello de botella? | Utilización ≥ 95%, con desempate por utilización, carga e id (D-26). |
+| ¿Qué reasignaciones se proponen? | Solo entre estaciones del mismo `station_type` (D-28). |
+| ¿Cómo se “aplican” las sugerencias? | No se aplican: la aceptación es simulada y solo marca la fila (D-28). |
+| ¿Se persiste o registra algo? | No; todo es derivado y la confirmación no sale de la vista (D-27). |
 
 No quedan incógnitas bloqueantes para la Fase 1 de US-10 ni US-11.

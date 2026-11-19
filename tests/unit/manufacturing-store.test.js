@@ -29,7 +29,7 @@ describe('ManufacturingStore', () => {
   it('carga los fixtures de manufactura', () => {
     expect(store.productionOrders.length).toBeGreaterThan(0);
     expect(store.billOfMaterials.length).toBe(3);
-    expect(store.workCenters.length).toBe(5);
+    expect(store.workCenters.length).toBe(6);
   });
 
   it('construye el árbol de BOM y aplana el consumo teórico', () => {
@@ -110,10 +110,10 @@ describe('ManufacturingStore', () => {
 
   it('calcula KPIs y carga por centro de trabajo', () => {
     const kpis = store.kpis();
-    expect(kpis.totalOrders).toBe(6);
+    expect(kpis.totalOrders).toBe(7);
     expect(kpis.activeOrders).toBeGreaterThanOrEqual(3);
     const loads = store.workCenterLoads();
-    expect(loads.length).toBe(5);
+    expect(loads.length).toBe(6);
     expect(loads.find((l) => l.workCenter.id === 'wc_corte').loadMinutes).toBeGreaterThan(0);
   });
 

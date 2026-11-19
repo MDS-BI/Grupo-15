@@ -178,7 +178,7 @@ describe('Tablero de órdenes', () => {
 describe('Supervisión de línea (US-07)', () => {
   it('muestra semáforos, asigna operario y escala un incidente', () => {
     document.body.appendChild(SupervisorLinePanel(store));
-    expect(document.querySelectorAll('[data-wc]')).toHaveLength(5);
+    expect(document.querySelectorAll('[data-wc]')).toHaveLength(6);
     expect(document.querySelector('[data-light="wc_corte"]').textContent).toBe('En fallo');
     expect(document.querySelector('[data-light="wc_armado"]').textContent).toBe('En operación');
 
