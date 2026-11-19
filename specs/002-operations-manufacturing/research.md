@@ -1,8 +1,8 @@
 # Investigación y Decisiones Técnicas (Fase 0)
 
-**Rama**: `002-operations-manufacturing` | **Fecha**: 2026-10-29
-**Entrada**: [spec.md](spec.md) (FR-07 / US-06), [data-model.md](data-model.md), [plan.md](plan.md)
-**Alcance**: resolver las incógnitas de diseño del registro de turno del operador antes de generar los contratos.
+**Rama**: `002-operations-manufacturing` | **Fecha**: 2026-10-29 | **Actualizado**: 2026-11-19
+**Entrada**: [spec.md](spec.md) (FR-07 a FR-12), [data-model.md](data-model.md), [plan.md](plan.md)
+**Alcance**: resolver las incógnitas de diseño de US-06 a US-11 antes de generar los contratos.
 
 ---
 
@@ -238,28 +238,79 @@ No quedan incógnitas bloqueantes para la Fase 1 de US-08.
 
 ### D-25 — Carga y utilización derivadas de estándares y órdenes
 
-- **Decisión**: `computeProjectedLoad` suma `planned_time_minutes` de las operaciones del período por centro; `computeUtilization` divide la carga entre `capacity_per_day_minutes` (capacidad nominal del período), sin aplicar `efficiency_factor`. Ambos valores se calculan bajo demanda y no se persisten.
-- **Razón**: el balance es un análisis, no un dato operativo; derivarlo evita desactualización y el criterio nominal es comparable entre centros y coherente con AC-38.
-- **Alternativas descartadas**: persistir carga por centro (se invalida con cada orden); aplicar `efficiency_factor` (mezcla la capacidad efectiva de US-08 con el análisis nominal de US-11 y rompe AC-38).
+- **Decisión**: `computeProjectedLoad` suma `planned_time_minutes` de las operaciones del período por centro; `computeUtilization` divide la carga entre días hábiles × `capacity_per_day_minutes` × `efficiency_factor`. Ambos valores se calculan bajo demanda y no se persisten; la UI etiqueta la capacidad como efectiva del período.
+- **Razón**: el balance es un análisis, no un dato operativo; derivarlo evita desactualización y usa la misma eficiencia declarada para cada centro en el período seleccionado.
+- **Alternativas descartadas**: persistir carga por centro (se invalida con cada orden); usar días calendario (sobreestima capacidad) o ignorar `efficiency_factor` (ignora la eficiencia configurada del centro).
 
 ### D-26 — Cuello de botella determinista
 
-- **Decisión**: `detectBottlenecks` marca el centro con mayor utilización proyectada; en empate, el de mayor carga absoluta. El resultado es una lista ordenada, no un ranking de personas.
-- **Razón**: criterio reproducible y testeable que responde a "qué estación limita la línea".
-- **Alternativas descartadas**: heurísticas con pesos configurables (complejidad sin requisito); ranking por operador (viola la ética de datos).
+- **Decisión**: `detectBottlenecks` solo marca como cuello de botella al centro con utilización ≥ 95%; por debajo de ese umbral la línea se considera balanceada. Entre centros críticos gana la mayor utilización, luego la mayor carga absoluta y finalmente el identificador ascendente. Los estados auxiliares son Normal (< 75%) y Ajustada (75–94%).
+- **Razón**: criterio reproducible y testeable que evita alarmas permanentes en líneas con holgura suficiente.
+- **Alternativas descartadas**: resaltar siempre el centro más cargado (genera falsos cuellos de botella); heurísticas con pesos configurables (complejidad sin requisito); ranking por operador (viola la ética de datos).
 
-### D-27 — Sin nuevas entidades ni persistencia
+### D-27 — Sin nuevas entidades persistentes ni registro de solicitudes
 
-- **Decisión**: US-11 solo consume `work_centers`, `routing_operations` y `production_orders`. No añade tablas, colecciones ni campos.
-- **Razón**: el análisis se deriva de datos existentes; mantenerlo sin persistencia reduce el riesgo de deriva.
-- **Alternativas descartadas**: guardar resultados de balance (datos obsoletos); crear una entidad de escenario (fuera de alcance).
+- **Decisión**: US-11 solo consume `work_centers` (incluido `station_type`), `routing_operations` y `production_orders`. El análisis se deriva bajo demanda y la aceptación de propuestas es solo feedback local en el panel; no se añaden tablas, campos ni claves al snapshot `v2`, y el store no guarda ni expone solicitudes.
+- **Razón**: el análisis se deriva de datos existentes; mantenerlo sin persistencia reduce el riesgo de deriva y evita una migración adicional.
+- **Alternativas descartadas**: guardar resultados de balance (datos obsoletos); registrar solicitudes en memoria (apariencia de trazabilidad inexistente); persistir solicitudes (fuera de alcance y requeriría nueva versión de snapshot).
+
+### D-28 — Sugerencias simuladas y restringidas por tipo
+
+- **Decisión**: `buildLineBalanceSuggestions` genera propuestas solo con cuello crítico. Las reasignaciones exigen el mismo `station_type` entre origen y destino; la demo tiene 5 tipos y 6 estaciones físicas (Soldadura 1 y Soldadura 2). La aceptación explícita marca la fila como `Solicitud simulada` en la UI, sin registro en store, sin persistencia y sin mutar rutas, operaciones ni asignaciones.
+- **Razón**: cumple AC-40 con una simulación verificable en pantalla y evita proponer movimientos imposibles entre tipos de estación distintos.
+- **Alternativas descartadas**: aplicar el cambio al aceptar (rompe el aislamiento de US-11); registrar la solicitud (el usuario quiere que no vaya a ninguna parte); cruzar tipos de estación (no es una reasignación válida).
+
+### D-29 — Capacidad compartida, cargas con semántica propia
+
+- **Decisión**: `src/domain/capacity.js` centraliza `effectiveDailyCapacity`, `businessDaysInPeriod`, `capacityFor` y `loadRatio` (redondeo a 2 decimales, capacidad inválida = `null` + `invalid_capacity`). Panel de producción, desempeño de planta y balance de líneas delegan en esas primitivas; cada uno mantiene su carga (pendiente, observada y proyectada respectivamente) y su horizonte (1 día o período).
+- **Razón**: evita tres copias de la misma fórmula de capacidad y hace explícita la relación `capacidad_del_período = capacidad_diaria × días_hábiles` sin mezclar indicadores que responden preguntas distintas (FR-06, FR-09 y FR-12).
+- **Alternativas descartadas**: una única definición global de carga y utilización (cambiaría KPIs, cuellos y aserciones, y contradeciría la spec); mantener las tres implementaciones paralelas (riesgo de divergencia); usar días calendario en el panel de planta (sobreestima capacidad).
 
 ### Incógnitas resueltas (US-11)
 
 | Incógnita | Resolución |
 |---|---|
-| ¿Qué datos alimentan el balance? | Centros, rutas y órdenes existentes (D-25). |
-| ¿Cómo se define el cuello de botella? | Mayor utilización proyectada con desempate por carga (D-26). |
-| ¿Se persiste algo? | No; todo es derivado (D-27). |
+| ¿Qué datos alimentan el balance? | Centros con `station_type`, rutas y órdenes existentes (D-25). |
+| ¿Cómo se define el cuello de botella? | Utilización ≥ 95%, con desempate por utilización, carga e id (D-26). |
+| ¿Qué reasignaciones se proponen? | Solo entre estaciones del mismo `station_type` (D-28). |
+| ¿Cómo se “aplican” las sugerencias? | No se aplican: la aceptación es simulada y solo marca la fila (D-28). |
+| ¿Se persiste o registra algo? | No; todo es derivado y la confirmación no sale de la vista (D-27). |
 
 No quedan incógnitas bloqueantes para la Fase 1 de US-10 ni US-11.
+
+---
+
+## 8. Consolidación posterior al análisis (2026-11-19)
+
+**Entrada**: análisis de consistencia entre `spec.md`, `plan.md` y `tasks.md` (hallazgos C1, I1, I2, A1, U1, U2, D1).
+
+### D-30 — Una sola fórmula de capacidad efectiva para los tres paneles
+
+- **Decisión**: `domain/capacity.js` es la única fuente de `effective_per_day = capacity_per_day_minutes × efficiency_factor` y de `capacity_minutes = business_days × effective_per_day`. El panel de planta (US-08) y el balance (US-11) comparan la carga del período contra `capacity_minutes`; el Panel de Producción (FR-06) muestra la tasa de un solo día. El resaltado por sobrecarga del panel de planta usa `load_ratio > 1` (SC-02/AC-20); la alerta superior del balance usa `utilization ≥ 0.95` (AC-39).
+- **Razón**: elimina la ambigüedad entre “capacidad diaria efectiva” y “capacidad efectiva del período” y evita dos umbrales de alerta mezclados en una misma frase.
+- **Alternativas descartadas**: usar `capacity_per_day_minutes` sin eficiencia en el panel de planta (contradice D-29 y el contrato de planta); aplicar el umbral ≥ 95 % del balance al panel de planta (cambia SC-02).
+
+### D-31 — Días hábiles y umbrales sin huecos
+
+- **Decisión**: `business_days(period)` cuenta lunes a viernes del rango inclusivo y no aplica calendario de feriados en el prototipo. Los estados de utilización son `normal = [0, 0.75)`, `tight = [0.75, 0.95)` y `bottleneck = [0.95, ∞)`; no existe un intervalo sin clasificar entre 94 % y 95 %.
+- **Razón**: octubre 2026 debe seguir dando 22 días y noviembre 21, y un valor como 94,5 % debe ser ámbar sin depender de redondeos previos.
+- **Alternativas descartadas**: redondear a enteros antes de clasificar (puede mover un valor 94,6 % a rojo); usar días calendario (sobreestima capacidad); inventar feriados no presentes en los fixtures.
+
+### D-32 — Utilización diaria compartida y detalle de operaciones (AC-46)
+
+- **Decisión**: `store.dailyUtilizationByWorkCenter()` calcula, para cada centro, `carga pendiente (status !== 'completed') ÷ effective_per_day`. El Panel de Producción abre una ventana con esas operaciones al activar una fila. “Carga por centro” muestra los días hábiles entre paréntesis en el título, elimina la columna de días y añade “Utilización del día” a la derecha de “Utilización”. Ambas columnas del balance reutilizan el mismo componente de barra: texto real (incluso > 100 %), relleno limitado al 100 % y escala verde/ámbar/rojo por umbral. El cambio visual se limita a la pestaña de balance.
+- **Razón**: el valor diario debe coincidir exactamente entre panel y balance, pero la semántica de carga de cada vista no se mezcla; además se evita que un 447 % deforme la barra o pinte el texto de rojo.
+- **Alternativas descartadas**: reutilizar la carga proyectada del período como “utilización del día” (cambia el significado del KPI); dejar formatos de barra distintos por panel (rompe consistencia de UX); tocar el panel de producción al ajustar colores (fuera del alcance solicitado).
+
+### Incógnitas resueltas (consolidación)
+
+| Incógnita | Resolución |
+|---|---|
+| ¿Qué capacidad usa el panel de planta? | Capacidad efectiva del período con eficiencia y días hábiles (D-30). |
+| ¿Qué señala la sobrecarga en cada vista? | `> 1` en planta, `≥ 0.95` en balance (D-30). |
+| ¿Cómo se cuentan los días hábiles? | Lunes a viernes, sin feriados en la demo (D-31). |
+| ¿Cómo se clasifica 94,5 %? | Ámbar, porque `tight = [0.75, 0.95)` (D-31). |
+| ¿Qué muestra “Utilización del día”? | Carga pendiente dividida por capacidad efectiva de 1 día (D-32). |
+| ¿Qué pasa con un valor > 100 %? | Texto real, relleno al 100 %, color rojo por umbral (D-32). |
+
+No quedan incógnitas bloqueantes para la Fase 1.

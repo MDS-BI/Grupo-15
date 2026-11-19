@@ -1,5 +1,12 @@
-import { fmtNumber, fmtPercent, escapeHtml, el, ORDER_STATUS_LABEL } from './format.js';
-import { capacityUtilization } from '../domain/operation-planning.js';
+import {
+  fmtNumber,
+  fmtPercent,
+  escapeHtml,
+  el,
+  OP_STATUS_LABEL,
+  ORDER_STATUS_LABEL,
+} from './format.js';
+import { effectiveCapacityPerDay } from '../domain/operation-planning.js';
 import { isModuleAllowed, ROLE_DESCRIPTIONS, ROLE_LABELS } from '../domain/access-control.js';
 import { ACTIVITY_FEED, DEMO_NOTICE } from '../data/fixtures/dashboard-demo.js';
 
@@ -12,7 +19,7 @@ export function DashboardOverview(store, options = {}) {
   const role = options.role || 'plant_manager';
   const onNavigate = options.onNavigate;
   const kpis = store.kpis();
-  const loads = store.workCenterLoads();
+  const loads = store.dailyUtilizationByWorkCenter();
   const roleLabel = ROLE_LABELS[role] || role;
   const roleDescription = ROLE_DESCRIPTIONS[role] || '';
   const performance = store.plantPerformanceFor({});
@@ -112,21 +119,21 @@ export function DashboardOverview(store, options = {}) {
   ).join('');
 
   const capacityRows = loads
-    .map(({ workCenter, loadMinutes, pendingOperations }) => {
-      const util = capacityUtilization(loadMinutes, workCenter);
-      const pct = Math.min(util * 100, 100);
-      const over = util > 1;
+    .map(({ workCenter, loadMinutes, pendingOperations, utilization: util }) => {
+      const capacity = effectiveCapacityPerDay(workCenter);
+      const pct = util === null ? 0 : Math.min(util * 100, 100);
+      const over = util !== null && util > 1;
       return `
-      <tr>
+      <tr data-capacity-wc="${workCenter.id}" tabindex="0" role="button" aria-label="Ver operaciones de ${escapeHtml(workCenter.name)}">
         <td>${escapeHtml(workCenter.name)}</td>
-        <td class="num">${fmtNumber(loadMinutes)} min</td>
-        <td class="num">${fmtNumber(workCenter.capacity_per_day_minutes * workCenter.efficiency_factor)} min</td>
+        <td class="num" title="Suma de planned_time_minutes de las operaciones no completadas">${fmtNumber(loadMinutes)} min</td>
+        <td class="num" title="Capacidad efectiva de 1 día = min/día × eficiencia">${capacity === null ? '—' : fmtNumber(capacity)} min</td>
         <td class="num">${fmtNumber(pendingOperations)}</td>
-        <td class="cell--bar">
+        <td class="cell--bar" title="Carga pendiente ÷ capacidad de 1 día">
           <div class="bar ${over ? 'bar--over' : ''}">
             <div class="bar__fill" style="width:${pct}%"></div>
           </div>
-          <span class="bar__label ${over ? 'is-over' : ''}">${fmtPercent(util)}</span>
+          <span class="bar__label ${over ? 'is-over' : ''}">${util === null ? '—' : fmtPercent(util)}</span>
         </td>
       </tr>`;
     })
@@ -161,23 +168,24 @@ export function DashboardOverview(store, options = {}) {
       <section class="panel">
         <header class="panel__header">
           <h2>Utilización por Centro de Trabajo</h2>
-          <p class="panel__subtitle">Carga pendiente vs. capacidad diaria efectiva (operations no completadas).</p>
+          <p class="panel__subtitle">Carga pendiente vs. capacidad diaria efectiva (operaciones no completadas). Haz clic en un centro para ver sus operaciones.</p>
         </header>
         <div class="table-wrap">
-          <table class="data-table">
+          <table class="data-table dashboard-capacity-table">
             <thead>
               <tr>
                 <th>Centro de Trabajo</th>
                 <th class="num">Carga Pendiente</th>
-                <th class="num">Capacidad/día</th>
+                <th class="num" title="Capacidad efectiva de un solo día = min/día × eficiencia">Capacidad/día (1 día)</th>
                 <th class="num">Operaciones</th>
-                <th>Utilización</th>
+                <th title="Carga pendiente de operaciones no completadas ÷ capacidad de 1 día">Utilización</th>
               </tr>
             </thead>
             <tbody>${capacityRows}</tbody>
           </table>
         </div>
       </section>
+      <div class="center-popover-root" data-role="capacity-popover-root"></div>
     </section>`;
 
   const root = el(html);
@@ -194,6 +202,103 @@ export function DashboardOverview(store, options = {}) {
     button.addEventListener('click', () => {
       navigate(button.getAttribute('data-attention'));
     });
+  });
+
+  const popoverRoot = root.querySelector('[data-role="capacity-popover-root"]');
+  let openCapacityId = '';
+  let capacityAnchor = null;
+
+  function closeCapacityPopover(restoreFocus = false) {
+    if (!openCapacityId) return;
+    openCapacityId = '';
+    popoverRoot.innerHTML = '';
+    if (restoreFocus) capacityAnchor?.focus();
+    capacityAnchor = null;
+  }
+
+  function operationRowsFor(workCenterId) {
+    const operations = store.productionOrderOperations
+      .filter((op) => op.work_center_id === workCenterId && op.status !== 'completed')
+      .sort((a, b) => {
+        const numberA =
+          store.orderById(a.production_order_id)?.order_number || a.production_order_id;
+        const numberB =
+          store.orderById(b.production_order_id)?.order_number || b.production_order_id;
+        return (
+          numberA.localeCompare(numberB, 'es', { numeric: true }) ||
+          (a.sequence ?? 0) - (b.sequence ?? 0)
+        );
+      });
+    return operations.length
+      ? operations
+          .map((op) => {
+            const order = store.orderById(op.production_order_id);
+            return `<tr data-capacity-operation="${op.id}">
+              <td>${escapeHtml(order?.order_number || op.production_order_id)}</td>
+              <td>${fmtNumber(op.sequence ?? '—')}</td>
+              <td>${OP_STATUS_LABEL[op.status] || escapeHtml(op.status)}</td>
+              <td class="num">${fmtNumber(op.planned_time_minutes)}</td>
+            </tr>`;
+          })
+          .join('')
+      : '<tr><td colspan="4" class="empty-cell">Sin operaciones pendientes en este centro.</td></tr>';
+  }
+
+  function openCapacityPopover(workCenterId, anchor) {
+    const workCenter = store.workCenterById(workCenterId);
+    const load = loads.find((row) => row.workCenter.id === workCenterId);
+    const name = escapeHtml(workCenter?.name || workCenterId);
+    openCapacityId = workCenterId;
+    capacityAnchor = anchor;
+    popoverRoot.innerHTML = `
+      <div class="center-popover" data-role="capacity-popover" role="dialog" aria-modal="true" aria-label="Operaciones de ${name}">
+        <header class="center-popover__header">
+          <div>
+            <p class="center-popover__title">${name}</p>
+            <p class="center-popover__meta">${fmtNumber(load?.pendingOperations || 0)} operaciones · ${fmtNumber(load?.loadMinutes || 0)} min de carga pendiente</p>
+          </div>
+          <button type="button" class="btn btn--tiny" data-role="close-capacity-popover" aria-label="Cerrar detalle de operaciones">Cerrar</button>
+        </header>
+        <table class="data-table data-table--compact center-popover__table">
+          <thead><tr><th>Orden</th><th>Sec.</th><th>Estado</th><th class="num">Min</th></tr></thead>
+          <tbody>${operationRowsFor(workCenterId)}</tbody>
+        </table>
+      </div>`;
+    const closeButton = popoverRoot.querySelector('[data-role="close-capacity-popover"]');
+    closeButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      closeCapacityPopover(true);
+    });
+    closeButton.focus();
+  }
+
+  root.querySelectorAll('[data-capacity-wc]').forEach((row) => {
+    const toggle = (event) => {
+      event?.stopPropagation?.();
+      const workCenterId = row.getAttribute('data-capacity-wc');
+      if (openCapacityId === workCenterId) {
+        closeCapacityPopover();
+        return;
+      }
+      openCapacityPopover(workCenterId, row);
+    };
+    row.addEventListener('click', toggle);
+    row.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        toggle(event);
+      }
+    });
+  });
+
+  document.addEventListener('click', (event) => {
+    if (!openCapacityId) return;
+    if (event.target.closest?.('[data-role="capacity-popover"], [data-capacity-wc]')) return;
+    closeCapacityPopover();
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeCapacityPopover(true);
   });
 
   return root;

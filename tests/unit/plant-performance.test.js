@@ -10,8 +10,8 @@ import {
 } from '../../src/domain/plant-performance.js';
 
 describe('plant-performance', () => {
-  it('cuenta días inclusivos del período', () => {
-    expect(daysInPeriod({ from: '2026-10-01', to: '2026-10-31' })).toBe(31);
+  it('cuenta días hábiles inclusivos del período', () => {
+    expect(daysInPeriod({ from: '2026-10-01', to: '2026-10-31' })).toBe(22);
     expect(daysInPeriod({ from: '2026-10-01', to: '2026-10-01' })).toBe(1);
     expect(daysInPeriod({})).toBe(1);
   });
@@ -72,6 +72,25 @@ describe('plant-performance', () => {
     expect(load.wc_corte.load_minutes).toBe(150);
     expect(load.wc_corte.capacity_minutes).toBe(432);
     expect(load.wc_corte.load_ratio).toBe(0.35);
+    expect(load.wc_corte.invalid_capacity).toBe(false);
+  });
+
+  it('marca la capacidad inválida en lugar de inventar un minuto', () => {
+    const workCenters = [
+      { id: 'wc_solda', name: 'Solda', capacity_per_day_minutes: 0, efficiency_factor: 0.85 },
+    ];
+    const load = computeLoadByWorkCenter(
+      workCenters,
+      [{ work_center_id: 'wc_solda', planned_time_minutes: 100 }],
+      { from: '2026-10-15', to: '2026-10-15' },
+    );
+    expect(load.wc_solda).toMatchObject({
+      load_minutes: 100,
+      capacity_minutes: null,
+      load_ratio: null,
+      invalid_capacity: true,
+      inactive: true,
+    });
   });
 
   it('acumula paradas sin duplicar el ticket ligado a un atraso', () => {

@@ -23,7 +23,8 @@ import {
   canScheduleOnWorkCenter,
   deriveOrderStatus,
 } from '../domain/order-state-machine.js';
-import { plannedTimeMinutes } from '../domain/operation-planning.js';
+import { capacityFor } from '../domain/capacity.js';
+import { capacityUtilization, plannedTimeMinutes } from '../domain/operation-planning.js';
 import { buildBomTree, flattenBom } from '../domain/bom-explosion.js';
 import {
   validateBom,
@@ -65,7 +66,6 @@ import {
   canPerformAction,
   computeLoadByWorkCenter,
   computeOee,
-  daysInPeriod,
   evaluateThresholds,
 } from '../domain/plant-performance.js';
 import {
@@ -74,6 +74,9 @@ import {
   validatePlannedDates,
 } from '../domain/order-scheduling.js';
 import {
+  buildLineBalanceSuggestions,
+  computeBalanceSummary,
+  computeOrderDetail,
   computeProjectedLoad,
   computeStandardTimes,
   computeUtilization,
@@ -1098,6 +1101,14 @@ export class ManufacturingStore extends EventTarget {
     });
   }
 
+  /** Utilización diaria por centro: la misma carga pendiente que usa el panel. */
+  dailyUtilizationByWorkCenter() {
+    return this.workCenterLoads().map((row) => ({
+      ...row,
+      utilization: capacityUtilization(row.loadMinutes, row.workCenter),
+    }));
+  }
+
   /* -------------------- Mantenimiento (US-09) -------------------- */
 
   maintenanceTicketsFor({ status, priority, workCenterId } = {}) {
@@ -1981,13 +1992,13 @@ export class ManufacturingStore extends EventTarget {
   /* -------------------- US-11 Balance de líneas -------------------- */
 
   capacityForPeriod(period = {}) {
-    const days = daysInPeriod(period);
     const map = {};
     for (const workCenter of this.workCenters) {
+      const capacity = capacityFor(workCenter, period);
       map[workCenter.id] = {
         work_center_id: workCenter.id,
         name: workCenter.name,
-        capacity_minutes: round2((Number(workCenter.capacity_per_day_minutes) || 0) * days),
+        capacity_minutes: capacity.capacity_minutes,
       };
     }
     return map;
@@ -2003,13 +2014,23 @@ export class ManufacturingStore extends EventTarget {
     );
     const utilization = computeUtilization(projected.load_by_work_center, this.workCenters, period);
     const { bottleneck, candidates } = detectBottlenecks(utilization);
-    return {
+    const balance = {
       standard_times: standardTimes,
       load_by_work_center: projected.load_by_work_center,
       utilization_by_work_center: utilization,
       bottleneck,
       bottleneck_candidates: candidates,
+      summary: computeBalanceSummary(utilization),
       unscheduled_order_ids: projected.unscheduled_order_ids,
+    };
+    return {
+      ...balance,
+      suggestions: buildLineBalanceSuggestions(
+        balance,
+        projected.load_operations_by_order,
+        this.workCenters,
+        this.productionOrders,
+      ),
     };
   }
 
@@ -2028,7 +2049,7 @@ export class ManufacturingStore extends EventTarget {
     return {
       order,
       load_by_work_center: projected.load_by_work_center,
-      utilization_by_work_center: utilization,
+      utilization_by_work_center: computeOrderDetail(utilization, projected, orderId),
       bottleneck,
       bottleneck_candidates: candidates,
       unscheduled_order_ids: projected.unscheduled_order_ids,
