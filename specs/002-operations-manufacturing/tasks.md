@@ -22,7 +22,7 @@
 **Propósito**: Confirmar que el entorno de ejecución y pruebas del módulo está listo.
 
 - [X] T001 [P] Verificar dependencias y scripts de manufactura en `package.json` y `package-lock.json`; ejecutar `npm ci` si `node_modules` no existe
-- [X] T002 [P] Confirmar que jsdom se configura por suite con `JSDOM` en las pruebas de integración de manufactura; no se requiere cambio global en `vitest.config.mjs`
+- [X] T002 [P] Confirmar que jsdom se configura por suite con `JSDOM` en las pruebas de integración de manufactura; cerrado en Fase 16 (T119) con `environment: 'jsdom'` global en `vitest.config.mjs`
 - [X] T003 [P] Confirmar la estructura real del proyecto (`src/domain/`, `src/data/`, `src/data/fixtures/`, `src/data/ports/`, `src/components/`, `src/styles/`, `tests/unit/`, `tests/integration/`) contra `plan.md` §6
 
 **Punto de control**: entorno y estructura verificados.
@@ -112,13 +112,13 @@
 
 ## Fase 7: Historia de Usuario US-07 (HU-04) - Supervisión de Línea (Prioridad: P1) 🎯 MVP Supervisor
 
-**Objetivo**: Visualizar el semáforo en tiempo real, asignar operarios (`ext_hr_employee_id`), validar cierres de turno (`supervisor_validated = true`) y escalar incidentes a mantenimiento (`escalated_to_maint = true`).
+**Objetivo**: Visualizar el semáforo en tiempo real, asignar operadores (`ext_hr_employee_id`), validar cierres de turno (`supervisor_validated = true`) y escalar incidentes a mantenimiento (`escalated_to_maint = true`).
 
-**Prueba Independiente**: el supervisor visualiza el semáforo, asigna un operario a un centro, aprueba un cierre sin atrasos abiertos y escala una parada crítica viendo la máquina pasar a *En fallo* y persistir tras recargar.
+**Prueba Independiente**: el supervisor visualiza el semáforo, asigna un operador a un centro, aprueba un cierre sin atrasos abiertos y escala una parada crítica viendo la máquina pasar a *En fallo* y persistir tras recargar.
 
 ### Pruebas para US-07 (escribir primero) ⚠️
 
-- [X] T025 [P] [US7] Añadir pruebas unitarias de derivación del semáforo (`in_operation`, `paused`, `fault`, `changeover`), asignación única de operario por franja (`ext_hr_employee_id`) y reglas de aprobación de cierre en `tests/unit/line-supervision.test.js`
+- [X] T025 [P] [US7] Añadir pruebas unitarias de derivación del semáforo (`in_operation`, `paused`, `fault`, `changeover`), asignación única de operador por franja (`ext_hr_employee_id`) y reglas de aprobación de cierre en `tests/unit/line-supervision.test.js`
 - [X] T026 [P] [US7] Añadir pruebas unitarias en `tests/unit/manufacturing-store.test.js` para `assignOperatorToWorkCenter`, `setWorkCenterOperationalStatus`, `validateShiftClosure` y `escalateIncidentToMaintenance` (`escalated_to_maint = true` + ticket + `fault`)
 - [X] T027 [P] [US7] Añadir prueba de integración jsdom del panel de supervisor (semáforo, asignación, aprobación y botón de escalamiento) en `tests/integration/supervisor-line-panel.test.js`
 
@@ -275,15 +275,15 @@
 
 **Propósito**: Calidad, accesibilidad, rendimiento, documentación y cierre de AC.
 
-- [ ] T084 [P] Documentar y aislar las 12 suites legadas de `001-erp-base-module` que importan `src/storage.js` y `src/module-config.js` inexistentes, ajustando `vitest.config.mjs` o `tests/` según corresponda; deuda heredada no bloqueante para AC-14
+- [X] T084 [P] Documentar y aislar las 12 suites legadas de `001-erp-base-module` que importan `src/storage.js`, `src/app.js` y `src/module-config.js` inexistentes; aisladas en Fase 16 (T119) mediante `test.exclude` en `vitest.config.mjs`, conservando los excludes por defecto
 - [X] T085 [P] Revisar accesibilidad y consistencia de `src/components/OperatorWorkstationPanel.js`, `src/components/DelayCorrectionDialog.js`, `src/components/SupervisorLinePanel.js`, `src/components/PlantPerformancePanel.js`, `src/components/MaintenancePanel.js`, `src/components/ProductionSchedulingPanel.js` y `src/components/LineBalancePanel.js` (ARIA, foco, `Esc`, mensajes inline)
 - [X] T086 [P] Actualizar `quickstart.md` y `contracts/operator-shift.md` con selectores, etiquetas y pasos finales de todas las historias implementadas
 - [X] T087 [P] Validar el rendimiento con 500 órdenes, semáforo de supervisión, panel de planta, balance de líneas y cronómetro activo (<100 ms por interacción) usando `src/data/ManufacturingStore.js` y las vistas en `src/components/`
 - [X] T088 Ejecutar `npm run lint`, `npm run format:check`, `npm test -- --run` y `npm run build`; documentar en `tasks.md` cualquier fallo preexistente no relacionado con las historias nuevas
 
-> **Nota de gate (2026-11-11, revisada 2026-11-17)**: `npm run lint`, `npm run format:check` y `npm run build` pasan. `npm test -- --run` deja 114 pruebas verdes y 12 suites legadas de `001-erp-base-module` que no cargan por imports inexistentes (`src/storage.js`, `src/module-config.js`); es el fallo preexistente cubierto por T084, ajeno a las historias US-06…US-11. T002 quedó cerrado: jsdom se configura por suite con `JSDOM`; no se requiere cambio en `vitest.config.mjs`. AC-14 se interpreta como “suites del módulo en verde”.
+> **Nota de gate (2026-11-11, revisada 2026-11-17 y 2026-11-19)**: `npm run lint`, `npm run format:check` y `npm run build` pasan. Históricamente `npm test -- --run` dejaba 114 pruebas verdes y 12 suites legadas de `001-erp-base-module` que no cargaban por imports inexistentes (`src/storage.js`, `src/app.js`, `src/module-config.js`). T084 quedó cerrado en Fase 16 (T119): esas suites se excluyen en `vitest.config.mjs` sin borrarlas y se conservan los excludes por defecto. T002 quedó cerrado: jsdom se configura globalmente en `vitest.config.mjs` (además del `JSDOM` por suite). AC-14 se interpreta como “suites del módulo en verde”.
 - [X] T089 Actualizar `spec.md` para fijar la versión de snapshot en `erp.manufacturing.v2` de forma consistente y marcar todos los AC implementados como `Implementado`/`Verificado`
-- [X] T090 Preparar el guion de demo de 5 minutos (pedido → orden → fechas planificadas → asignación de operario → turno operador → atraso → escalamiento → mantenimiento → validación de cierre → panel de planta → balance de líneas → recarga) en `quickstart.md`
+- [X] T090 Preparar el guion de demo de 5 minutos (pedido → orden → fechas planificadas → asignación de operador → turno operador → atraso → escalamiento → mantenimiento → validación de cierre → panel de planta → balance de líneas → recarga) en `quickstart.md`
 
 ---
 
@@ -308,15 +308,15 @@
 
 - [X] T097 [P] Auditar la tabla de AC de `spec.md`: confirmar los IDs únicos (40 en su momento, 43 tras Fase 17), añadir la columna "Historia" y documentar que AC-04..AC-07/AC-20 son US-08 mientras AC-08..AC-14 son la base US-01..US-05/FR-06 (AC-34..AC-36), y AC-37..AC-40 son US-11
 - [X] T098 [P] [FR-13] Formalizar en `spec.md` los cuatro roles simulados (Jefa de Planta, Supervisor, Planificador, Operador), la matriz `MODULE_ACCESS` y el panel `RoleAccessPanel`, añadiendo permisos de planta para Supervisor en `src/data/fixtures/plant-performance.js`, `role_permissions`, `contracts/plant-performance.md` y `data-model.md`
-- [X] T099 [P] [FR-13] Unificar la etiqueta visible "Operador" en `src/domain/access-control.js`, `src/components/PlantPerformancePanel.js`, `src/components/SupervisorLinePanel.js` y `src/manufacturing-main.js`, conservando "operario" sólo como término de RR.HH. en documentación
+- [X] T099 [P] [FR-13] Unificar la etiqueta visible "Operador" en `src/domain/access-control.js`, `src/components/PlantPerformancePanel.js`, `src/components/SupervisorLinePanel.js` y `src/manufacturing-main.js`, usando "operador" también en los textos de RR.HH. de la documentación
 - [X] T100 [P] [FR-13] Añadir navegación por hash en `src/manufacturing-main.js` (`#/dashboard`, `#/plant`, etc.), breadcrumb, agrupación de módulos en la barra lateral y respeto de permisos al abrir un módulo por URL (AC-35)
 - [X] T101 [P] [FR-13] Crear `src/data/fixtures/dashboard-demo.js` con actividad reciente y avisos de demostración; mostrarlos en `src/components/DashboardOverview.js` sin mutar el snapshot (AC-36)
 - [X] T102 [P] [FR-13] Añadir transiciones suaves, animación de entrada, estados de foco y `prefers-reduced-motion` en `src/styles/manufacturing.css`
 - [X] T103 [P] [FR-13] Añadir `tests/unit/dashboard-demo.test.js` y `tests/integration/dashboard-shell.test.js`, y ejecutar regresión de `tests/integration/plant-scheduling-panels.test.js` y `tests/unit/operations-store.test.js`
-- [X] T104 Actualizar `README.md` con roles, módulos, datos simulados, navegación por hash y comandos de validación; T002 cerrado por configuración jsdom por suite; T084 sigue como deuda heredada de 001
+- [X] T104 Actualizar `README.md` con roles, módulos, datos simulados, navegación por hash y comandos de validación; T002 cerrado por configuración jsdom por suite y T084 cerrado en Fase 16 (T119) al aislar las suites heredadas de 001
 - [X] T105 Ajustar `.prettierrc.json` con `endOfLine: "auto"` para validar el formato en checkouts Windows y Unix sin normalizar archivos no relacionados, y volver a ejecutar el gate
 
-**Punto de control**: sin IDs AC duplicados ni cruzados, roles y terminología alineados, navegación profunda y demo visual verificadas, formato validado en ambos sistemas de archivos; T002 está cerrado; T084 permanece como deuda heredada documentada.
+**Punto de control**: sin IDs AC duplicados ni cruzados, roles y terminología alineados, navegación profunda y demo visual verificadas, formato validado en ambos sistemas de archivos; T002 y T084 están cerrados (T084 cerrado en Fase 16 – Pulido MVP).
 
 ## Fase 17: Usabilidad de captura, tablero y contadores (2026-11-17)
 
@@ -345,7 +345,7 @@
 - [X] T117 [P] Añadir monograma, nombre del módulo, botón accesible de contraseña y estado de carga de 400 ms en `renderLogin`, sin mostrar credenciales ni pistas de roles
 - [X] T118 Actualizar `README.md` y las pruebas de integración de login y panel; ejecutar `npm test -- --run`, `npm run lint` y `npm run format:check`
 
-**Punto de control**: el login determina el rol real, solo la Jefa de Planta puede cambiar el rol efectivo, el drawer y el menú son accesibles y el sistema visual usa tokens, tipografía Inter y tablas legibles; T084 permanece como deuda heredada.
+**Punto de control**: el login determina el rol real, solo la Jefa de Planta puede cambiar el rol efectivo, el drawer y el menú son accesibles y el sistema visual usa tokens, tipografía Inter y tablas legibles; T084 se cierra en Fase 16 – Pulido MVP.
 
 ---
 
@@ -366,7 +366,7 @@
 - **US-11 (Fase 13)**: depende de Fase 2 y de centros/rutas de US-02 y de las órdenes de US-03.
 - **Pulido (Fase 14)**: depende de todas las historias deseadas.
 - **Remediación (Fase 15)**: depende de Fase 2 y de las historias que toca cada tarea (US-08, US-09, US-11); T096 debe completarse antes de ejecutar el gate de calidad de T088.
-- **Consolidación UX (Fase 16)**: depende de Fases 2, 10 y 14; no modifica el snapshot `v2`; actualiza los contratos documentales de roles y preserva la deuda heredada T084.
+- **Consolidación UX (Fase 16)**: depende de Fases 2, 10 y 14; no modifica el snapshot `v2`; actualiza los contratos documentales de roles y cierra la deuda heredada T084 en la Fase 16 – Pulido MVP.
 - **Usabilidad (Fase 17)**: depende de Fases 2, 3, 6 y 16; reutiliza la máquina de estados y el store sin introducir campos nuevos ni cambiar el snapshot `v2`.
 
 ### Dependencias dentro de cada historia
@@ -439,3 +439,16 @@ Tras la Fase 2, un equipo puede dividir: persona A en US-06/US-07, persona B en 
 - No introducir rankings por operador; los tiempos, asignaciones y atrasos son contexto operacional.
 - Los indicadores de mantenimiento se agregan por máquina/centro; no se exponen rankings de técnicos.
 - El panel de planta agrega siempre por centro de trabajo y operación, sin rankings individuales.
+
+---
+
+## Fase 16 – Pulido MVP
+
+**Propósito**: cerrar la deuda heredada de pruebas, unificar terminología, blindar el render HTML y sustituir los diálogos nativos antes de la entrega del MVP. La etiqueta de fase se conserva literalmente; las fases históricas no se renombran y los IDs T119–T122 continúan la secuencia existente (T118 es el último asignado).
+
+- [X] T119 [P] Excluir en `vitest.config.mjs` las suites legadas de `001-erp-base-module` que importan `src/storage.js`, `src/app.js` o `src/module-config.js` (localizar los imports bajo `tests/` y añadir sus patrones a `test.exclude`), configurar `test.environment = 'jsdom'` de forma global, verificar `npm test -- --run` sin esas suites y cerrar T084 y T002 en `specs/002-operations-manufacturing/tasks.md`
+- [X] T120 [P] Unificar la terminología como "operador"/"operadores" en `specs/002-operations-manufacturing/spec.md`, `specs/002-operations-manufacturing/tasks.md`, `specs/002-operations-manufacturing/data-model.md` y en los comentarios de `src/**/*.js` (sin cambiar identificadores, claves ni contratos de datos), y renombrar el campo `name` de `package.json` a `erp-manufactura-grupo15`
+- [X] T121 [P] Auditar los `innerHTML` y las plantillas de `src/components/*.js` y aplicar `escapeHtml` de `src/components/format.js` a todo texto interpolado que proceda de datos (fixtures, store o entrada del usuario), conservando sin escapar únicamente el marcado generado por el propio componente
+- [X] T122 Crear un `ConfirmDialog` accesible en `src/components/ConfirmDialog.js` (`role="dialog"`, `aria-modal="true"`, foco inicial, cierre con `Esc`, devolución del foco y acciones Confirmar/Cancelar) y reemplazar todos los `window.confirm`/`window.alert` de `src/components/BomExplorer.js` y `src/components/MaintenancePanel.js` por ese diálogo, conservando mensajes, flujos y resultados
+
+**Punto de control**: `npm test -- --run` sin suites legadas de 001, terminología y nombre de paquete unificados, texto derivado de datos escapado en `src/components/` y sin `window.confirm`/`window.alert` en `BomExplorer.js` ni `MaintenancePanel.js`.

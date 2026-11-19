@@ -48,7 +48,7 @@ export function OperatorWorkstationPanel(store) {
     selectEl.innerHTML = list
       .map((op) => {
         const order = store.orderById(op.production_order_id);
-        return `<option value="${op.id}">${escapeHtml(order ? order.order_number : op.production_order_id)} · op ${op.sequence} (${OP_STATUS_LABEL[op.status]})</option>`;
+        return `<option value="${escapeHtml(op.id)}">${escapeHtml(order ? order.order_number : op.production_order_id)} · op ${escapeHtml(op.sequence)} (${OP_STATUS_LABEL[op.status]})</option>`;
       })
       .join('');
     if (selectedOperationId) selectEl.value = selectedOperationId;
@@ -83,13 +83,15 @@ export function OperatorWorkstationPanel(store) {
 
     const reasons = shift ? store.reasonsForShift(shift.id) : [];
     const reasonOptions = reasons
-      .map((reason) => `<option value="${reason.id}">${escapeHtml(reason.label)}</option>`)
+      .map(
+        (reason) => `<option value="${escapeHtml(reason.id)}">${escapeHtml(reason.label)}</option>`,
+      )
       .join('');
 
     const delayRows = delays
       .map((delay) => {
         const reason = store.delayReasons.find((row) => row.id === delay.delay_reason_id);
-        return `<tr data-delay-row="${delay.id}">
+        return `<tr data-delay-row="${escapeHtml(delay.id)}">
           <td>${escapeHtml(reason ? reason.label : delay.delay_reason_id)}</td>
           <td>${escapeHtml(delay.started_at)}</td>
           <td>${delay.duration_minutes != null ? fmtNumber(delay.duration_minutes, 2) : 'Abierto'}</td>

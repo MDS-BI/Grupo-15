@@ -800,6 +800,69 @@ button {
   gap: 0.5rem;
 }
 
+.confirm-dialog {
+  width: min(440px, 92vw);
+  padding: 0;
+  border: 1px solid var(--erp-border);
+  border-radius: 12px;
+  background: var(--erp-surface);
+  color: var(--erp-text);
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.28);
+  animation: confirm-dialog-enter 180ms var(--erp-ease) both;
+}
+
+.confirm-dialog::backdrop {
+  background: var(--erp-overlay);
+}
+
+.confirm-dialog--fallback {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+}
+
+.confirm-dialog--fallback::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: var(--erp-overlay);
+  z-index: -1;
+}
+
+.confirm-dialog__body {
+  padding: 1.25rem 1.25rem 0.75rem;
+}
+
+.confirm-dialog__title {
+  margin: 0 0 0.5rem;
+  font-size: 1.15rem;
+}
+
+.confirm-dialog__message {
+  margin: 0;
+  color: var(--erp-text-muted);
+  white-space: pre-wrap;
+}
+
+.confirm-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 1rem 1.25rem;
+  border-top: 1px solid var(--erp-border);
+}
+
+@keyframes confirm-dialog-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 @media (max-width: 1100px) {
   .orders-layout {
     grid-template-columns: 1fr;
@@ -1932,7 +1995,9 @@ input:focus-visible,
   .topbar__brand,
   .sidebar,
   .sidebar__chevron,
-  .content > .view {
+  .content > .view,
+  .confirm-dialog,
+  .confirm-dialog::backdrop {
     animation: none;
     transition: none;
   }

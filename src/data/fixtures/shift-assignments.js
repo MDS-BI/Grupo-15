@@ -1,5 +1,5 @@
 /**
- * @file Fixtures de asignación de operarios a centros de trabajo (US-07).
+ * @file Fixtures de asignación de operadores a centros de trabajo (US-07).
  * Ver data-model.md §3.8 y contracts/operator-shift.md.
  */
 

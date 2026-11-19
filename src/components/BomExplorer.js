@@ -5,6 +5,7 @@
 
 import { fmtNumber, escapeHtml, el } from './format.js';
 import { decimalInput, parseDecimal } from './numeric-field.js';
+import { confirmDialog, notifyDialog } from './ConfirmDialog.js';
 
 const MODIFY_FIELDS = [
   ['material_quantity', 'Cantidad de un material'],
@@ -89,7 +90,7 @@ export function BomExplorer(store) {
       .map((bom) => {
         const active = bom.id === selectedBomId ? 'is-active' : '';
         return `<li>
-        <button type="button" class="bom-list__item ${active}" data-bom="${bom.id}">
+        <button type="button" class="bom-list__item ${active}" data-bom="${escapeHtml(bom.id)}">
           <span class="bom-list__name">${escapeHtml(productNameOf(bom))}</span>
           <span class="bom-list__code">${escapeHtml(bom.code)} · v${escapeHtml(bom.version)}</span>
         </button>
@@ -160,7 +161,7 @@ export function BomExplorer(store) {
       .sort((a, b) => a.name.localeCompare(b.name, 'es'))
       .map(
         (product) =>
-          `<option value="${product.id}">${escapeHtml(product.name)} (${escapeHtml(product.code)})</option>`,
+          `<option value="${escapeHtml(product.id)}">${escapeHtml(product.name)} (${escapeHtml(product.code)})</option>`,
       )
       .join('');
   }
@@ -170,7 +171,7 @@ export function BomExplorer(store) {
       .filter((workCenter) => workCenter.status === 'active')
       .map(
         (workCenter) =>
-          `<option value="${workCenter.id}">${escapeHtml(workCenter.name)} (${escapeHtml(workCenter.code)})</option>`,
+          `<option value="${escapeHtml(workCenter.id)}">${escapeHtml(workCenter.name)} (${escapeHtml(workCenter.code)})</option>`,
       )
       .join('');
   }
@@ -195,14 +196,14 @@ export function BomExplorer(store) {
       .map((line) => {
         const prod = store.productById(line.component_product_id);
         const uom = store.uomById(line.uom_id);
-        return `<tr data-material="${line.id}">
+        return `<tr data-material="${escapeHtml(line.id)}">
         <td>${escapeHtml(prod ? prod.name : line.component_product_id)}</td>
         <td>${fmtNumber(line.quantity_per_unit, 4)} ${escapeHtml(uom ? uom.code : '')}</td>
         <td>${fmtNumber(line.scrap_percentage, 2)}%</td>
-        <td>${line.sequence}</td>
+        <td>${escapeHtml(line.sequence)}</td>
         <td class="cell--actions">
-          <button type="button" class="btn btn--tiny" data-edit-material="${line.id}">Modificar</button>
-          <button type="button" class="btn btn--tiny btn--danger" data-remove-material="${line.id}">Eliminar</button>
+          <button type="button" class="btn btn--tiny" data-edit-material="${escapeHtml(line.id)}">Modificar</button>
+          <button type="button" class="btn btn--tiny btn--danger" data-remove-material="${escapeHtml(line.id)}">Eliminar</button>
         </td>
       </tr>`;
       })
@@ -211,16 +212,16 @@ export function BomExplorer(store) {
     const stationRows = stations
       .map((station) => {
         const workCenter = station.work_center;
-        return `<tr data-station="${station.id}">
-        <td>${station.sequence}</td>
+        return `<tr data-station="${escapeHtml(station.id)}">
+        <td>${escapeHtml(station.sequence)}</td>
         <td>${escapeHtml(workCenter ? workCenter.name : station.work_center_id)}</td>
         <td>${escapeHtml(station.description || '—')}</td>
         <td>${fmtNumber(station.setup_time_minutes, 2)} min</td>
         <td>${fmtNumber(station.run_time_per_unit_minutes, 2)} min/u</td>
         <td>${fmtNumber(station.estimated_time_minutes, 2)} min</td>
         <td class="cell--actions">
-          <button type="button" class="btn btn--tiny" data-edit-station="${station.id}">Modificar</button>
-          <button type="button" class="btn btn--tiny btn--danger" data-remove-station="${station.id}">Eliminar</button>
+          <button type="button" class="btn btn--tiny" data-edit-station="${escapeHtml(station.id)}">Modificar</button>
+          <button type="button" class="btn btn--tiny btn--danger" data-remove-station="${escapeHtml(station.id)}">Eliminar</button>
         </td>
       </tr>`;
       })
@@ -321,33 +322,45 @@ export function BomExplorer(store) {
     }
   }
 
-  function removeMaterial(componentId) {
+  async function removeMaterial(componentId) {
     const bom = currentBom();
     if (!bom) return;
     const line = store.bomComponents.find((item) => item.id === componentId);
     const product = line ? store.productById(line.component_product_id) : null;
     const name = product ? product.name : componentId;
-    if (!window.confirm(`¿Eliminar el material "${name}" de la receta?`)) return;
+    const confirmed = await confirmDialog({
+      title: 'Eliminar material',
+      message: `¿Eliminar el material "${name}" de la receta?`,
+      confirmLabel: 'Eliminar',
+      danger: true,
+    });
+    if (!confirmed) return;
     try {
       store.removeBomComponent(bom.id, componentId);
       renderAll();
     } catch (err) {
-      window.alert(err.message);
+      await notifyDialog({ title: 'No se pudo eliminar el material', message: err.message });
     }
   }
 
-  function removeStation(operationId) {
+  async function removeStation(operationId) {
     const bom = currentBom();
     if (!bom) return;
     const operation = store.routingOperations.find((item) => item.id === operationId);
     const workCenter = operation ? store.workCenterById(operation.work_center_id) : null;
     const name = workCenter ? workCenter.name : operationId;
-    if (!window.confirm(`¿Eliminar la estación "${name}" de la receta?`)) return;
+    const confirmed = await confirmDialog({
+      title: 'Eliminar estación',
+      message: `¿Eliminar la estación "${name}" de la receta?`,
+      confirmLabel: 'Eliminar',
+      danger: true,
+    });
+    if (!confirmed) return;
     try {
       store.removeRoutingOperationForBom(bom.id, operationId);
       renderAll();
     } catch (err) {
-      window.alert(err.message);
+      await notifyDialog({ title: 'No se pudo eliminar la estación', message: err.message });
     }
   }
 
@@ -528,7 +541,7 @@ export function BomExplorer(store) {
       const options = lines
         .map((line) => {
           const product = store.productById(line.component_product_id);
-          return `<option value="${line.id}" ${selected(line.id)}>${escapeHtml(product ? product.name : line.component_product_id)}</option>`;
+          return `<option value="${escapeHtml(line.id)}" ${selected(line.id)}>${escapeHtml(product ? product.name : line.component_product_id)}</option>`;
         })
         .join('');
       if (!lines.length) return '<p class="empty-note">La receta no tiene materiales.</p>';
@@ -565,7 +578,7 @@ export function BomExplorer(store) {
       const options = stations
         .map((station) => {
           const name = station.work_center ? station.work_center.name : station.work_center_id;
-          return `<option value="${station.id}" ${selected(station.id)}>${escapeHtml(name)}</option>`;
+          return `<option value="${escapeHtml(station.id)}" ${selected(station.id)}>${escapeHtml(name)}</option>`;
         })
         .join('');
       if (!stations.length) return '<p class="empty-note">La receta no tiene estaciones.</p>';
@@ -587,7 +600,7 @@ export function BomExplorer(store) {
         .filter((workCenter) => workCenter.status === 'active' && !used.includes(workCenter.id))
         .map(
           (workCenter) =>
-            `<option value="${workCenter.id}">${escapeHtml(workCenter.name)} (${escapeHtml(workCenter.code)})</option>`,
+            `<option value="${escapeHtml(workCenter.id)}">${escapeHtml(workCenter.name)} (${escapeHtml(workCenter.code)})</option>`,
         )
         .join('');
       return `<label>Estación / máquina a añadir
@@ -667,7 +680,7 @@ export function BomExplorer(store) {
     });
     renderDynamic();
 
-    form.addEventListener('submit', (event) => {
+    form.addEventListener('submit', async (event) => {
       event.preventDefault();
       const selectedField = form.querySelector('[name="field"]').value;
       const targetEl = form.querySelector('[data-role="target"]');
@@ -683,9 +696,13 @@ export function BomExplorer(store) {
       if (!removeField && valueEl && !value) {
         errorEl.textContent = 'El cambio está vacío. Indique el nuevo valor o cancele.';
         const name = productNameOf(bom);
-        if (
-          window.confirm(`El cambio está vacío. ¿Desea eliminar el producto "${name}" y su receta?`)
-        ) {
+        const deleteRecipe = await confirmDialog({
+          title: 'Cambio vacío',
+          message: `El cambio está vacío. ¿Desea eliminar el producto "${name}" y su receta?`,
+          confirmLabel: 'Eliminar receta',
+          danger: true,
+        });
+        if (deleteRecipe) {
           try {
             store.deleteBomRecipe(bom.id);
             selectedBomId = store.activeBoms().length ? store.activeBoms()[0].id : null;
@@ -724,15 +741,17 @@ export function BomExplorer(store) {
                 }) ?? 0,
             });
             break;
-          case 'remove_material':
-            if (
-              !window.confirm(
-                `¿Eliminar el material seleccionado de la receta "${productNameOf(bom)}"?`,
-              )
-            )
-              return;
+          case 'remove_material': {
+            const confirmed = await confirmDialog({
+              title: 'Eliminar material',
+              message: `¿Eliminar el material seleccionado de la receta "${productNameOf(bom)}"?`,
+              confirmLabel: 'Eliminar',
+              danger: true,
+            });
+            if (!confirmed) return;
             store.removeBomComponent(bom.id, targetValue);
             break;
+          }
           case 'station_time':
             store.updateRoutingOperationForBom(bom.id, targetValue, {
               run_time_per_unit_minutes: decimal('El tiempo estimado por unidad', { min: 0.01 }),
@@ -755,15 +774,17 @@ export function BomExplorer(store) {
               run_time_per_unit_minutes: decimal('El tiempo estimado por unidad', { min: 0.01 }),
             });
             break;
-          case 'remove_station':
-            if (
-              !window.confirm(
-                `¿Eliminar la estación seleccionada de la receta "${productNameOf(bom)}"?`,
-              )
-            )
-              return;
+          case 'remove_station': {
+            const confirmed = await confirmDialog({
+              title: 'Eliminar estación',
+              message: `¿Eliminar la estación seleccionada de la receta "${productNameOf(bom)}"?`,
+              confirmLabel: 'Eliminar',
+              danger: true,
+            });
+            if (!confirmed) return;
             store.removeRoutingOperationForBom(bom.id, targetValue);
             break;
+          }
           case 'product_name':
             store.updateBomRecipe(bom.id, { product_name: value });
             break;
@@ -795,16 +816,16 @@ export function BomExplorer(store) {
     });
   }
 
-  function openDeleteRecipeModal() {
+  async function openDeleteRecipeModal() {
     const boms = store.activeBoms();
     if (!boms.length) {
-      window.alert('No hay recetas para eliminar.');
+      await notifyDialog({ title: 'Sin recetas', message: 'No hay recetas para eliminar.' });
       return;
     }
     const options = boms
       .map(
         (bom) =>
-          `<option value="${bom.id}" ${bom.id === selectedBomId ? 'selected' : ''}>${escapeHtml(productNameOf(bom))} — ${escapeHtml(bom.code)} (v${escapeHtml(bom.version)})</option>`,
+          `<option value="${escapeHtml(bom.id)}" ${bom.id === selectedBomId ? 'selected' : ''}>${escapeHtml(productNameOf(bom))} — ${escapeHtml(bom.code)} (v${escapeHtml(bom.version)})</option>`,
       )
       .join('');
     showModal(`
@@ -823,20 +844,20 @@ export function BomExplorer(store) {
 
     const form = modalRoot.querySelector('[data-role="form"]');
     const errorEl = form.querySelector('[data-role="error"]');
-    form.addEventListener('submit', (event) => {
+    form.addEventListener('submit', async (event) => {
       event.preventDefault();
       const data = new FormData(form);
       const bomId = data.get('bom_id');
       const bom = store.billOfMaterials.find((item) => item.id === bomId);
       if (!bom) return;
       const name = productNameOf(bom);
-      if (
-        !window.confirm(
-          `¿Está seguro de eliminar la receta "${name}" (${bom.code})? Esta acción no se puede deshacer.`,
-        )
-      ) {
-        return;
-      }
+      const confirmed = await confirmDialog({
+        title: 'Eliminar receta',
+        message: `¿Está seguro de eliminar la receta "${name}" (${bom.code})? Esta acción no se puede deshacer.`,
+        confirmLabel: 'Eliminar receta',
+        danger: true,
+      });
+      if (!confirmed) return;
       try {
         store.deleteBomRecipe(bomId);
         selectedBomId = store.activeBoms().length ? store.activeBoms()[0].id : null;
@@ -856,9 +877,12 @@ export function BomExplorer(store) {
   }
 
   root.querySelector('[data-role="new-recipe"]').addEventListener('click', openNewRecipeModal);
-  root.querySelector('[data-role="edit-recipe"]').addEventListener('click', () => {
+  root.querySelector('[data-role="edit-recipe"]').addEventListener('click', async () => {
     if (!currentBom()) {
-      window.alert('Primero seleccione o cree una receta.');
+      await notifyDialog({
+        title: 'Sin receta seleccionada',
+        message: 'Primero seleccione o cree una receta.',
+      });
       return;
     }
     openModifyRecipeModal();

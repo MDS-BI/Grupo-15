@@ -91,7 +91,7 @@ export function DashboardOverview(store, options = {}) {
     .filter((card) => isModuleAllowed(role, card.moduleId))
     .map(
       (card) => `
-      <button type="button" class="attention-card attention-card--${card.tone}" data-attention="${card.moduleId}">
+      <button type="button" class="attention-card attention-card--${escapeHtml(card.tone)}" data-attention="${escapeHtml(card.moduleId)}">
         <span class="attention-card__label">${card.label}</span>
         <span class="attention-card__value">${fmtNumber(card.value)}</span>
         <span class="attention-card__hint">${card.hint}</span>
@@ -101,7 +101,7 @@ export function DashboardOverview(store, options = {}) {
 
   const activityRows = ACTIVITY_FEED.map(
     (item) => `
-    <li class="activity-item activity-item--${item.tone}" data-activity="${item.moduleId}">
+    <li class="activity-item activity-item--${escapeHtml(item.tone)}" data-activity="${escapeHtml(item.moduleId)}">
       <span class="activity-dot" aria-hidden="true"></span>
       <span class="activity-time">${escapeHtml(item.time)}</span>
       <span class="activity-copy">

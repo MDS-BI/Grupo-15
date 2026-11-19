@@ -57,7 +57,7 @@ export function LineBalancePanel(store) {
         const standard = balance.standard_times[row.work_center_id];
         const isBottleneck =
           balance.bottleneck && balance.bottleneck.work_center_id === row.work_center_id;
-        return `<tr data-wc="${row.work_center_id}" class="${isBottleneck ? 'is-bottleneck' : ''}">
+        return `<tr data-wc="${escapeHtml(row.work_center_id)}" class="${isBottleneck ? 'is-bottleneck' : ''}">
           <td>${escapeHtml(row.name)}${isBottleneck ? ' <span class="badge badge--danger">Cuello</span>' : ''}</td>
           <td>${fmtNumber(row.load_minutes, 2)}</td>
           <td>${fmtNumber(row.capacity_minutes, 2)}</td>
@@ -89,7 +89,7 @@ export function LineBalancePanel(store) {
       ? orderDetail.utilization_by_work_center
           .map((row) => {
             const load = orderDetail.load_by_work_center[row.work_center_id];
-            return `<tr data-order-wc="${row.work_center_id}">
+            return `<tr data-order-wc="${escapeHtml(row.work_center_id)}">
               <td>${escapeHtml(row.name)}</td>
               <td>${fmtNumber(load ? load.load_minutes : 0, 2)}</td>
               <td>${row.utilization === null ? '—' : fmtPercent(row.utilization)}</td>
@@ -121,7 +121,7 @@ export function LineBalancePanel(store) {
               ${schedulableOrders
                 .map(
                   (order) =>
-                    `<option value="${order.id}" ${order.id === selectedOrderId ? 'selected' : ''}>${escapeHtml(order.order_number)}</option>`,
+                    `<option value="${escapeHtml(order.id)}" ${order.id === selectedOrderId ? 'selected' : ''}>${escapeHtml(order.order_number)}</option>`,
                 )
                 .join('')}
             </select>

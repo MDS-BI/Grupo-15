@@ -450,7 +450,7 @@ export const ThresholdComparison = Object.freeze({
  */
 
 /**
- * Asignación de un operario a un centro de trabajo en una franja.
+ * Asignación de un operador a un centro de trabajo en una franja.
  * @typedef {Object} ShiftAssignment
  * @property {UUID} id
  * @property {UUID} shift_assignment_id

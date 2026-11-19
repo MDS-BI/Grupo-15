@@ -33,7 +33,7 @@ export function SupervisorLinePanel(store) {
           <form class="stack-form" data-role="assign-form">
             <label>Centro de trabajo
               <select name="work_center_id">${store.workCenters
-                .map((wc) => `<option value="${wc.id}">${escapeHtml(wc.name)}</option>`)
+                .map((wc) => `<option value="${escapeHtml(wc.id)}">${escapeHtml(wc.name)}</option>`)
                 .join('')}</select>
             </label>
             <label>Operador (RR.HH.)
@@ -41,7 +41,7 @@ export function SupervisorLinePanel(store) {
                 .filter((employee) => employee.role === 'operator')
                 .map(
                   (employee) =>
-                    `<option value="${employee.ext_hr_employee_id}">${escapeHtml(employee.name)}</option>`,
+                    `<option value="${escapeHtml(employee.ext_hr_employee_id)}">${escapeHtml(employee.name)}</option>`,
                 )
                 .join('')}</select>
             </label>
@@ -85,12 +85,12 @@ export function SupervisorLinePanel(store) {
                         (row) => row.ext_hr_employee_id === assignment.ext_hr_employee_id,
                       )
                     : null;
-                  return `<tr data-wc="${work_center.id}">
+                  return `<tr data-wc="${escapeHtml(work_center.id)}">
                     <td>${escapeHtml(work_center.name)}</td>
-                    <td><span class="badge badge--light-${status}" data-light="${work_center.id}">${LIGHT_LABEL[status] || status}</span></td>
+                    <td><span class="badge badge--light-${escapeHtml(status)}" data-light="${escapeHtml(work_center.id)}">${escapeHtml(LIGHT_LABEL[status] || status)}</span></td>
                     <td>${employee ? escapeHtml(employee.name) : '—'}</td>
                     <td>${active_operation ? escapeHtml(active_operation.id) : '—'}</td>
-                    <td><button type="button" class="btn btn--tiny btn--danger" data-escalate="${work_center.id}">Escalar incidente</button></td>
+                    <td><button type="button" class="btn btn--tiny btn--danger" data-escalate="${escapeHtml(work_center.id)}">Escalar incidente</button></td>
                   </tr>`;
                 })
                 .join('')}
@@ -113,9 +113,9 @@ export function SupervisorLinePanel(store) {
               (op) => op.id === shift.po_operation_id,
             );
             const order = operation ? store.orderById(operation.production_order_id) : null;
-            return `<div class="closure-row" data-shift-row="${shift.id}">
+            return `<div class="closure-row" data-shift-row="${escapeHtml(shift.id)}">
               <span>${escapeHtml(order ? order.order_number : shift.po_operation_id)} · turno ${shift.shift_number} · ${fmtNumber(shift.quantity_counted)} piezas</span>
-              <button type="button" class="btn btn--tiny btn--primary" data-validate="${shift.id}">Validar cierre</button>
+              <button type="button" class="btn btn--tiny btn--primary" data-validate="${escapeHtml(shift.id)}">Validar cierre</button>
             </div>`;
           })
           .join('')

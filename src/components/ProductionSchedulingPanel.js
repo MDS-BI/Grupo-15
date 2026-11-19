@@ -83,17 +83,17 @@ export function ProductionSchedulingPanel(store) {
       .map((order) => {
         const closed = order.status === 'completed' || order.status === 'cancelled';
         const product = store.productById(order.product_id);
-        return `<tr data-order="${order.id}">
+        return `<tr data-order="${escapeHtml(order.id)}">
           <td>${escapeHtml(order.order_number)}</td>
           <td>${escapeHtml(product ? product.name : order.product_id)}</td>
           <td>${orderStatusBadge(order.status)}</td>
-          <td>${PRIORITY_LABEL[order.priority] || order.priority}</td>
-          <td><input type="date" data-date="start" data-order="${order.id}" value="${order.planned_start_date || ''}" ${closed ? 'disabled' : ''} /></td>
-          <td><input type="date" data-date="end" data-order="${order.id}" value="${order.planned_end_date || ''}" ${closed ? 'disabled' : ''} /></td>
+          <td>${escapeHtml(PRIORITY_LABEL[order.priority] || order.priority)}</td>
+          <td><input type="date" data-date="start" data-order="${escapeHtml(order.id)}" value="${escapeHtml(order.planned_start_date || '')}" ${closed ? 'disabled' : ''} /></td>
+          <td><input type="date" data-date="end" data-order="${escapeHtml(order.id)}" value="${escapeHtml(order.planned_end_date || '')}" ${closed ? 'disabled' : ''} /></td>
           <td class="row-actions">
-            <button type="button" class="btn btn--tiny btn--primary" data-save="${order.id}" ${closed ? 'disabled' : ''}>Guardar</button>
-            <button type="button" class="btn btn--tiny" data-clear="${order.id}" ${closed ? 'disabled' : ''}>Limpiar</button>
-            <span class="form-error" data-error="${order.id}" role="alert"></span>
+            <button type="button" class="btn btn--tiny btn--primary" data-save="${escapeHtml(order.id)}" ${closed ? 'disabled' : ''}>Guardar</button>
+            <button type="button" class="btn btn--tiny" data-clear="${escapeHtml(order.id)}" ${closed ? 'disabled' : ''}>Limpiar</button>
+            <span class="form-error" data-error="${escapeHtml(order.id)}" role="alert"></span>
           </td>
         </tr>`;
       })

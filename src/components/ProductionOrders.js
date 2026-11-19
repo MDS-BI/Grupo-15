@@ -18,6 +18,7 @@ import { OperatorWorkstationPanel } from './OperatorWorkstationPanel.js';
 import { SupervisorLinePanel } from './SupervisorLinePanel.js';
 import { decimalInput, parseDecimal } from './numeric-field.js';
 import { canTransition } from '../domain/order-state-machine.js';
+import { notifyDialog } from './ConfirmDialog.js';
 
 const BOARD_COLUMNS = ['planned', 'released', 'in_progress', 'completed'];
 
@@ -108,7 +109,7 @@ export function ProductionOrders(store) {
       columnEl.addEventListener('dragleave', (event) => {
         if (!columnEl.contains(event.relatedTarget)) columnEl.classList.remove('is-drop-target');
       });
-      columnEl.addEventListener('drop', (event) => {
+      columnEl.addEventListener('drop', async (event) => {
         event.preventDefault();
         columnEl.classList.remove('is-drop-target');
         const status = columnEl.parentElement.getAttribute('data-status');
@@ -120,7 +121,7 @@ export function ProductionOrders(store) {
         try {
           store.transitionOrder(orderId, status);
         } catch (err) {
-          window.alert(err.message);
+          await notifyDialog({ title: 'No se pudo cambiar el estado', message: err.message });
         }
       });
     });
@@ -133,10 +134,10 @@ export function ProductionOrders(store) {
       : '<span class="tag tag--stock">Stock</span>';
     const active = order.id === selectedOrderId ? 'is-active' : '';
     return `
-      <button type="button" class="order-card ${active}" data-order="${order.id}" draggable="true" title="Arrastra a otra columna para cambiar el estado">
+      <button type="button" class="order-card ${active}" data-order="${escapeHtml(order.id)}" draggable="true" title="Arrastra a otra columna para cambiar el estado">
         <div class="order-card__top">
           <strong>${escapeHtml(order.order_number)}</strong>
-          <span class="priority priority--${order.priority}">${PRIORITY_LABEL[order.priority] || order.priority}</span>
+          <span class="priority priority--${escapeHtml(order.priority)}">${escapeHtml(PRIORITY_LABEL[order.priority] || order.priority)}</span>
         </div>
         <div class="order-card__product">${escapeHtml(product ? product.name : order.product_id)}</div>
         <div class="order-card__meta">
@@ -183,15 +184,15 @@ export function ProductionOrders(store) {
         const canStart = op.status === 'pending' || op.status === 'paused';
         const canComplete = op.status === 'in_progress' || op.status === 'paused';
         return `
-        <tr data-op="${op.id}">
-          <td>${op.sequence}</td>
+        <tr data-op="${escapeHtml(op.id)}">
+          <td>${escapeHtml(op.sequence)}</td>
           <td>${escapeHtml(wc ? wc.name : op.work_center_id)}</td>
-          <td><span class="badge badge--op-${op.status}">${OP_STATUS_LABEL[op.status]}</span></td>
+          <td><span class="badge badge--op-${escapeHtml(op.status)}">${OP_STATUS_LABEL[op.status]}</span></td>
           <td>${fmtNumber(op.planned_time_minutes)}</td>
           <td>${op.actual_time_minutes != null ? fmtNumber(op.actual_time_minutes) : '—'}</td>
           <td class="cell--actions">
-            ${canStart ? `<button type="button" class="btn btn--tiny" data-start="${op.id}">Iniciar</button>` : ''}
-            ${canComplete ? `<button type="button" class="btn btn--tiny btn--primary" data-complete="${op.id}">Completar</button>` : ''}
+            ${canStart ? `<button type="button" class="btn btn--tiny" data-start="${escapeHtml(op.id)}">Iniciar</button>` : ''}
+            ${canComplete ? `<button type="button" class="btn btn--tiny btn--primary" data-complete="${escapeHtml(op.id)}">Completar</button>` : ''}
           </td>
         </tr>`;
       })
@@ -225,7 +226,7 @@ export function ProductionOrders(store) {
         <div><dt>Merma</dt><dd>${fmtNumber(scrap)} u</dd></div>
         <div><dt>Rendimiento</dt><dd>${fmtPercent(yieldRatio)}</dd></div>
         <div><dt>Tasa de merma</dt><dd>${fmtPercent(scrapRate)}</dd></div>
-        <div><dt>Calidad (derivada)</dt><dd><span class="badge badge--qc-${quality}">${QUALITY_LABEL[quality]}</span></dd></div>
+        <div><dt>Calidad (derivada)</dt><dd><span class="badge badge--qc-${escapeHtml(quality)}">${QUALITY_LABEL[quality]}</span></dd></div>
         <div><dt>Tiempo plan / real</dt><dd>${fmtNumber(plannedTotal)} / ${fmtNumber(actualTotal)} min</dd></div>
         <div><dt>Origen</dt><dd>${order.sales_order_id ? `MTO (${escapeHtml(order.sales_order_id)})` : 'Stock'}</dd></div>
       </dl>
@@ -255,27 +256,27 @@ export function ProductionOrders(store) {
       </div>`;
 
     detailEl.querySelectorAll('[data-transition]').forEach((btn) => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         try {
           store.transitionOrder(order.id, btn.getAttribute('data-transition'));
         } catch (err) {
-          window.alert(err.message);
+          await notifyDialog({ title: 'No se pudo cambiar el estado', message: err.message });
         }
         renderAll();
       });
     });
     detailEl.querySelectorAll('[data-start]').forEach((btn) => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         try {
           store.startOperation(btn.getAttribute('data-start'));
         } catch (err) {
-          window.alert(err.message);
+          await notifyDialog({ title: 'No se pudo iniciar la operación', message: err.message });
         }
         renderAll();
       });
     });
     detailEl.querySelectorAll('[data-complete]').forEach((btn) => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         const opId = btn.getAttribute('data-complete');
         const op = store.productionOrderOperations.find((o) => o.id === opId);
         const value = window.prompt(
@@ -293,7 +294,7 @@ export function ProductionOrders(store) {
           });
           renderAll();
         } catch (err) {
-          window.alert(err.message);
+          await notifyDialog({ title: 'No se pudo completar la operación', message: err.message });
         }
       });
     });
@@ -336,13 +337,13 @@ export function ProductionOrders(store) {
     const options = lines
       .map((line) => {
         const prod = store.productById(line.component_product_id);
-        return `<option value="${line.component_product_id}" data-bom="${line.id}" data-uom="${line.uom_id}">
+        return `<option value="${escapeHtml(line.component_product_id)}" data-bom="${escapeHtml(line.id)}" data-uom="${escapeHtml(line.uom_id)}">
         ${escapeHtml(prod ? prod.name : line.component_product_id)}</option>`;
       })
       .join('');
     const warehouseOptions = store.warehouses
       .filter((w) => w.warehouse_type === 'raw_materials')
-      .map((w) => `<option value="${w.id}">${escapeHtml(w.name)}</option>`)
+      .map((w) => `<option value="${escapeHtml(w.id)}">${escapeHtml(w.name)}</option>`)
       .join('');
 
     showModal(`
@@ -407,7 +408,7 @@ export function ProductionOrders(store) {
     const product = store.productById(order.product_id);
     const warehouseOptions = store.warehouses
       .filter((w) => w.warehouse_type === 'finished_goods')
-      .map((w) => `<option value="${w.id}">${escapeHtml(w.name)}</option>`)
+      .map((w) => `<option value="${escapeHtml(w.id)}">${escapeHtml(w.name)}</option>`)
       .join('');
     showModal(`
       <h2>Registrar Salida de Bien Terminado</h2>
@@ -474,14 +475,19 @@ export function ProductionOrders(store) {
   function openNewOrderModal() {
     const productOptions = store.products
       .filter((p) => p.product_type === 'finished_good')
-      .map((p) => `<option value="${p.id}">${escapeHtml(p.name)} (${escapeHtml(p.code)})</option>`)
+      .map(
+        (p) =>
+          `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)} (${escapeHtml(p.code)})</option>`,
+      )
       .join('');
     const warehouseOptions = store.warehouses
-      .map((w) => `<option value="${w.id}">${escapeHtml(w.name)}</option>`)
+      .map((w) => `<option value="${escapeHtml(w.id)}">${escapeHtml(w.name)}</option>`)
       .join('');
     const salesOptions = store.salesOrders
       .filter((s) => s.make_to_order)
-      .map((s) => `<option value="${s.id}">${escapeHtml(s.order_number)} (MTO)</option>`)
+      .map(
+        (s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.order_number)} (MTO)</option>`,
+      )
       .join('');
     showModal(`
       <h2>Nueva Orden de Producción</h2>

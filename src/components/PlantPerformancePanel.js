@@ -6,6 +6,7 @@
 import { escapeHtml, el, fmtNumber, fmtPercent, ORDER_STATUS_LABEL } from './format.js';
 import { downloadCsv, printReport } from '../data/exporters/plant-report.js';
 import { decimalInput, parseDecimal } from './numeric-field.js';
+import { notifyDialog } from './ConfirmDialog.js';
 
 const PERIODS = {
   october: { from: '2026-10-01', to: '2026-10-31', label: 'Octubre 2026' },
@@ -100,7 +101,7 @@ export function PlantPerformancePanel(store, options = {}) {
       ? alarms
           .map(
             (row) =>
-              `<li data-alarm="${row.indicator}">${INDICATOR_LABEL[row.indicator] || row.indicator}: ${formatIndicator(row.indicator, row.value)} (umbral ${row.comparison === 'gt' ? '>' : '<'} ${formatIndicator(row.indicator, row.threshold)})</li>`,
+              `<li data-alarm="${escapeHtml(row.indicator)}">${escapeHtml(INDICATOR_LABEL[row.indicator] || row.indicator)}: ${formatIndicator(row.indicator, row.value)} (umbral ${row.comparison === 'gt' ? '>' : '<'} ${formatIndicator(row.indicator, row.threshold)})</li>`,
           )
           .join('')
       : '<li class="empty-note">Sin alertas de umbral.</li>';
@@ -109,7 +110,7 @@ export function PlantPerformancePanel(store, options = {}) {
       .map((workCenter) => {
         const load = data.load_by_work_center[workCenter.id];
         const oee = data.oee_by_work_center[workCenter.id];
-        return `<tr data-wc="${workCenter.id}">
+        return `<tr data-wc="${escapeHtml(workCenter.id)}">
           <td>${escapeHtml(workCenter.name)}</td>
           <td>${fmtNumber(load.load_minutes, 2)} / ${fmtNumber(load.capacity_minutes, 2)}</td>
           <td>${fmtPercent(load.load_ratio)}</td>
@@ -122,7 +123,7 @@ export function PlantPerformancePanel(store, options = {}) {
       ? data.downtime_by_reason
           .map(
             (row) =>
-              `<tr data-downtime="${row.reason_id}"><td>${escapeHtml(row.reason_label)}</td><td>${fmtNumber(row.downtime_minutes, 2)}</td></tr>`,
+              `<tr data-downtime="${escapeHtml(row.reason_id)}"><td>${escapeHtml(row.reason_label)}</td><td>${fmtNumber(row.downtime_minutes, 2)}</td></tr>`,
           )
           .join('')
       : '<tr><td colspan="2" class="empty-cell">Sin paradas cerradas en el período.</td></tr>';
@@ -133,11 +134,11 @@ export function PlantPerformancePanel(store, options = {}) {
     const orderRows = actionOrders
       .map((order) => {
         const priorityDisabled = !canChangePriority || order.status !== 'planned';
-        return `<tr data-order="${order.id}">
+        return `<tr data-order="${escapeHtml(order.id)}">
           <td>${escapeHtml(order.order_number)}</td>
-          <td>${ORDER_STATUS_LABEL[order.status] || order.status}</td>
+          <td>${escapeHtml(ORDER_STATUS_LABEL[order.status] || order.status)}</td>
           <td>
-            <select data-priority="${order.id}" ${priorityDisabled ? 'disabled' : ''}>
+            <select data-priority="${escapeHtml(order.id)}" ${priorityDisabled ? 'disabled' : ''}>
               ${['low', 'normal', 'high']
                 .map(
                   (priority) =>
@@ -146,7 +147,7 @@ export function PlantPerformancePanel(store, options = {}) {
                 .join('')}
             </select>
           </td>
-          <td><button type="button" class="btn btn--tiny btn--danger" data-cancel="${order.id}" ${canCancel ? '' : 'disabled'}>Cancelar</button></td>
+          <td><button type="button" class="btn btn--tiny btn--danger" data-cancel="${escapeHtml(order.id)}" ${canCancel ? '' : 'disabled'}>Cancelar</button></td>
         </tr>`;
       })
       .join('');
@@ -213,12 +214,12 @@ export function PlantPerformancePanel(store, options = {}) {
       </article>`;
 
     bodyEl.querySelectorAll('[data-priority]').forEach((select) => {
-      select.addEventListener('change', () => {
+      select.addEventListener('change', async () => {
         try {
           store.changeOrderPriority(select.getAttribute('data-priority'), select.value);
           render();
         } catch (err) {
-          window.alert(err.message);
+          await notifyDialog({ title: 'No se pudo cambiar la prioridad', message: err.message });
         }
       });
     });

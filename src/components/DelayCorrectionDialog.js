@@ -22,7 +22,7 @@ export function DelayCorrectionDialog(store, operationId, { onClose } = {}) {
           ${delays
             .map(
               (delay) => `
-            <form class="stack-form" data-correction-form="${delay.id}">
+            <form class="stack-form" data-correction-form="${escapeHtml(delay.id)}">
               <p><strong>${escapeHtml(store.delayReasons.find((r) => r.id === delay.delay_reason_id)?.label || delay.delay_reason_id)}</strong>
                 · inicio ${escapeHtml(delay.started_at)}</p>
               <label>Fin del atraso
