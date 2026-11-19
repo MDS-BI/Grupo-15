@@ -23,7 +23,8 @@ import {
   canScheduleOnWorkCenter,
   deriveOrderStatus,
 } from '../domain/order-state-machine.js';
-import { plannedTimeMinutes } from '../domain/operation-planning.js';
+import { capacityFor } from '../domain/capacity.js';
+import { capacityUtilization, plannedTimeMinutes } from '../domain/operation-planning.js';
 import { buildBomTree, flattenBom } from '../domain/bom-explosion.js';
 import {
   validateBom,
@@ -74,7 +75,6 @@ import {
 } from '../domain/order-scheduling.js';
 import {
   buildLineBalanceSuggestions,
-  businessDaysInPeriod,
   computeBalanceSummary,
   computeOrderDetail,
   computeProjectedLoad,
@@ -1101,6 +1101,14 @@ export class ManufacturingStore extends EventTarget {
     });
   }
 
+  /** Utilización diaria por centro: la misma carga pendiente que usa el panel. */
+  dailyUtilizationByWorkCenter() {
+    return this.workCenterLoads().map((row) => ({
+      ...row,
+      utilization: capacityUtilization(row.loadMinutes, row.workCenter),
+    }));
+  }
+
   /* -------------------- Mantenimiento (US-09) -------------------- */
 
   maintenanceTicketsFor({ status, priority, workCenterId } = {}) {
@@ -1984,17 +1992,13 @@ export class ManufacturingStore extends EventTarget {
   /* -------------------- US-11 Balance de líneas -------------------- */
 
   capacityForPeriod(period = {}) {
-    const days = businessDaysInPeriod(period);
     const map = {};
     for (const workCenter of this.workCenters) {
-      const rawEfficiency = Number(workCenter.efficiency_factor);
-      const efficiency = Number.isFinite(rawEfficiency) && rawEfficiency > 0 ? rawEfficiency : 1;
+      const capacity = capacityFor(workCenter, period);
       map[workCenter.id] = {
         work_center_id: workCenter.id,
         name: workCenter.name,
-        capacity_minutes: round2(
-          (Number(workCenter.capacity_per_day_minutes) || 0) * efficiency * days,
-        ),
+        capacity_minutes: capacity.capacity_minutes,
       };
     }
     return map;

@@ -106,6 +106,7 @@ describe('line-balance', () => {
     );
     expect(rows[0]).toMatchObject({
       capacity_minutes: 9504,
+      effective_per_day_minutes: 432,
       business_days: 22,
       efficiency_factor: 0.9,
       slack_minutes: 8654,

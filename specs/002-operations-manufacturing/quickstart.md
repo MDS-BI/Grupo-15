@@ -216,14 +216,15 @@ El módulo es frontend-only: no requiere backend ni variables de entorno. Los da
 ## 15. Balance de líneas (US-11)
 
 1. Abra **Balance de líneas** y seleccione un período con órdenes planificadas; en la demo use **Octubre 2026** (22 días hábiles).
-2. Confirme la tabla por centro: tiempo estándar, carga proyectada, días, eficiencia, capacidad efectiva del período y utilización.
-3. Verifique el semáforo: **Normal · verde** (< 75 %, capacidad ociosa), **Ajustada · ámbar** (75 %–94 %, mayor carga sin sobrecarga) y **Cuello crítico · rojo** (≥ 95 %). La alerta superior se activa solo si algún centro alcanza el 95 %; si ninguno lo hace, debe aparecer “Línea balanceada · Sin cuellos de botella críticos”.
+2. Confirme el título “Carga por centro · Octubre 2026 (22 días hábiles)” y la tabla por centro: tiempo estándar, carga proyectada, eficiencia, capacidad efectiva del período, utilización y utilización del día. No debe haber columna de días.
+3. Verifique el semáforo: **Normal · verde** (< 75 %, capacidad ociosa), **Ajustada · ámbar** (75 % a < 95 %, por ejemplo 94,5 %) y **Cuello crítico · rojo** (≥ 95 %). La alerta superior se activa solo si algún centro alcanza el 95 %; si ninguno lo hace, debe aparecer “Línea balanceada · Sin cuellos de botella críticos”.
 4. Revise el panel **Sugerencias de balanceo**: solo ofrece propuestas con cuello crítico. Las reasignaciones son únicamente entre estaciones del mismo tipo; en la demo se espera “Reasignar 6.865 min de OP-3007 desde Estación de Soldadura 1 a Estación de Soldadura 2 · Sec. 20.”
 5. Pulse **Solicitar**, añada una nota y confirme **Aceptar solicitud**: la fila pasa a `Solicitud simulada`. La nota no se envía, no se registra solicitud alguna y no cambian rutas, operaciones ni asignaciones.
 6. Si hay órdenes sin fechas planificadas, confirme el aviso y el enlace a **Planificación**; no deben sumarse a la carga.
 7. Haga clic (o pulse Enter/Espacio) en una fila de **Carga por centro**: se abre un popover compacto centrado sobre esa sección, sin salirse del viewport, con las órdenes de la estación, la carga en el centro y la participación por orden; se cierra con el botón, Escape, clic fuera o nueva activación. La sección “Órdenes por centro” ya no existe; el detalle de una orden sigue disponible para comparar su desglose por operación con la fila del centro.
-8. Recargue la página: el balance se recalcula desde el estado vigente y no aparece ningún registro de solicitudes porque la confirmación fue solo visual.
-9. **Solución de problemas US-11**: si la tabla aparece vacía, revise que existan rutas con tiempos estándar y órdenes con fechas; si un centro muestra `—`, su capacidad efectiva es `0` y debe corregirse en datos maestros.
+8. En la pestaña **Producción**, active una fila de **Utilización por Centro de Trabajo**: se abre una ventana con las operaciones pendientes de ese centro (orden, secuencia, estado y minutos). Compare el porcentaje de la fila con la columna **Utilización del día** del balance: deben coincidir, con texto real aunque supere 100 % y relleno limitado al 100 % en ambas columnas del balance; los colores verde/ámbar/rojo son idénticos en “Utilización” y “Utilización del día”.
+9. Recargue la página: el balance se recalcula desde el estado vigente y no aparece ningún registro de solicitudes porque la confirmación fue solo visual.
+10. **Solución de problemas US-11**: si la tabla aparece vacía, revise que existan rutas con tiempos estándar y órdenes con fechas; si un centro muestra `—`, su capacidad efectiva es `0` y debe corregirse en datos maestros.
 
 | AC | Verificación |
 |---|---|
@@ -231,6 +232,7 @@ El módulo es frontend-only: no requiere backend ni variables de entorno. Los da
 | AC-39 | Pasos 1–3: carga/utilización con días hábiles × `capacity_per_day_minutes` × `efficiency_factor`; semáforo verde/ámbar/rojo; alerta superior solo con algún centro ≥ 95 % y mensaje de línea balanceada en caso contrario. |
 | AC-40 | Pasos 4–5 y 8: propuestas solo con cuello crítico, reasignaciones del mismo `station_type`, confirmación simulada sin registro ni persistencia y sin mutación de datos maestros. |
 | AC-45 | Paso 7: popover compacto centrado sobre “Carga por centro” y limitado al viewport, con órdenes, carga en el centro y participación; cierre con botón, Escape, clic fuera o nueva activación; sin sección “Órdenes por centro”. |
+| AC-46 | Pasos 2, 3 y 8: días hábiles en el título sin columna de días, columna “Utilización del día” con markup y colores compartidos, texto real con relleno limitado al 100 % y ventana de operaciones pendientes en el Panel de Producción. |
 
 ---
 

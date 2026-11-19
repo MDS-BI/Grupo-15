@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ManufacturingStore } from '../../src/data/ManufacturingStore.js';
 import { LEGACY_SNAPSHOT_KEY, SNAPSHOT_KEY } from '../../src/data/persistence.js';
+import { capacityUtilization } from '../../src/domain/operation-planning.js';
 
 function memoryStorage(initial = {}) {
   const map = new Map(Object.entries(initial));
@@ -115,6 +116,19 @@ describe('ManufacturingStore', () => {
     const loads = store.workCenterLoads();
     expect(loads.length).toBe(6);
     expect(loads.find((l) => l.workCenter.id === 'wc_corte').loadMinutes).toBeGreaterThan(0);
+  });
+
+  it('deriva la utilización diaria de la misma carga pendiente del panel', () => {
+    const rows = store.dailyUtilizationByWorkCenter();
+    const loads = store.workCenterLoads();
+    expect(rows).toHaveLength(loads.length);
+    rows.forEach((row, index) => {
+      expect(row.workCenter).toBe(loads[index].workCenter);
+      expect(row.loadMinutes).toBe(loads[index].loadMinutes);
+      expect(row.utilization).toBe(
+        capacityUtilization(loads[index].loadMinutes, loads[index].workCenter),
+      );
+    });
   });
 
   it('reconcilia plan-vs-real de una orden', () => {

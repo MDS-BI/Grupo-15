@@ -47,7 +47,7 @@ Sin efectos secundarios, sin acceso a `localStorage` y sin lectura del reloj glo
 ### `utilizationStatus(utilization)`
 1. `null`/no finito → `'unknown'`.
 2. `< 0.75` → `'normal'` (verde / saludable).
-3. `0.75–0.949` → `'tight'` (ámbar / ajustada).
+3. `[0.75, 0.95)` → `'tight'` (ámbar / ajustada); por ejemplo, `0.945` también es ajustada.
 4. `≥ 0.95` → `'bottleneck'` (rojo / sobrecarga).
 
 ### `computeStandardTimes(routingOperations)`
@@ -101,9 +101,9 @@ Todas las consultas son deterministas para el mismo estado y período.
 | Elemento | Estado | Comportamiento |
 |---|---|---|
 | Selector de período | Siempre visible | Cambia el cálculo; no muta datos. |
-| Tabla por centro | Período con datos | Nombre, tiempo estándar, carga proyectada, capacidad efectiva, días, eficiencia, utilización y estado. |
+| Tabla por centro | Período con datos | Nombre, estado, carga proyectada, capacidad del período, capacidad/día, holgura, utilización del período, utilización del día (la misma del Panel de Producción), setup y run estándar. Ambas columnas de utilización usan el mismo componente de barra (contenedor `cell--bar`, pista gris redondeada y etiqueta de texto neutra), con relleno limitado al 100 % pero texto real y escala verde/ámbar/rojo por umbral. El título “Carga por centro · <período> (N días hábiles)” muestra los días; no hay columna de días. |
 | Popover de órdenes por centro | Al activar una fila de “Carga por centro” | Ventana compacta centrada sobre la sección “Carga por centro” y limitada al viewport, con las órdenes que consumen el centro, la carga en el centro y la participación por orden; se cierra con botón, Escape, clic fuera o nueva activación. No existe una sección “Órdenes por centro”. |
-| Semáforo | Siempre | `Normal · verde` (< 75 %), `Ajustada · ámbar` (75 %–94 %) y `Cuello crítico · rojo` (≥ 95 %); no solo color. |
+| Semáforo | Siempre | `Normal · verde` (< 75 %), `Ajustada · ámbar` (75 % a < 95 %) y `Cuello crítico · rojo` (≥ 95 %); no solo color. |
 | Alerta superior | Algún centro ≥ 95 % | Muestra `Alerta crítica · Cuello de botella: <nombre> (<utilización>)` y resalta la fila. Si ninguno alcanza el umbral, muestra “Línea balanceada · Sin cuellos de botella críticos”. |
 | Sugerencias | Con cuello crítico | Tabla con tipo, propuesta, carga y botón `Solicitar`. Las reasignaciones son solo entre estaciones del mismo `station_type`. Sin críticos: “Sin cuellos de botella críticos: no hay reasignaciones pendientes.” |
 | Modal de solicitud | Tras `Solicitar` | `role="dialog"`, `aria-modal="true"`, texto de la propuesta, aviso de simulación, textarea de nota, `Cancelar` y `Aceptar solicitud`; cierra con Escape. |
@@ -134,7 +134,7 @@ capacity_minutes(work_center, period) = business_days(period)
 
 utilization = load_minutes / capacity_minutes        # null si capacity_minutes == 0
 
-status = 'normal' (< 0.75) | 'tight' (0.75–0.949) | 'bottleneck' (≥ 0.95)
+status = 'normal' ([0, 0.75)) | 'tight' ([0.75, 0.95)) | 'bottleneck' ([0.95, ∞))
 
 bottleneck = argmax(utilization) solo si utilization ≥ 0.95
              empate → argmax(load_minutes) → id ascendente
@@ -144,6 +144,9 @@ reassign_target = work_center con el mismo station_type que el cuello
 ```
 
 - La UI etiqueta la capacidad como **efectiva del período**; US-08 usa la misma eficiencia sobre capacidad diaria.
+- `business_days(period)` cuenta lunes a viernes del rango inclusivo; la demo no aplica feriados (octubre 2026 = 22, noviembre 2026 = 21).
+- `daily_utilization = pending_load_minutes / (capacity_per_day_minutes × efficiency_factor)`; es el mismo valor que muestra el Panel de Producción y alimenta la columna “Utilización del día”.
+- En ambas columnas de utilización, el texto conserva el porcentaje real (por ejemplo `447,0 %`) mientras el relleno de la barra se limita a `min(daily_utilization × 100, 100) %`.
 - La alerta superior se activa solo si existe al menos un centro con `utilization ≥ 0.95`.
 - Las reasignaciones no cruzan `station_type`; la revisión de secuencia es siempre solo una propuesta.
 - La carga se expresa en minutos y también como porcentaje de la capacidad del período.
@@ -169,7 +172,8 @@ reassign_target = work_center con el mismo station_type que el cuello
 3. **Utilización con eficiencia**: 600 minutos de carga, 480 minutos/día, eficiencia `0.8` y un día hábil dan `1.5625`, no `1.25`; la UI muestra capacidad efectiva de 384 minutos.
 4. **Días hábiles**: octubre 2026 cuenta 22 días laborables; el rango `2026-10-01` a `2026-10-31` inclusive usa 22 días.
 5. **Capacidad cero**: un centro con `capacity_per_day_minutes = 0` devuelve `null` y la UI muestra `—` sin romperse.
-6. **Umbral y alerta**: 97 % se marca rojo y activa la alerta superior; 79 % se marca ámbar; 29 % se marca verde; sin centros ≥ 95 % aparece “Línea balanceada · Sin cuellos de botella críticos”.
+6. **Umbral y alerta**: 97 % se marca rojo y activa la alerta superior; 94,5 % se marca ámbar; 79 % se marca ámbar; 29 % se marca verde; sin centros ≥ 95 % aparece “Línea balanceada · Sin cuellos de botella críticos”.
+6b. **Utilización diaria compatible con AC-46**: `wc_solda` muestra `447,0 %` como texto, con el relleno limitado al 100 % y color rojo; el markup usa `cell--bar`/`bar`/`bar__label` igual que “Utilización”, sin borde interno adicional y con etiqueta de texto neutra.
 7. **Desempate**: dos centros al 97 % eligen el de mayor carga y, si empatan, el menor `work_center_id`.
 8. **Sugerencia del mismo tipo**: con cuello en `wc_solda`, la demo propone `Reasignar 6.865 min de OP-3007 desde Estación de Soldadura 1 a Estación de Soldadura 2 · Sec. 20.`
 9. **Sin cruce de tipos**: si el cuello es soldadura y solo hay destinos de corte, armado o calidad, no se genera reasignación; puede generarse solo la revisión de secuencia.

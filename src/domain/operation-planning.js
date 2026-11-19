@@ -1,14 +1,11 @@
 /**
  * @file Cálculo de tiempos estándar de operaciones y utilización de capacidad.
  * `planned_time_minutes = setup_time_minutes + run_time_per_unit_minutes × quantity`
+ * La capacidad se deriva de `domain/capacity.js`; aquí se mantiene el horizonte
+ * diario del panel de producción.
  */
 
-function round2(n) {
-  return Math.round((n + Number.EPSILON) * 100) / 100;
-}
-function round4(n) {
-  return Math.round((n + Number.EPSILON) * 10000) / 10000;
-}
+import { effectiveDailyCapacity, loadRatio, round2 } from './capacity.js';
 
 /**
  * @param {import('./types.js').RoutingOperation} operation
@@ -35,23 +32,18 @@ export function totalPlannedTime(operations, quantity) {
 /**
  * Minutos de capacidad efectiva de un centro de trabajo en un día.
  * @param {import('./types.js').WorkCenter} workCenter
- * @returns {number}
+ * @returns {number|null} `null` si el centro no tiene capacidad válida
  */
 export function effectiveCapacityPerDay(workCenter) {
-  const capacity = Number(workCenter?.capacity_per_day_minutes) || 0;
-  const efficiency = Number(workCenter?.efficiency_factor);
-  const factor = Number.isFinite(efficiency) && efficiency > 0 ? efficiency : 1;
-  return round2(capacity * factor);
+  return effectiveDailyCapacity(workCenter);
 }
 
 /**
- * Utilización de un centro de trabajo como proporción (carga / capacidad).
+ * Utilización diaria de un centro (carga pendiente / capacidad de un día).
  * @param {number} loadMinutes
  * @param {import('./types.js').WorkCenter} workCenter
- * @returns {number} valor ≥ 0 (puede superar 1 en sobrecarga)
+ * @returns {number|null} proporción ≥ 0 (puede superar 1), o `null` sin capacidad
  */
 export function capacityUtilization(loadMinutes, workCenter) {
-  const capacity = effectiveCapacityPerDay(workCenter);
-  if (capacity <= 0) return 0;
-  return round4(loadMinutes / capacity);
+  return loadRatio(loadMinutes, effectiveCapacityPerDay(workCenter));
 }

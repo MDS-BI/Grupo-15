@@ -4,6 +4,8 @@
  */
 
 import { escapeHtml, el, fmtNumber, fmtPercent } from './format.js';
+import { businessDaysInPeriod } from '../domain/capacity.js';
+import { utilizationStatus } from '../domain/line-balance.js';
 
 const PERIODS = {
   october: { from: '2026-10-01', to: '2026-10-31', label: 'Octubre 2026' },
@@ -35,10 +37,9 @@ function utilizationCell(row) {
   if (row.utilization === null || row.utilization === undefined) return '—';
   const width = Math.min(100, Math.max(0, row.utilization * 100));
   const config = STATUS[row.status] || STATUS.unknown;
-  const labelClass = row.status === 'bottleneck' ? ' is-over' : '';
   return `<div class="cell--bar">
     <div class="bar ${config.bar}"><div class="bar__fill" style="width:${width}%"></div></div>
-    <span class="bar__label${labelClass}">${fmtPercent(row.utilization)}</span>
+    <span class="bar__label">${fmtPercent(row.utilization)}</span>
   </div>`;
 }
 
@@ -233,6 +234,10 @@ export function LineBalancePanel(store) {
   function render() {
     const period = PERIODS[periodKey];
     const balance = store.lineBalanceFor(period);
+    const businessDays = businessDaysInPeriod(period);
+    const dailyUtilization = new Map(
+      store.dailyUtilizationByWorkCenter().map((row) => [row.workCenter.id, row.utilization]),
+    );
 
     if (balance.bottleneck) {
       bottleneckEl.className = 'badge badge--danger';
@@ -251,12 +256,16 @@ export function LineBalancePanel(store) {
         const isSelected = selectedWorkCenterId === row.work_center_id;
         const deficit = row.slack_minutes < 0 ? ' cell--deficit' : '';
         const popoverOpen = popoverCenterId === row.work_center_id;
+        const dailyUtil = dailyUtilization.get(row.work_center_id);
+        const dailyRow = { utilization: dailyUtil, status: utilizationStatus(dailyUtil) };
         return `<tr data-wc="${row.work_center_id}" data-status="${row.status}" tabindex="0" role="button" aria-pressed="${isSelected}" aria-expanded="${popoverOpen}" ${popoverOpen ? 'aria-controls="center-orders-popover"' : ''} class="status--${row.status}${isBottleneck ? ' is-bottleneck' : ''}${isSelected ? ' is-selected' : ''}">
           <td>${escapeHtml(row.name)} ${statusBadge(row.status)}</td>
           <td class="num">${formatMinutes(row.load_minutes)}</td>
           <td class="num">${formatMinutes(row.capacity_minutes)}</td>
+          <td class="num" title="Capacidad efectiva de 1 día = min/día × eficiencia; se multiplica por los días hábiles del período">${row.effective_per_day_minutes === null ? '—' : formatMinutes(row.effective_per_day_minutes)}</td>
           <td class="num${deficit}">${formatMinutes(row.slack_minutes)}</td>
           <td>${utilizationCell(row)}</td>
+          <td title="Carga pendiente ÷ capacidad de 1 día, igual que en el Panel de Producción">${utilizationCell(dailyRow)}</td>
           <td class="num">${standard ? fmtNumber(standard.setup_time_minutes, 0) : '—'}</td>
           <td class="num">${standard ? fmtNumber(standard.run_time_per_unit_minutes, 2) : '—'}</td>
         </tr>`;
@@ -330,7 +339,7 @@ export function LineBalancePanel(store) {
     bodyEl.innerHTML = `
       <article class="panel" data-role="load-section">
         <header class="panel__header">
-          <h3>Carga por centro · ${escapeHtml(period.label)}</h3>
+          <h3>Carga por centro · ${escapeHtml(period.label)} (${fmtNumber(businessDays)} días hábiles)</h3>
           <p class="panel__subtitle" data-unscheduled>Órdenes sin fechas excluidas: ${unscheduled.length} (${escapeHtml(unscheduledText)})</p>
           <p class="panel__subtitle">Capacidad = días hábiles × min/día × factor de eficiencia. Haz clic en un centro para ver sus órdenes en una ventana compacta.</p>
         </header>
@@ -339,10 +348,12 @@ export function LineBalancePanel(store) {
             <thead>
               <tr>
                 <th>Centro</th>
-                <th class="num">Carga (min)</th>
-                <th class="num" title="Días hábiles × min/día × factor de eficiencia">Capacidad (min)</th>
+                <th class="num" title="Carga proyectada de las órdenes que solapan el período">Carga (min)</th>
+                <th class="num" title="Días hábiles × min/día × factor de eficiencia">Capacidad del período (min)</th>
+                <th class="num" title="Capacidad efectiva de 1 día, la misma tasa que muestra el Panel de Producción">Capacidad/día (min)</th>
                 <th class="num">Holgura (min / h)</th>
-                <th>Utilización</th>
+                <th title="Carga proyectada del período ÷ capacidad del período">Utilización</th>
+                <th title="Carga pendiente ÷ capacidad de 1 día, igual que en el Panel de Producción">Utilización del día</th>
                 <th class="num">Setup estándar</th>
                 <th class="num">Run estándar /u</th>
               </tr>

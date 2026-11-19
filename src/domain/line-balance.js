@@ -1,15 +1,16 @@
 /**
  * @file Balance de líneas (US-11): tiempos estándar, carga proyectada,
  * utilización frente a capacidad efectiva y estados de carga por centro.
- * Ver contracts/line-balance.md §3 y §6.
+ * Ver contracts/line-balance.md §3 y §6. La capacidad y el ratio se derivan de
+ * `domain/capacity.js`; la carga proyectada es propia de este caso de uso.
  */
+
+import { capacityFor, loadRatio, round2 } from './capacity.js';
+
+export { businessDaysInPeriod } from './capacity.js';
 
 export const TIGHT_FROM = 0.75;
 export const BOTTLENECK_FROM = 0.95;
-
-function round2(value) {
-  return Math.round(value * 100) / 100;
-}
 
 function toMillis(value) {
   if (!value) return null;
@@ -27,26 +28,6 @@ function overlaps(period = {}, order) {
   if (from !== null && end !== null && end < from) return false;
   if (to !== null && start !== null && start > to + 86399999) return false;
   return true;
-}
-
-/** Días hábiles (lunes a viernes) inclusivos del período; mínimo 1. */
-export function businessDaysInPeriod(period = {}) {
-  const from = toMillis(period.from);
-  const to = toMillis(period.to);
-  if (from === null || to === null) return 1;
-  const start = new Date(from);
-  const end = new Date(to);
-  const cursor = new Date(
-    Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()),
-  );
-  const last = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate()));
-  let count = 0;
-  while (cursor <= last) {
-    const day = cursor.getUTCDay();
-    if (day !== 0 && day !== 6) count += 1;
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
-  }
-  return Math.max(1, count);
 }
 
 /** Estado semántico de carga según utilización relativa a capacidad. */
@@ -171,25 +152,24 @@ export function computeProjectedLoad(
  * @param {{from?:string,to?:string}} [period]
  */
 export function computeUtilization(loadByWorkCenter = {}, workCenters = [], period = {}) {
-  const days = businessDaysInPeriod(period);
   return workCenters
     .map((wc) => {
       const load = Number(loadByWorkCenter[wc.id]?.load_minutes) || 0;
-      const rawEfficiency = Number(wc.efficiency_factor);
-      const efficiency = Number.isFinite(rawEfficiency) && rawEfficiency > 0 ? rawEfficiency : 1;
-      const capacity = (Number(wc.capacity_per_day_minutes) || 0) * efficiency * days;
-      const ratio = capacity === 0 ? null : load / capacity;
+      const capacity = capacityFor(wc, period);
+      const ratio = loadRatio(load, capacity.capacity_minutes);
       return {
         work_center_id: wc.id,
         name: wc.name,
         load_minutes: round2(load),
-        capacity_minutes: round2(capacity),
-        utilization: ratio === null ? null : round2(ratio),
+        capacity_minutes: capacity.capacity_minutes,
+        effective_per_day_minutes: capacity.effective_per_day_minutes,
+        utilization: ratio,
         status: utilizationStatus(ratio),
-        slack_minutes: round2(capacity - load),
-        business_days: days,
-        efficiency_factor: efficiency,
-        invalid_capacity: capacity === 0,
+        slack_minutes:
+          capacity.capacity_minutes === null ? null : round2(capacity.capacity_minutes - load),
+        business_days: capacity.business_days,
+        efficiency_factor: capacity.efficiency_factor,
+        invalid_capacity: capacity.invalid_capacity,
       };
     })
     .sort((a, b) => {

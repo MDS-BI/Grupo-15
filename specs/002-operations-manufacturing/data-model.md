@@ -805,7 +805,7 @@ erDiagram
 | `performance` | `quantity_completed`, `run_time_per_unit_minutes`, `quantity_planned` | Ritmo real frente al estándar; componente del OEE. |
 | `quality` | `quantity_completed`, `scrap_quantity` | Proporción conforme de la producción; componente del OEE. |
 | `oee` | `availability × performance × quality` | Eficiencia global del centro en el período. |
-| `load` | `Σ planned_time_minutes`, `capacity_per_day_minutes × efficiency_factor` | Carga del centro frente a su capacidad efectiva. |
+| `load` | `Σ planned_time_minutes`, `días hábiles × capacity_per_day_minutes × efficiency_factor` | Carga del centro frente a su capacidad efectiva del período. |
 | `utilization` | `Σ planned_time_minutes`, `días hábiles × capacity_per_day_minutes × efficiency_factor` | Uso de la capacidad efectiva del período; base del cuello de botella. |
 | `bottleneck` | `utilization` por centro | Centro con utilización ≥ 95% que limita la línea; desempate por utilización, carga e id. La alerta superior solo se activa si existe al menos un centro en este estado. |
 
@@ -813,7 +813,7 @@ erDiagram
 - `availability`, `performance` y `quality` se acotan a `[0, 1]`; `oee` nunca supera `1`.
 - `load` puede superar `1` para señalar sobrecarga; el panel debe destacarlo.
 - `capacity_minutes(work_center, period) = business_days(period) × capacity_per_day_minutes × efficiency_factor`; los días hábiles excluyen sábados y domingos.
-- Los estados de utilización son Normal (`< 0.75`) en verde, Ajustada (`0.75–0.949`) en ámbar y Cuello crítico / Sobrecarga (`≥ 0.95`) en rojo. Si ningún centro llega al 95%, la vista muestra “Línea balanceada · Sin cuellos de botella críticos”.
+- Los estados de utilización son Normal (`[0, 0.75)`) en verde, Ajustada (`[0.75, 0.95)`) en ámbar y Cuello crítico / Sobrecarga (`[0.95, ∞)`) en rojo. No hay intervalo sin clasificar entre 94 % y 95 %. Si ningún centro llega al 95%, la vista muestra “Línea balanceada · Sin cuellos de botella críticos”.
 - Las reasignaciones sugeridas requieren el mismo `station_type` en origen y destino. La demo tiene 5 tipos y 6 estaciones físicas (Soldadura 1 y Soldadura 2).
 - No existe `lineBalanceRequest`: la aceptación de una sugerencia es simulada, solo marca la fila en la vista y no escribe en `erp.manufacturing.v2`.
 - Los indicadores se calculan por centro de trabajo y período; nunca por operador.

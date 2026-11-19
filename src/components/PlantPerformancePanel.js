@@ -111,8 +111,8 @@ export function PlantPerformancePanel(store, options = {}) {
         const oee = data.oee_by_work_center[workCenter.id];
         return `<tr data-wc="${workCenter.id}">
           <td>${escapeHtml(workCenter.name)}</td>
-          <td>${fmtNumber(load.load_minutes, 2)} / ${fmtNumber(load.capacity_minutes, 2)}</td>
-          <td>${fmtPercent(load.load_ratio)}</td>
+          <td>${load.invalid_capacity ? '—' : `${fmtNumber(load.load_minutes, 2)} / ${fmtNumber(load.capacity_minutes, 2)}`}</td>
+          <td>${load.load_ratio === null ? '—' : fmtPercent(load.load_ratio)}</td>
           <td>${oee && oee.oee !== null ? fmtPercent(oee.oee) : '—'}</td>
         </tr>`;
       })
@@ -188,7 +188,7 @@ export function PlantPerformancePanel(store, options = {}) {
         <header class="panel__header"><h3>Carga y OEE por centro</h3></header>
         <div class="table-wrap">
           <table class="data-table">
-            <thead><tr><th>Centro</th><th>Carga / capacidad (min)</th><th>Utilización</th><th>OEE</th></tr></thead>
+            <thead><tr><th>Centro</th><th title="Capacidad del período = días hábiles × min/día × eficiencia">Carga / capacidad (min)</th><th title="Carga del período ÷ capacidad del período">Utilización</th><th>OEE</th></tr></thead>
             <tbody>${centerRows}</tbody>
           </table>
         </div>

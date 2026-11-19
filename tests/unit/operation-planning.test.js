@@ -27,11 +27,20 @@ describe('operation-planning', () => {
   it('aplica el efficiency_factor a la capacidad', () => {
     const wc = { capacity_per_day_minutes: 480, efficiency_factor: 0.9 };
     expect(effectiveCapacityPerDay(wc)).toBe(432);
+    expect(effectiveCapacityPerDay({ capacity_per_day_minutes: 480, efficiency_factor: 0 })).toBe(
+      480,
+    );
+    expect(effectiveCapacityPerDay({ capacity_per_day_minutes: 0 })).toBeNull();
   });
 
-  it('calcula la utilización con sobrecarga', () => {
+  it('calcula la utilización con sobrecarga y redondea a 2 decimales', () => {
     const wc = { capacity_per_day_minutes: 480, efficiency_factor: 1 };
     expect(capacityUtilization(240, wc)).toBe(0.5);
     expect(capacityUtilization(960, wc)).toBe(2);
+    expect(capacityUtilization(150, { ...wc, efficiency_factor: 0.9 })).toBe(0.35);
+  });
+
+  it('devuelve null cuando el centro no tiene capacidad efectiva', () => {
+    expect(capacityUtilization(240, { capacity_per_day_minutes: 0 })).toBeNull();
   });
 });

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { JSDOM } from 'jsdom';
 import { ManufacturingStore } from '../../src/data/ManufacturingStore.js';
+import { DashboardOverview } from '../../src/components/DashboardOverview.js';
 import { PlantPerformancePanel } from '../../src/components/PlantPerformancePanel.js';
 import { ProductionSchedulingPanel } from '../../src/components/ProductionSchedulingPanel.js';
 import { LineBalancePanel } from '../../src/components/LineBalancePanel.js';
@@ -146,6 +147,15 @@ describe('Balance de líneas (US-11)', () => {
 
   it('muestra KPIs, semáforo, holgura y barras de utilización', () => {
     document.body.appendChild(LineBalancePanel(store));
+    expect(document.querySelector('[data-role="load-section"] h3').textContent).toContain(
+      'Octubre 2026 (22 días hábiles)',
+    );
+    const headers = [...document.querySelectorAll('.balance-table th')].map((th) =>
+      th.textContent.trim(),
+    );
+    expect(headers).not.toContain('Días hábiles');
+    expect(headers).toContain('Utilización del día');
+    expect(headers.indexOf('Utilización del día')).toBeGreaterThan(headers.indexOf('Utilización'));
     expect(document.querySelector('[data-kpi="avg-utilization"]').textContent).toContain('%');
     expect(document.querySelector('[data-kpi="top-center"]').textContent).toContain(
       'Estación de Soldadura',
@@ -160,7 +170,26 @@ describe('Balance de líneas (US-11)', () => {
     expect(soldaRow.textContent).toContain('144,8 h');
     expect(document.querySelector('[data-wc="wc_corte"]').dataset.status).toBe('normal');
     expect(document.querySelector('[data-wc="wc_pintura"]').dataset.status).toBe('tight');
-    expect(document.querySelectorAll('.bar__fill').length).toBe(6);
+    const daily = store
+      .dailyUtilizationByWorkCenter()
+      .find((row) => row.workCenter.id === 'wc_solda');
+    const dailyIndex = headers.indexOf('Utilización del día');
+    const periodCell = soldaRow.querySelectorAll('td')[headers.indexOf('Utilización')];
+    const dailyCell = soldaRow.querySelectorAll('td')[dailyIndex];
+    expect(dailyCell.textContent).toContain(`${(daily.utilization * 100).toFixed(1)}%`);
+    expect(dailyCell.classList.contains('cell--bar')).toBe(false);
+    expect(dailyCell.children.length).toBe(1);
+    expect(dailyCell.querySelector('.cell--bar')).toBeTruthy();
+    expect(dailyCell.querySelector('.bar').className).toBe(
+      periodCell.querySelector('.bar').className,
+    );
+    expect(dailyCell.querySelector('.bar__label').className).toBe('bar__label');
+    expect(dailyCell.querySelector('.bar__fill').style.width).toBe('100%');
+    expect(document.querySelector('.balance-table .bar--over')).toBeNull();
+    const armadoDailyCell = document.querySelectorAll('[data-wc="wc_armado"] td')[dailyIndex];
+    expect(armadoDailyCell.querySelector('.bar').classList.contains('bar--tight')).toBe(true);
+    expect(armadoDailyCell.querySelector('.bar__label').className).toBe('bar__label');
+    expect(document.querySelectorAll('.bar__fill').length).toBe(12);
     expect(document.querySelectorAll('.balance-chart__fill').length).toBe(6);
     expect(document.querySelectorAll('.balance-chart__ref').length).toBe(6);
   });
@@ -250,5 +279,39 @@ describe('Balance de líneas (US-11)', () => {
     expect(store.lineBalanceRequestsFor).toBeUndefined();
     expect(JSON.stringify(store.routingOperations)).toBe(routingSnapshot);
     expect(JSON.stringify(store.productionOrders)).toBe(ordersSnapshot);
+  });
+});
+
+describe('Panel de producción (US-06)', () => {
+  it('muestra las operaciones que generan la carga al hacer clic en un centro', () => {
+    document.body.appendChild(DashboardOverview(store));
+    expect(document.querySelector('[data-role="capacity-popover"]')).toBeNull();
+
+    click('[data-capacity-wc="wc_solda"]');
+    const popover = document.querySelector('[data-role="capacity-popover"]');
+    expect(popover).toBeTruthy();
+    expect(popover.textContent).toContain('Estación de Soldadura 1');
+
+    const load = store.workCenterLoads().find((row) => row.workCenter.id === 'wc_solda');
+    expect(popover.textContent).toContain(`${load.pendingOperations} operaciones`);
+    expect(popover.textContent).toContain('min de carga pendiente');
+    const operations = store.productionOrderOperations.filter(
+      (op) => op.work_center_id === 'wc_solda' && op.status !== 'completed',
+    );
+    expect(popover.querySelectorAll('[data-capacity-operation]')).toHaveLength(operations.length);
+    operations.forEach((op) => {
+      expect(popover.textContent).toContain(store.orderById(op.production_order_id).order_number);
+    });
+
+    click('[data-role="close-capacity-popover"]');
+    expect(document.querySelector('[data-role="capacity-popover"]')).toBeNull();
+
+    click('[data-capacity-wc="wc_solda"]');
+    document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(document.querySelector('[data-role="capacity-popover"]')).toBeNull();
+
+    click('[data-capacity-wc="wc_solda"]');
+    document.body.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    expect(document.querySelector('[data-role="capacity-popover"]')).toBeNull();
   });
 });

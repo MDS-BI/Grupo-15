@@ -1,6 +1,6 @@
 # Implementation Plan: Operations & Manufacturing Module (ERP)
 
-**Branch**: `002-operations-manufacturing` | **Date**: 2026-10-21 | **Updated**: 2026-11-18
+**Branch**: `002-operations-manufacturing` | **Date**: 2026-10-21 | **Updated**: 2026-11-19
 **Spec**: `specs/002-operations-manufacturing/spec.md`
 **Input**: Feature specification and data contracts derived from `erp_data_model.md` (Module 7: Operations / Manufacturing) and `specs/002-operations-manufacturing/data-model.md`
 **Methodology**: Spec-Driven Development (Spec-Kit)
@@ -24,7 +24,7 @@ The MVP covers the following production routines and supervision capabilities (U
 7. **Plant performance (US-08)** — load, derived OEE, accumulated downtimes and fulfillment by period; configurable thresholds, order rescheduling/cancellation, local PDF/Excel export and simulated role permissions (`threshold_settings`, `role_permissions`).
 8. **Maintenance management (US-09)** — escalated ticket inbox, technician interventions, real downtime capture, preventive orders and work-center availability restoration (`maintenance_tickets`, `preventive_maintenance_orders`).
 9. **Production scheduling (US-10)** — planned start/end dates on `production_orders` with `planned_end_date ≥ planned_start_date`.
-10. **Line balancing (US-11)** — standard times, projected load, utilization vs. nominal capacity and bottleneck detection (derived, read-only).
+10. **Line balancing (US-11)** — standard times, projected load, utilization vs. effective period capacity and bottleneck detection (derived, read-only).
 
 The data model remains the single source of truth (`data-model.md`); the UI is a typed, traceable projection of that schema. Type fidelity is enforced with JSDoc typedefs in `src/domain/types.js` (the as-built stack is vanilla JavaScript, not TypeScript).
 
@@ -236,7 +236,7 @@ The module references, but does **not** own, the following boundary entities. Al
 **Activities**
 
 - **Dashboard overview** — KPI tiles:
-  - Active orders (by `status`), capacity utilization per `work_center` (`planned_time_minutes` vs. `capacity_per_day_minutes`), scrap rate, completion/yield rate.
+  - Active orders (by `status`), capacity utilization per `work_center` (`planned_time_minutes` vs. effective daily capacity `capacity_per_day_minutes × efficiency_factor`), scrap rate, completion/yield rate.
 - **BOM & Routing Explorer**:
   - Hierarchical `BomTreeViewer` (expand/collapse, 4+ levels, cycle detection).
   - `BomEditor` for header and `bom_components` lines.
@@ -409,7 +409,7 @@ Testable acceptance criteria and accountable owner.
 ```text
 specs/002-operations-manufacturing/
 ├── plan.md                        # This file
-├── spec.md                        # Functional specification + AC-01…AC-44 (AC-38 retired)
+├── spec.md                        # Functional specification + AC-01…AC-46 (AC-38 retired)
 ├── research.md                    # Phase 1 + incremental decisions
 ├── data-model.md                  # Data contracts (source of truth projection)
 ├── quickstart.md                  # Demo and validation flows
@@ -432,6 +432,7 @@ src/
 │   ├── order-state-machine.js      # production_orders transitions & guards
 │   ├── bom-explosion.js            # Theoretical consumption, multi-level explosion
 │   ├── operation-planning.js       # planned_time_minutes = setup + run × qty
+│   ├── capacity.js                  # business days, efficiency and effective capacity
 │   ├── reconciliation.js           # Plan-vs-actual variance & discrepancy flags
 │   ├── shift-tracking.js           # Effective time, delay guards, counters (US-06)
 │   ├── line-supervision.js         # Traffic light, assignment and validation rules (US-07)
@@ -718,7 +719,7 @@ No hay violaciones que requieran justificación adicional.
 
 # 10. Plan Técnico Incremental — US-08 (Panel de Planta), US-10 (Planificación) y US-11 (Balance de Líneas)
 
-**Alcance**: FR-09 / US-08 (AC-04…AC-07 y AC-20), FR-11 / US-10 (AC-28…AC-33) y FR-12 / US-11 (AC-37, AC-39, AC-40 y AC-45; AC-38 retirado y absorbido por AC-39; se apoya en FR-02, FR-03, FR-09 y FR-11). No reabre ni rediseña US-01…US-07 ni US-09.
+**Alcance**: FR-09 / US-08 (AC-04…AC-07 y AC-20), FR-11 / US-10 (AC-28…AC-33), FR-12 / US-11 (AC-37, AC-39, AC-40 y AC-45; AC-38 retirado y absorbido por AC-39) y FR-06 / AC-46 (utilización diaria compartida y detalle de operaciones pendientes; se apoya en FR-02, FR-03, FR-09 y FR-11). No reabre ni rediseña US-01…US-07 ni US-09.
 
 ## 10.1 Alcance y no objetivos
 
@@ -730,6 +731,7 @@ No hay violaciones que requieran justificación adicional.
 - Asignación y edición de fechas planificadas de inicio y término por orden, con validación `planned_end_date ≥ planned_start_date`.
 - Panel de balance de líneas: tiempos estándar, carga proyectada, utilización vs. capacidad efectiva del período, estados por umbral y cuellos críticos (`≥ 95%`).
 - Sugerencias simuladas de reasignación/secuencia con confirmación explícita: la reasignación solo cruza estaciones del mismo `station_type`; la confirmación marca la fila como `Solicitud simulada` sin registro, persistencia ni mutación.
+- AC-46: utilización diaria compartida entre el Panel de Producción y “Carga por centro”, con detalle de operaciones pendientes, días hábiles en el título y componente de barra unificado solo en la pestaña de balance.
 
 **No objetivos**
 - No hay backend, autenticación real ni motor de permisos del servidor; los roles y permisos son simulados con un selector.
@@ -790,12 +792,12 @@ Entidades nuevas o ampliadas en [data-model.md](data-model.md):
 - `performance = quantity_completed / (run_time_per_unit_minutes × quantity_planned)` acotado a [0, 1].
 - `quality = quantity_completed / (quantity_completed + scrap_quantity)`.
 - `oee = availability × performance × quality`.
-- `load = Σ planned_time_minutes / (capacity_per_day_minutes × efficiency_factor)` en el panel de planta.
+- `capacity_minutes = días_hábiles_del_período × capacity_per_day_minutes × efficiency_factor` y `load = Σ planned_time_minutes / capacity_minutes` en el panel de planta; la tarjeta diaria del Panel de Producción usa solo `capacity_per_day_minutes × efficiency_factor`.
 - `utilization = Σ planned_time_minutes / (días_hábiles_del_período × capacity_per_day_minutes × efficiency_factor)` en el balance de líneas.
 - `bottleneck = work_center con utilization ≥ 0.95`; desempate por utilización, carga absoluta e id.
-- `estado = normal (< 0.75) | ajustada (0.75–0.949) | cuello_crítico (≥ 0.95)`.
+- `estado = normal ([0, 0.75)) | ajustada ([0.75, 0.95)) | cuello_crítico ([0.95, ∞))`; no hay huecos entre 94 % y 95 %.
 
-> US-11 aplica el mismo `efficiency_factor` que US-08, multiplicado por los días hábiles del período. El panel propone reasignaciones solo entre estaciones del mismo `station_type` y revisiones de secuencia. La alerta superior se activa únicamente con algún centro ≥ 95 %; si no, muestra “Línea balanceada · Sin cuellos de botella críticos”. Al confirmar, la fila se marca como `Solicitud simulada`: no se registra, persiste ni muta rutas, operaciones ni órdenes.
+> US-11 aplica el mismo `efficiency_factor` que US-08, multiplicado por los días hábiles del período; `business_days` cuenta lunes a viernes del rango inclusivo y no aplica feriados en la demo (octubre 2026 = 22, noviembre 2026 = 21). El panel propone reasignaciones solo entre estaciones del mismo `station_type` y revisiones de secuencia. La alerta superior se activa únicamente con algún centro ≥ 95 %; si no, muestra “Línea balanceada · Sin cuellos de botella críticos”. Al confirmar, la fila se marca como `Solicitud simulada`: no se registra, persiste ni muta rutas, operaciones ni órdenes.
 
 > `downtime_minutes` tiene una sola definición para US-08/US-09: `Σ operation_delays.duration_minutes + Σ maintenance_tickets.downtime_minutes` del período, sin duplicar una misma parada. `actual_time_minutes` es el tiempo ejecutado observado y no se usa como multiplicador adicional del OEE.
 
@@ -836,7 +838,8 @@ Contratos completos en [contracts/plant-performance.md](contracts/plant-performa
 **Contratos de UI**
 - `src/components/PlantPerformancePanel.js`: KPIs de carga/OEE/paradas/cumplimiento, alarmas de umbral, acciones de orden con confirmación, selector de rol y exportación.
 - `src/components/ProductionSchedulingPanel.js`: listado filtrable de órdenes, edición de fechas planificadas con validación inline y confirmación de guardado.
-- `src/components/LineBalancePanel.js`: tabla por centro con utilización vs. capacidad efectiva del período, semáforo verde/ámbar/rojo, alerta superior solo con cuello ≥ 95 %, panel de sugerencias del mismo `station_type` y modal de confirmación simulada.
+- `src/components/DashboardOverview.js` (AC-46): tabla “Utilización por Centro de Trabajo” con tasa diaria efectiva; al activar una fila se abre una ventana con las operaciones pendientes (orden, secuencia, estado y minutos), cerrable con botón, Escape, clic fuera o nueva activación.
+- `src/components/LineBalancePanel.js`: tabla por centro con utilización vs. capacidad efectiva del período, semáforo verde/ámbar/rojo, alerta superior solo con cuello ≥ 95 %, panel de sugerencias del mismo `station_type` y modal de confirmación simulada. El título muestra “(N días hábiles)”; no hay columna de días. La columna “Utilización del día” va después de “Utilización” y usa el mismo componente de barra, texto real con relleno limitado al 100 % y la misma escala de colores; el ajuste visual no se aplica al Panel de Producción.
 - `src/data/exporters/plant-report.js`: generación local de PDF y Excel a partir del reporte consolidado.
 
 ## 10.6 Persistencia y migración
@@ -862,16 +865,16 @@ Contratos completos en [contracts/plant-performance.md](contracts/plant-performa
 
 **Integración jsdom**
 - `tests/integration/operations-panels.test.js`: KPIs, alarmas, acciones y exportación simulada.
-- `tests/integration/plant-scheduling-panels.test.js`: edición de fechas, validación inline, paneles de planta/balance, semáforo, alerta crítica, sugerencias del mismo `station_type` y confirmación simulada.
+- `tests/integration/plant-scheduling-panels.test.js`: edición de fechas, validación inline, paneles de planta/balance, semáforo, alerta crítica, sugerencias del mismo `station_type`, confirmación simulada y AC-46 (popup del panel, días en el título, columna diaria con markup/colores compartidos y texto > 100 % sin deformar la barra).
 
 **Regresión**
 - Ejecutar las suites existentes de US-01…US-09 para confirmar que las extensiones aditivas no alteran su comportamiento.
 
 ## 10.8 Constitution Check (post-diseño US-08 / US-10 / US-11)
 
-- **I. Calidad y mantenibilidad**: lógica pura en `src/domain/plant-performance.js`, `src/domain/order-scheduling.js` y `src/domain/line-balance.js`; el store solo orquesta y los contratos están documentados.
-- **II. Pruebas primero**: cada cálculo derivado, umbral, permiso y validación de fechas tiene prueba unitaria; cada panel tiene prueba de integración jsdom.
-- **III. Consistencia de UX**: se reutilizan patrones de tarjetas, tablas, validación inline, diálogos con foco atrapado y estados vacíos del módulo; los roles deshabilitan acciones de forma visible y accesible.
+- **I. Calidad y mantenibilidad**: lógica pura en `src/domain/capacity.js`, `src/domain/plant-performance.js`, `src/domain/order-scheduling.js` y `src/domain/line-balance.js`; el store solo orquesta y los contratos están documentados.
+- **II. Pruebas primero**: cada cálculo derivado, umbral, permiso y validación de fechas tiene prueba unitaria; cada panel tiene prueba de integración jsdom, incluida AC-46.
+- **III. Consistencia de UX**: se reutilizan patrones de tarjetas, tablas, validación inline, diálogos con foco atrapado y estados vacíos del módulo; el popup de operaciones, el título con días hábiles y la barra de utilización compartida siguen el mismo patrón en FR-06 y US-11; los roles deshabilitan acciones de forma visible y accesible.
 - **IV. Rendimiento y confiabilidad**: cálculos O(n) sobre operaciones del período; snapshot versionado con migración y fallback a fixtures; sin temporizadores ni recálculos en bucle.
 
 No hay violaciones que requieran justificación adicional.
@@ -894,10 +897,10 @@ No hay violaciones que requieran justificación adicional.
 3. **Store US-08**: consultas, acciones de umbral/prioridad/cancelación y exportación del reporte.
 4. **UI US-08**: `PlantPerformancePanel.js`, ruta en el shell y estilos.
 5. **US-10**: validación de fechas, acción de store, `ProductionSchedulingPanel.js` y ruta.
-6. **US-11**: cálculos de balance, umbrales, `LineBalancePanel.js`, sugerencias del mismo `station_type` con modal de confirmación simulada, escenario de cuello crítico y ruta.
+6. **US-11 / AC-46**: cálculos de balance, umbrales, `LineBalancePanel.js` con días en el título y utilización diaria compartida, sugerencias del mismo `station_type` con modal de confirmación simulada, popup de operaciones en `DashboardOverview.js`, escenario de cuello crítico y ruta.
 7. **Verificación**: pruebas de integración de los tres paneles, regresión de US-01…US-09, rendimiento y guion de demo.
 
-**Criterio de salida**: AC-04…AC-07 y AC-20 verificados; AC-28…AC-33 verificados; AC-37, AC-39, AC-40 y AC-45 verificados (AC-38 retirado); suites de regresión del módulo verdes; snapshot migra sin pérdida; `npm run build` exitoso.
+**Criterio de salida**: AC-04…AC-07 y AC-20 verificados; AC-28…AC-33 verificados; AC-37, AC-39, AC-40, AC-45 y AC-46 verificados (AC-38 retirado); suites de regresión del módulo verdes; snapshot migra sin pérdida; `npm run build` exitoso.
 
 ## 10.11 Trazabilidad de criterios de aceptación
 
@@ -914,6 +917,7 @@ No hay violaciones que requieran justificación adicional.
 | AC-39 Carga/utilización con eficiencia y cuello `≥ 95%` | `computeProjectedLoad`, `computeUtilization`, `detectBottlenecks` + escenario sembrado |
 | AC-40 Sugerencias simuladas del mismo tipo | `buildLineBalanceSuggestions` con `station_type` + badge local de `LineBalancePanel` |
 | AC-45 Popover de órdenes por centro | `centerPopoverMarkup` en `LineBalancePanel` + estilos `.center-popover` + prueba de integración |
+| AC-46 Utilización diaria compartida | `dailyUtilizationByWorkCenter` + popup en `DashboardOverview` + `utilizationCell` en `LineBalancePanel` + días en el título y barra con texto real/relleno limitado |
 
 ## 10.12 Complexity Tracking (US-08 / US-10 / US-11)
 

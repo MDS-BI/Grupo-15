@@ -1,12 +1,13 @@
 /**
  * @file Indicadores consolidados del panel de planta (US-08).
  * Ver contracts/plant-performance.md §3 y §6. Funciones puras: el período y el
- * instante de corte siempre se reciben como argumentos.
+ * instante de corte siempre se reciben como argumentos. La capacidad se deriva
+ * de `domain/capacity.js`; la carga observada es propia de este caso de uso.
  */
 
-export function round2(value) {
-  return Math.round(value * 100) / 100;
-}
+import { businessDaysInPeriod, capacityFor, loadRatio, round2 } from './capacity.js';
+
+export { businessDaysInPeriod as daysInPeriod, round2 };
 
 export function clamp(value, min = 0, max = 1) {
   return Math.min(max, Math.max(min, value));
@@ -16,14 +17,6 @@ function toMillis(value) {
   if (!value) return null;
   const time = new Date(value).getTime();
   return Number.isFinite(time) ? time : null;
-}
-
-/** Días inclusivos del período; mínimo 1. */
-export function daysInPeriod(period = {}) {
-  const from = toMillis(period.from);
-  const to = toMillis(period.to);
-  if (from === null || to === null) return 1;
-  return Math.max(1, Math.floor((to - from) / 86400000) + 1);
 }
 
 function inPeriod(value, period = {}) {
@@ -106,7 +99,6 @@ export function computeOee(workCenterId, operations = [], delays = [], period = 
  * @param {{from?:string,to?:string}} [period]
  */
 export function computeLoadByWorkCenter(workCenters = [], operations = [], period = {}) {
-  const days = daysInPeriod(period);
   const map = {};
   for (const wc of workCenters) {
     const load = operations
@@ -116,14 +108,13 @@ export function computeLoadByWorkCenter(workCenters = [], operations = [], perio
           inPeriodOrUndated(op.completed_at || op.started_at, period),
       )
       .reduce((sum, op) => sum + (Number(op.planned_time_minutes) || 0), 0);
-    const capacity = Math.max(
-      1,
-      (Number(wc.capacity_per_day_minutes) || 0) * (Number(wc.efficiency_factor) || 1) * days,
-    );
+    const capacity = capacityFor(wc, period);
     map[wc.id] = {
       load_minutes: round2(load),
-      capacity_minutes: round2(capacity),
-      load_ratio: round2(load / capacity),
+      capacity_minutes: capacity.capacity_minutes,
+      load_ratio: loadRatio(load, capacity.capacity_minutes),
+      business_days: capacity.business_days,
+      invalid_capacity: capacity.invalid_capacity,
       inactive: wc.status !== 'active',
     };
   }

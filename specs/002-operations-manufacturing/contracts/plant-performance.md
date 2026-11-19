@@ -46,9 +46,10 @@ Sin efectos secundarios, sin acceso a `localStorage` y sin lectura del reloj glo
 
 ### `computeLoadByWorkCenter(workCenters, operations, period)`
 1. Suma `planned_time_minutes` por `work_center_id` dentro del período.
-2. `capacity = capacity_per_day_minutes × efficiency_factor` (mínimo `1` para evitar división por cero).
-3. Devuelve un mapa `{ [work_center_id]: { load_minutes, capacity_minutes, load_ratio } }`, con `load_ratio = load_minutes / capacity_minutes`.
-4. Incluye centros desactivados con `load_ratio = 0` y marca `inactive: true`; no los omite del reporte.
+2. `capacity = días_hábiles × capacity_per_day_minutes × efficiency_factor`, derivada de `domain/capacity.js` (la misma tasa diaria que usa el Panel de Producción, escalada al período).
+3. Devuelve un mapa `{ [work_center_id]: { load_minutes, capacity_minutes, load_ratio, business_days, invalid_capacity, inactive } }`, con `load_ratio = load_minutes / capacity_minutes` redondeado a 2 decimales.
+4. Si la capacidad es inválida o cero, `capacity_minutes` y `load_ratio` son `null` y `invalid_capacity: true`; la UI muestra `—`. No se inventa un minuto de capacidad.
+5. Incluye centros desactivados y marca `inactive: true`; no los omite del reporte.
 
 ### `accumulateDowntimesByReason(delays, maintenanceTickets, period)`
 1. Agrupa por `reason_id` (o `cause_reason_id` en tickets) dentro del período.
@@ -133,12 +134,14 @@ performance  = clamp(quantity_completed / (run_time_per_unit_minutes × quantity
 quality      = quantity_completed / (quantity_completed + scrap_quantity)
 oee          = clamp(availability × performance × quality, 0, 1)
 
-capacity_minutes = capacity_per_day_minutes × efficiency_factor
-load_ratio       = Σ planned_time_minutes / capacity_minutes
-fulfillment      = órdenes completadas a tiempo / órdenes con fecha objetivo
+effective_per_day = capacity_per_day_minutes × efficiency_factor
+capacity_minutes  = días_hábiles × effective_per_day
+load_ratio        = Σ planned_time_minutes / capacity_minutes
+fulfillment       = órdenes completadas a tiempo / órdenes con fecha objetivo
 ```
 
 - Los indicadores se calculan bajo demanda y **no se persisten**.
+- `domain/capacity.js` es la única fuente de `effective_per_day`, `días_hábiles`, `capacity_minutes` y `load_ratio` para los tres paneles; cada panel conserva su propia definición de carga.
 - `downtime_minutes` se toma de `operation_delays` y `maintenance_tickets`; no se duplica el conteo de una misma parada.
 - `load_ratio > 1` señala sobrecarga y debe destacarse.
 - `performance` y `quality` devuelven `null` cuando falta el denominador; la UI muestra `—`, no `0`.
@@ -168,3 +171,30 @@ fulfillment      = órdenes completadas a tiempo / órdenes con fecha objetivo
 9. **Exportación**: el reporte PDF/Excel contiene los indicadores del período y no incluye datos por operador.
 10. **Persistencia**: tras cambiar umbrales y permisos, recargar rehidrata los valores; un snapshot `v1` válido se migra a `v2`.
 11. **Regresión**: las suites de US-01…US-07 y US-09 siguen pasando sin cambios de comportamiento.
+
+---
+
+## 9. Utilización diaria y detalle de operaciones (FR-06 / AC-46)
+
+### Consulta compartida
+- `store.dailyUtilizationByWorkCenter()` devuelve por centro `{ workCenter, loadMinutes, utilization, operations }`, donde `loadMinutes = Σ planned_time_minutes` de operaciones con `status !== 'completed'` y `utilization = loadMinutes / (capacity_per_day_minutes × efficiency_factor)` redondeado a 2 decimales.
+- Capacidad inválida (`capacity_per_day_minutes <= 0` o `efficiency_factor` fuera de `(0, 1]`) produce `utilization = null`; la UI muestra `—`.
+- `load_ratio > 1` en el panel de planta sigue refiriéndose a la capacidad efectiva del período; no se confunde con esta tasa diaria.
+
+### Contrato de UI del Panel de Producción
+- La tabla “Utilización por Centro de Trabajo” muestra la tasa diaria con su barra de utilize y etiqueta.
+- Al activar una fila (clic, `Enter` o `Espacio`) se abre una ventana con las operaciones pendientes que generan la carga: orden, secuencia, estado y minutos.
+- La ventana se cierra con botón, `Escape`, clic fuera o nueva activación; no cambia el store ni el snapshot.
+
+### Contrato de UI del Balance de Líneas
+- El título “Carga por centro · <período> (<N> días hábiles)” incluye los días; se elimina la columna de días.
+- La columna “Utilización del día” se sitúa inmediatamente a la derecha de “Utilización” y consume la misma consulta diaria.
+- Ambas columnas reutilizan el markup `cell--bar > bar.bar--* > bar__fill + bar__label`; la etiqueta permanece con texto neutro y el relleno usa `min(utilización × 100, 100) %`, manteniendo el porcentaje real cuando supera 100 %.
+- La escala de color del relleno es verde `< 0.75`, ámbar `[0.75, 0.95)` y rojo `≥ 0.95` en ambas columnas. El ajuste visual se limita a esta pestaña; el Panel de Producción conserva su presentación.
+
+### Escenarios de verificación
+1. `wc_solda` con 1825 minutos pendientes y 408 minutos/día efectivos muestra `447,0 %` en ambas vistas, con barra llena al 100 % y color rojo.
+2. `wc_armado` al 75,0 % muestra ámbar, no azul ni rojo.
+3. Al activar un centro en el Panel de Producción se listan solo sus operaciones `status !== 'completed'`; canceladas y completadas se omiten.
+4. El balance muestra “Octubre 2026 (22 días hábiles)” y no muestra la columna “Días hábiles”.
+5. Cambiar el período del balance no altera la utilización diaria; cambia solo la utilización del período y el número de días del título.
