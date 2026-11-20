@@ -3,7 +3,7 @@
  * umbrales, acciones sobre órdenes y exportación local.
  */
 
-import { escapeHtml, el, fmtNumber, fmtPercent, ORDER_STATUS_LABEL } from './format.js';
+import { escapeHtml, el, fmtNumber, fmtPercent, orderStatusBadge } from './format.js';
 import { downloadCsv, printReport } from '../data/exporters/plant-report.js';
 import { decimalInput, parseDecimal } from './numeric-field.js';
 import { notifyDialog } from './ConfirmDialog.js';
@@ -28,6 +28,12 @@ function formatIndicator(indicator, value) {
 }
 
 const PRIORITY_LABEL = { low: 'Baja', normal: 'Normal', high: 'Alta' };
+
+function miniBar(value, max = 1) {
+  const ratio = Number(max) > 0 ? Number(value) / Number(max) : 0;
+  const width = Number.isFinite(ratio) ? Math.min(100, Math.max(0, ratio * 100)) : 0;
+  return `<div class="bar"><div class="bar__fill" style="width: ${width}%"></div></div>`;
+}
 
 /**
  * @param {import('../data/ManufacturingStore.js').ManufacturingStore} store
@@ -65,7 +71,7 @@ export function PlantPerformancePanel(store, options = {}) {
           <button type="button" class="btn" data-export="pdf">Exportar PDF</button>
         </div>
       </header>
-      <div data-role="body"></div>
+      <div class="performance-body" data-role="body"></div>
       <div class="modal-root" data-role="modal-root"></div>
     </section>`);
 
@@ -86,13 +92,16 @@ export function PlantPerformancePanel(store, options = {}) {
     const canCancel = store.canPerformActionFor(role, 'cancel_order');
     const canExport = store.canPerformActionFor(role, 'export_report');
 
+    const breachedIndicators = new Set(
+      data.thresholds.filter((row) => row.breached).map((row) => row.indicator),
+    );
     const kpis = ['load', 'oee', 'downtime', 'fulfillment']
       .map(
         (indicator) => `
-        <div class="mini-stat" data-kpi="${indicator}">
-          <span class="mini-stat__value">${formatIndicator(indicator, data.indicators[indicator])}</span>
-          <span class="mini-stat__label">${INDICATOR_LABEL[indicator]}</span>
-        </div>`,
+        <article class="kpi-card kpi-card--plant ${breachedIndicators.has(indicator) ? 'kpi-card--alert' : ''}" data-kpi="${indicator}">
+          <span class="kpi-card__label">${INDICATOR_LABEL[indicator]}</span>
+          <span class="kpi-card__value">${formatIndicator(indicator, data.indicators[indicator])}</span>
+        </article>`,
       )
       .join('');
 
@@ -113,17 +122,21 @@ export function PlantPerformancePanel(store, options = {}) {
         return `<tr data-wc="${escapeHtml(workCenter.id)}">
           <td>${escapeHtml(workCenter.name)}</td>
           <td>${load.invalid_capacity ? '—' : `${fmtNumber(load.load_minutes, 2)} / ${fmtNumber(load.capacity_minutes, 2)}`}</td>
-          <td>${load.load_ratio === null ? '—' : fmtPercent(load.load_ratio)}</td>
-          <td>${oee && oee.oee !== null ? fmtPercent(oee.oee) : '—'}</td>
+          <td class="perf-bar"><div class="cell--bar">${miniBar(load.load_ratio)}<span class="bar__label">${load.load_ratio === null ? '—' : fmtPercent(load.load_ratio)}</span></div></td>
+          <td class="perf-bar"><div class="cell--bar">${miniBar(oee && oee.oee)}<span class="bar__label">${oee && oee.oee !== null ? fmtPercent(oee.oee) : '—'}</span></div></td>
         </tr>`;
       })
       .join('');
 
+    const maxDowntime = Math.max(
+      0,
+      ...data.downtime_by_reason.map((row) => Number(row.downtime_minutes) || 0),
+    );
     const downtimeRows = data.downtime_by_reason.length
       ? data.downtime_by_reason
           .map(
             (row) =>
-              `<tr data-downtime="${escapeHtml(row.reason_id)}"><td>${escapeHtml(row.reason_label)}</td><td>${fmtNumber(row.downtime_minutes, 2)}</td></tr>`,
+              `<tr data-downtime="${escapeHtml(row.reason_id)}"><td>${escapeHtml(row.reason_label)}</td><td class="perf-bar"><div class="cell--bar">${miniBar(row.downtime_minutes, maxDowntime)}<span class="bar__label">${fmtNumber(row.downtime_minutes, 2)}</span></div></td></tr>`,
           )
           .join('')
       : '<tr><td colspan="2" class="empty-cell">Sin paradas cerradas en el período.</td></tr>';
@@ -136,8 +149,8 @@ export function PlantPerformancePanel(store, options = {}) {
         const priorityDisabled = !canChangePriority || order.status !== 'planned';
         return `<tr data-order="${escapeHtml(order.id)}">
           <td>${escapeHtml(order.order_number)}</td>
-          <td>${escapeHtml(ORDER_STATUS_LABEL[order.status] || order.status)}</td>
-          <td>
+          <td>${orderStatusBadge(order.status)}</td>
+          <td class="perf-select">
             <select data-priority="${escapeHtml(order.id)}" ${priorityDisabled ? 'disabled' : ''}>
               ${['low', 'normal', 'high']
                 .map(
@@ -147,17 +160,17 @@ export function PlantPerformancePanel(store, options = {}) {
                 .join('')}
             </select>
           </td>
-          <td><button type="button" class="btn btn--tiny btn--danger" data-cancel="${escapeHtml(order.id)}" ${canCancel ? '' : 'disabled'}>Cancelar</button></td>
+          <td class="perf-action"><button type="button" class="btn btn--tiny btn--danger" data-cancel="${escapeHtml(order.id)}" ${canCancel ? '' : 'disabled'}>Cancelar</button></td>
         </tr>`;
       })
       .join('');
 
     bodyEl.innerHTML = `
-      <div class="kpi-grid">${kpis}</div>
-      <div class="panel-grid">
+      <div class="kpi-grid kpi-grid--plant">${kpis}</div>
+      <div class="panel-grid panel-grid--plant">
         <article class="panel">
           <header class="panel__header"><h3>Alertas de umbral</h3></header>
-          <ul class="alarm-list">${alarmRows}</ul>
+          <ul class="alarm-list alarm-list--plant">${alarmRows}</ul>
         </article>
         <article class="panel">
           <header class="panel__header"><h3>Configurar umbral</h3></header>
@@ -188,30 +201,32 @@ export function PlantPerformancePanel(store, options = {}) {
       <article class="panel">
         <header class="panel__header"><h3>Carga y OEE por centro</h3></header>
         <div class="table-wrap">
-          <table class="data-table">
+          <table class="data-table perf-center-table">
             <thead><tr><th>Centro</th><th title="Capacidad del período = días hábiles × min/día × eficiencia">Carga / capacidad (min)</th><th title="Carga del período ÷ capacidad del período">Utilización</th><th>OEE</th></tr></thead>
             <tbody>${centerRows}</tbody>
           </table>
         </div>
       </article>
-      <article class="panel">
-        <header class="panel__header"><h3>Paradas por motivo</h3></header>
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead><tr><th>Motivo</th><th>Minutos</th></tr></thead>
-            <tbody>${downtimeRows}</tbody>
-          </table>
-        </div>
-      </article>
-      <article class="panel">
-        <header class="panel__header"><h3>Acciones sobre órdenes</h3></header>
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead><tr><th>Orden</th><th>Estado</th><th>Prioridad</th><th></th></tr></thead>
-            <tbody>${orderRows || '<tr><td colspan="4" class="empty-cell">Sin órdenes accionables.</td></tr>'}</tbody>
-          </table>
-        </div>
-      </article>`;
+      <div class="perf-bottom-grid">
+        <article class="panel">
+          <header class="panel__header"><h3>Paradas por motivo</h3></header>
+          <div class="table-wrap">
+            <table class="data-table perf-downtime-table">
+              <thead><tr><th>Motivo</th><th>Minutos</th></tr></thead>
+              <tbody>${downtimeRows}</tbody>
+            </table>
+          </div>
+        </article>
+        <article class="panel">
+          <header class="panel__header"><h3>Acciones sobre órdenes</h3></header>
+          <div class="table-wrap">
+            <table class="data-table perf-orders-table">
+              <thead><tr><th>Orden</th><th>Estado</th><th>Prioridad</th><th></th></tr></thead>
+              <tbody>${orderRows || '<tr><td colspan="4" class="empty-cell">Sin órdenes accionables.</td></tr>'}</tbody>
+            </table>
+          </div>
+        </article>
+      </div>`;
 
     bodyEl.querySelectorAll('[data-priority]').forEach((select) => {
       select.addEventListener('change', async () => {

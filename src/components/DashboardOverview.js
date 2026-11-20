@@ -216,6 +216,23 @@ export function DashboardOverview(store, options = {}) {
     capacityAnchor = null;
   }
 
+  function positionCapacityPopover() {
+    const popover = popoverRoot.querySelector('[data-role="capacity-popover"]');
+    const section = root.querySelector('.dashboard-capacity-table')?.closest('.panel');
+    if (!popover || !section) return;
+    const sectionRect = section.getBoundingClientRect();
+    const rowRect = capacityAnchor?.getBoundingClientRect?.() ?? sectionRect;
+    const viewportWidth = window.innerWidth || 1024;
+    const viewportHeight = window.innerHeight || 768;
+    const width = popover.offsetWidth || 420;
+    const height = popover.offsetHeight || 260;
+    const centeredLeft = sectionRect.left + sectionRect.width / 2 - width / 2;
+    const left = Math.max(16, Math.min(centeredLeft, viewportWidth - width - 16));
+    const top = Math.max(16, Math.min(rowRect.top, viewportHeight - height - 16));
+    popover.style.left = `${left}px`;
+    popover.style.top = `${top}px`;
+  }
+
   function operationRowsFor(workCenterId) {
     const operations = store.productionOrderOperations
       .filter((op) => op.work_center_id === workCenterId && op.status !== 'completed')
@@ -264,6 +281,7 @@ export function DashboardOverview(store, options = {}) {
           <tbody>${operationRowsFor(workCenterId)}</tbody>
         </table>
       </div>`;
+    positionCapacityPopover();
     const closeButton = popoverRoot.querySelector('[data-role="close-capacity-popover"]');
     closeButton.addEventListener('click', (event) => {
       event.stopPropagation();
@@ -300,6 +318,18 @@ export function DashboardOverview(store, options = {}) {
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') closeCapacityPopover(true);
   });
+
+  window.addEventListener('resize', () => {
+    if (openCapacityId) positionCapacityPopover();
+  });
+
+  window.addEventListener(
+    'scroll',
+    () => {
+      if (openCapacityId) positionCapacityPopover();
+    },
+    true,
+  );
 
   return root;
 }

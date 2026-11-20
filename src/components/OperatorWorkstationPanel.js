@@ -8,6 +8,12 @@ import { elapsedMinutes, sumClosedDelayMinutes } from '../domain/shift-tracking.
 import { DelayCorrectionDialog } from './DelayCorrectionDialog.js';
 import { decimalInput, parseDecimal } from './numeric-field.js';
 
+function formatDelayStart(iso) {
+  const text = String(iso ?? '');
+  const match = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/.exec(text);
+  return match ? `${match[3]}/${match[2]} ${match[4]}:${match[5]}` : text;
+}
+
 /**
  * @param {import('../data/ManufacturingStore.js').ManufacturingStore} store
  * @returns {HTMLElement}
@@ -62,6 +68,10 @@ export function OperatorWorkstationPanel(store) {
     }
     const order = store.orderById(operation.production_order_id);
     const plannedQuantity = Number(order?.quantity_planned) || 0;
+    const cumulativePercent =
+      plannedQuantity > 0
+        ? Math.min(100, Math.max(0, (Number(operation.quantity_completed) / plannedQuantity) * 100))
+        : 0;
     const atLimit = Number(operation.quantity_completed) >= plannedQuantity;
     const shift = store.activeShiftFor(operation.id);
     const openDelay = store.openDelayFor(operation.id);
@@ -93,9 +103,9 @@ export function OperatorWorkstationPanel(store) {
         const reason = store.delayReasons.find((row) => row.id === delay.delay_reason_id);
         return `<tr data-delay-row="${escapeHtml(delay.id)}">
           <td>${escapeHtml(reason ? reason.label : delay.delay_reason_id)}</td>
-          <td>${escapeHtml(delay.started_at)}</td>
+          <td class="delay-start" title="${escapeHtml(delay.started_at)}">${escapeHtml(formatDelayStart(delay.started_at))}</td>
           <td>${delay.duration_minutes != null ? fmtNumber(delay.duration_minutes, 2) : 'Abierto'}</td>
-          <td>${delay.status === 'open' ? '<span class="badge badge--warn">Abierto — pendiente de corrección</span>' : 'Cerrado'}</td>
+          <td>${delay.status === 'open' ? '<span class="badge badge--warn badge--delay-open">Abierto — pendiente de corrección</span>' : 'Cerrado'}</td>
         </tr>`;
       })
       .join('');
@@ -109,7 +119,7 @@ export function OperatorWorkstationPanel(store) {
 
     bodyEl.innerHTML = `
       <div class="operator-layout">
-        <article class="panel">
+        <article class="panel operator-panel operator-panel--operation">
           <header class="panel__header">
             <h2>${escapeHtml(order ? order.order_number : operation.production_order_id)} · ${escapeHtml(workCenter ? workCenter.name : operation.work_center_id)}</h2>
             <p class="panel__subtitle">${escapeHtml(store.productById(order?.product_id)?.name || '')}</p>
@@ -121,45 +131,54 @@ export function OperatorWorkstationPanel(store) {
             <div class="mini-stat"><span class="mini-stat__value">${fmtNumber(operation.quantity_completed)} / ${fmtNumber(plannedQuantity)}</span><span class="mini-stat__label">Avance acumulado</span></div>
           </div>
           <div class="detail-actions">
-            <button type="button" class="btn btn--primary" data-role="toggle" aria-pressed="${operation.status === 'in_progress'}" ${operation.status === 'completed' ? 'disabled' : ''}>${toggleText}</button>
+            <button type="button" class="btn btn--primary btn--block" data-role="toggle" aria-pressed="${operation.status === 'in_progress'}" ${operation.status === 'completed' ? 'disabled' : ''}>${toggleText}</button>
           </div>
           <p class="form-error" data-role="error" role="alert"></p>
         </article>
 
-        <article class="panel">
+        <article class="panel operator-panel operator-panel--counters">
           <header class="panel__header"><h3>Contadores</h3></header>
-          <div class="counter-row">
-            <span>Turno: <strong data-role="shift-counter">${fmtNumber(shift ? shift.quantity_counted : 0)}</strong></span>
-            <button type="button" class="btn btn--tiny" data-counter="dec">−</button>
-            ${decimalInput({ name: 'counter', value: String(shift ? shift.quantity_counted : 0), min: 0, decimals: 0, label: 'El contador del turno', extra: `data-role="counter-input" ${shift ? '' : 'disabled'}` })}
-            <button type="button" class="btn btn--tiny" data-counter="inc" ${atLimit ? 'disabled' : ''}>+</button>
-            <button type="button" class="btn btn--tiny" data-role="set-counter" ${shift ? '' : 'disabled'}>Fijar</button>
+          <div class="counter-blocks">
+            <div class="counter-block counter-block--shift">
+              <p class="counter-block__label">Turno: <strong class="counter-block__value" data-role="shift-counter">${fmtNumber(shift ? shift.quantity_counted : 0)}</strong></p>
+              <div class="counter-controls">
+                <button type="button" class="btn btn--counter" data-counter="dec">−</button>
+                ${decimalInput({ name: 'counter', value: String(shift ? shift.quantity_counted : 0), min: 0, decimals: 0, label: 'El contador del turno', extra: `data-role="counter-input" ${shift ? '' : 'disabled'}` })}
+                <button type="button" class="btn btn--counter" data-counter="inc" ${atLimit ? 'disabled' : ''}>+</button>
+                <button type="button" class="btn btn--tiny" data-role="set-counter" ${shift ? '' : 'disabled'}>Fijar</button>
+              </div>
+            </div>
+            <div class="counter-block counter-block--cumulative">
+              <p class="counter-block__label">Acumulado: <strong data-role="cumulative-counter">${fmtNumber(operation.quantity_completed)}</strong> / ${fmtNumber(plannedQuantity)}</p>
+              <div class="bar counter-progress" aria-hidden="true"><div class="bar__fill" style="width: ${cumulativePercent}%"></div></div>
+            </div>
           </div>
-          <p class="counter-row">Acumulado: <strong data-role="cumulative-counter">${fmtNumber(operation.quantity_completed)}</strong> / ${fmtNumber(plannedQuantity)}</p>
         </article>
 
-        <article class="panel">
+        <article class="panel operator-panel operator-panel--delays">
           <header class="panel__header"><h3>Atrasos justificados</h3></header>
           <div class="table-wrap">
-            <table class="data-table data-table--compact">
+            <table class="data-table data-table--compact operator-delay-table">
               <thead><tr><th>Motivo</th><th>Inicio</th><th>Duración</th><th>Estado</th></tr></thead>
               <tbody>${delayRows || '<tr><td colspan="4" class="empty-cell">Sin atrasos.</td></tr>'}</tbody>
             </table>
           </div>
           <div class="stack-form">
-            <label>Motivo
-              <select data-role="delay-reason" ${shift ? '' : 'disabled'}>
-                <option value="">Selecciona…</option>${reasonOptions}
-                <option value="__custom">Nuevo motivo…</option>
-              </select>
-            </label>
-            <label>Motivo personalizado
-              <input type="text" data-role="custom-label" placeholder="Etiqueta del motivo" />
-            </label>
+            <div class="delay-form-grid">
+              <label>Motivo
+                <select data-role="delay-reason" ${shift ? '' : 'disabled'}>
+                  <option value="">Selecciona…</option>${reasonOptions}
+                  <option value="__custom">Nuevo motivo…</option>
+                </select>
+              </label>
+              <label>Motivo personalizado
+                <input type="text" data-role="custom-label" placeholder="Etiqueta del motivo" />
+              </label>
+            </div>
             <label>Nota
               <input type="text" data-role="delay-note" placeholder="Detalle opcional" />
             </label>
-            <div class="detail-actions">
+            <div class="detail-actions delay-form-actions">
               <button type="button" class="btn" data-role="start-delay" ${shift && !openDelay ? '' : 'disabled'}>Registrar atraso</button>
               <button type="button" class="btn btn--primary" data-role="close-delay" ${openDelay ? '' : 'disabled'}>Finalizar atraso</button>
               <button type="button" class="btn" data-role="correct-delay" ${operation.status === 'completed' && openDelay ? '' : 'disabled'}>Corregir atraso abierto</button>

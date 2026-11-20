@@ -28,8 +28,9 @@ export function ProductionSchedulingPanel(store) {
         </div>
       </header>
       <article class="panel">
-        <div class="filter-row">
-          <label class="inline-field">Estado
+        <div class="filter-row filter-row--scheduling">
+          <label class="inline-field">
+            <span class="filter-label">Estado</span>
             <select data-role="filter-status">
               <option value="">Abiertas</option>
               <option value="planned">Planificada</option>
@@ -39,10 +40,12 @@ export function ProductionSchedulingPanel(store) {
               <option value="cancelled">Cancelada</option>
             </select>
           </label>
-          <label class="inline-field">Desde
+          <label class="inline-field">
+            <span class="filter-label">Desde</span>
             <input type="date" data-role="filter-from" />
           </label>
-          <label class="inline-field">Hasta
+          <label class="inline-field">
+            <span class="filter-label">Hasta</span>
             <input type="date" data-role="filter-to" />
           </label>
         </div>
