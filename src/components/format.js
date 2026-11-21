@@ -64,7 +64,7 @@ export const QUALITY_LABEL = {
 
 /** @param {string} status */
 export function orderStatusBadge(status) {
-  return `<span class="badge badge--${status}">${ORDER_STATUS_LABEL[status] || status}</span>`;
+  return `<span class="badge badge--${escapeHtml(status)}">${escapeHtml(ORDER_STATUS_LABEL[status] || status)}</span>`;
 }
 
 /**

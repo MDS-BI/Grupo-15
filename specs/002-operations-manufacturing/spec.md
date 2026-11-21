@@ -1,6 +1,6 @@
 # Especificación: Módulo de Operaciones / Manufactura (ERP)
 
-**Rama**: `002-operations-manufacturing` | **Fecha**: 2026-10-31 | **Actualizado**: 2026-11-17
+**Rama**: `002-operations-manufacturing` | **Fecha**: 2026-10-31 | **Actualizado**: 2026-11-18
 **Datos maestros**: [data-model.md](data-model.md) | **Plan**: [plan.md](plan.md) | **Tareas**: [tasks.md](tasks.md)
 
 ---
@@ -26,7 +26,7 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 <summary><strong>Session 2026-10-31 (Supervisor de Operaciones - US-07 / HU-04)</strong></summary>
 
 - **Q**: ¿Cómo se determina el estado del semáforo en vivo de cada línea/máquina (`work_center`)? → **A**: Se deriva reactivamente del estado operativo y eventos activos (`in_operation` / En operación, `paused` / En pausa, `fault` / En fallo cuando existe un atraso crítico o ticket urgente abierto, `changeover` / Cambio de formato) permitiendo además cambio manual justificado por el supervisor.
-- **Q**: ¿Cómo se vinculan los operarios con las máquinas para el turno? → **A**: Mediante asignaciones de turno (`shift_assignments`) usando el puente de solo lectura `ext_hr_employee_id` hacia el módulo de *Recursos Humanos y Planillas*.
+- **Q**: ¿Cómo se vinculan los operadores con las máquinas para el turno? → **A**: Mediante asignaciones de turno (`shift_assignments`) usando el puente de solo lectura `ext_hr_employee_id` hacia el módulo de *Recursos Humanos y Planillas*.
 - **Q**: ¿Qué ocurre cuando el supervisor valida un cierre de turno o escala un incidente? → **A**: La validación marca `supervisor_validated = true` con timestamp y firma del supervisor sobre el turno cerrado (`completed`); el botón de alerta de escalamiento marca `escalated_to_maint = true` en el evento de parada/atraso y genera un registro urgente en `maintenance_tickets` cambiando el semáforo del centro de trabajo a `fault` ("En fallo").
 
 </details>
@@ -38,7 +38,7 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 - Despacho de órdenes (`production_orders`) desde reposición o make-to-order (`sales_order_id`), con congelación de BOM/ruta y generación de operaciones.
 - Ejecución en piso (`production_order_operations`) con estados `pending → in_progress → paused → completed`, tiempos reales y cálculo de avance.
 - Registro de turno del operador: inicio/fin de la orden activa con un solo botón, tiempo real, justificación de atrasos con motivos predefinidos o personalizados, y contador de piezas del turno.
-- **Supervisión de operaciones en línea (HU-04 / US-07)**: semáforo de estado en tiempo real por línea/máquina (*En operación, En pausa, En fallo, Cambio de formato*), asignación de operarios a máquinas para el turno (`shift_assignments` con puente `ext_hr_employee_id`), revisión y aprobación de cierres de turno (`supervisor_validated = true`), y escalamiento inmediato de incidentes a mantenimiento (`maintenance_tickets` con `escalated_to_maint = true`).
+- **Supervisión de operaciones en línea (HU-04 / US-07)**: semáforo de estado en tiempo real por línea/máquina (*En operación, En pausa, En fallo, Cambio de formato*), asignación de operadores a máquinas para el turno (`shift_assignments` con puente `ext_hr_employee_id`), revisión y aprobación de cierres de turno (`supervisor_validated = true`), y escalamiento inmediato de incidentes a mantenimiento (`maintenance_tickets` con `escalated_to_maint = true`).
 - Consumo real (`material_consumption`) vs. teórico, y salida de bien terminado (`production_output`) con merma.
 - Panel con KPIs, tablero kanban, trazabilidad plan-vs-real y estado de calidad derivado. El tablero permite arrastrar tarjetas entre columnas válidas, respetando la máquina de estados.
 - La captura de datos numéricos admite escritura directa con punto o coma decimal y un máximo de dos decimales, sin flechas de precisión que bloqueen el formulario.
@@ -55,13 +55,13 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 | Persona | Descripción |
 |---|---|
 | **Jefa de Planta (`@Lia-dl`)** | Gestiona BOM y rutas, define capacidad, programa y prioriza órdenes, monitorea carga. Supervisa el desempeño global de la planta: consulta carga por centro, OEE, paradas acumuladas y cumplimiento de órdenes, configura alarmas de umbral, reprograma o cancela órdenes, exporta reportes consolidados y define permisos por rol. Analiza por centro de trabajo y operación, sin ranking de operadores. |
-| **Supervisor de Operaciones / Línea (`@carlos-277`)** | Monitorea el semáforo de líneas/máquinas en tiempo real, asigna operarios por turno (`ext_hr_employee_id`), revisa y aprueba cierres de turno (`supervisor_validated`) y escala incidentes críticos a mantenimiento. |
+| **Supervisor de Operaciones / Línea (`@carlos-277`)** | Monitorea el semáforo de líneas/máquinas en tiempo real, asigna operadores por turno (`ext_hr_employee_id`), revisa y aprueba cierres de turno (`supervisor_validated`) y escala incidentes críticos a mantenimiento. |
 | **Operador de Máquina (`@maximilianMC`)** | Ejecuta operaciones en pantalla táctil/piso, inicia/finaliza turno, justifica atrasos, registra conteo de piezas, consumo, salida y merma. |
 | **Ingeniero de Producción (`@JualTrupe`)** | Configura rutas de fabricación y tiempos estándar, analiza el balance de líneas y evalúa informes de materiales para optimizar tiempos, reducir mermas y encontrar rutas óptimas. |
 | **Encargado de Mantenimiento (`@SebastianRivasprg`)** | Atiende incidentes críticos escalados desde piso (`fault`), analiza historial operativo y evalúa desgaste en maquinaria para programar mantenimientos preventivos, registra tiempos de parada por mantención y restablece la disponibilidad operativa de las máquinas. |
 | **Planificador (`@maiteval`)** |  Organiza y calendariza las órdenes de producción, asignando fechas planificadas de inicio y término a las tareas. Coordina la secuencia de fabricación según las prioridades y plazos de entrega, consulta el estado de las órdenes y ajusta la programación cuando existen atrasos o cambios en la producción, buscando optimizar los tiempos y cumplir con las fechas de entrega establecidas. |
 
-> **Convención de roles simulados**: la interfaz usa cuatro etiquetas de rol —Jefa de Planta, Supervisor de Operaciones/Línea, Planificador y **Operador**—. "Operario" en textos de asignación de RR.HH. y "Operador de Máquina" en descripciones de persona son sinónimos documentales; la etiqueta visible canónica en toda la interfaz es **Operador**. Las responsabilidades de Ingeniería de Producción y Mantenimiento se ejercen, en la demo, desde los roles Planificador y Supervisor/Jefa de Planta respectivamente, sin crear credenciales adicionales.
+> **Convención de roles simulados**: la interfaz usa cuatro etiquetas de rol —Jefa de Planta, Supervisor de Operaciones/Línea, Planificador y **Operador**—. "Operador" es la forma canónica en textos de asignación de RR.HH. y descripciones de persona, con "Operador de Máquina" como variante descriptiva; la etiqueta visible canónica en toda la interfaz es **Operador**. Las responsabilidades de Ingeniería de Producción y Mantenimiento se ejercen, en la demo, desde los roles Planificador y Supervisor/Jefa de Planta respectivamente, sin crear credenciales adicionales.
 
 ## 4. Requisitos Funcionales
 
@@ -102,7 +102,7 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 
 ### FR-06: Panel y Trazabilidad
 - KPIs: órdenes activas, scrap rate, completion/yield, totales.
-- Utilización por centro de trabajo (carga pendiente vs. capacidad efectiva).
+- Utilización por centro de trabajo (carga pendiente vs. capacidad efectiva); al activar una fila se abre una ventana con las operaciones no completadas que generan esa carga (orden, secuencia, estado y minutos).
 - Trazabilidad por orden: operaciones, consumo plan-vs-real, salida, calidad derivada.
 
 </details>
@@ -126,10 +126,10 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 <details open>
 <summary><strong>FR-08: Supervisión de Línea, Semáforo, Asignación de Personal, Validación de Turno y Escalamiento (US-07 / HU-04)</strong></summary>
 
-**US-07 (HU-04 — Supervisor de Operaciones / Línea)**: Como Supervisor de Operaciones / Línea (Nivel Táctico-Operativo a pie de fábrica), quiero visualizar el semáforo de estado de cada línea/máquina en tiempo real, vincular operarios con máquinas para el turno, revisar y aprobar los cierres de turno y escalar incidentes a mantenimiento con un botón de alerta, para asegurar el cumplimiento del plan del turno y resolver incidencias inmediatas.
+**US-07 (HU-04 — Supervisor de Operaciones / Línea)**: Como Supervisor de Operaciones / Línea (Nivel Táctico-Operativo a pie de fábrica), quiero visualizar el semáforo de estado de cada línea/máquina en tiempo real, vincular operadores con máquinas para el turno, revisar y aprobar los cierres de turno y escalar incidentes a mantenimiento con un botón de alerta, para asegurar el cumplimiento del plan del turno y resolver incidencias inmediatas.
 
-- **Semáforo en tiempo real por línea/máquina (`work_centers`)**: Mostrar tarjetas o filas por cada centro de trabajo con su estado operativo en vivo (`in_operation` = *En operación* [verde], `paused` = *En pausa* [amarillo], `changeover` = *Cambio de formato* [azul/ámbar], `fault` = *En fallo* [rojo]), junto con la orden/operación activa, operario asignado y avance de piezas.
-- **Asignación de personal al turno (`shift_assignments`)**: Permitir vincular un operario (`ext_hr_employee_id`, puente hacia *Recursos Humanos y Planillas*) con un centro de trabajo/máquina (`work_center_id`) y franja de turno (`morning`, `afternoon`, `night`); impedir que un mismo operario sea asignado simultáneamente a dos máquinas activas en la misma franja sin confirmación de reasignación.
+- **Semáforo en tiempo real por línea/máquina (`work_centers`)**: Mostrar tarjetas o filas por cada centro de trabajo con su estado operativo en vivo (`in_operation` = *En operación* [verde], `paused` = *En pausa* [amarillo], `changeover` = *Cambio de formato* [azul/ámbar], `fault` = *En fallo* [rojo]), junto con la orden/operación activa, operador asignado y avance de piezas.
+- **Asignación de personal al turno (`shift_assignments`)**: Permitir vincular un operador (`ext_hr_employee_id`, puente hacia *Recursos Humanos y Planillas*) con un centro de trabajo/máquina (`work_center_id`) y franja de turno (`morning`, `afternoon`, `night`); impedir que un mismo operador sea asignado simultáneamente a dos máquinas activas en la misma franja sin confirmación de reasignación.
 - **Revisión y aprobación de cierres de turno (`production_shifts`)**: Listar los turnos finalizados (`status === 'completed'`) pendientes de revisión con su resumen de piezas conformes, merma, tiempo efectivo y atrasos (`operation_delays`); permitir al supervisor aprobar el cierre marcando `supervisor_validated = true`, `validated_by`, `validated_at` y nota opcional de supervisión. Bloquear la aprobación si el turno aún tiene un atraso abierto sin corregir (integración con `DelayCorrectionDialog` de US-06).
 - **Escalamiento de incidentes a mantenimiento (`maintenance_tickets`)**: Incluir un botón de alerta rápida en cada línea/máquina o evento de parada para escalar incidentes críticos; al activarlo, marcar `escalated_to_maint = true` en el evento de atraso/parada (`operation_delays`), crear un ticket urgente (`priority = 'urgent'`, `ticket_status = 'open'`) en `maintenance_tickets` y cambiar automáticamente el estado operativo del centro de trabajo a `fault` (*En fallo*).
 - **Persistencia**: Conservar asignaciones de personal, estados del semáforo, validaciones de turno y tickets de mantenimiento escalados dentro del snapshot versionado en `localStorage` (`erp.manufacturing.v2`; un `v1` existente se migra automáticamente).
@@ -142,7 +142,7 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 
 **US-08 (Jefa de Planta)**: Como Jefa de Planta, quiero consultar en un solo lugar la carga de cada centro de trabajo, el OEE, las paradas acumuladas y el cumplimiento de órdenes (por día, semana o mes), recibir alertas cuando un indicador cae bajo su umbral crítico y reprogramar o cancelar órdenes desde la misma vista, para mantener una visión global del desempeño de la planta y decidir en minutos.
 
-- **Carga y capacidad**: Mostrar la carga por centro de trabajo contra `capacity_per_day_minutes` ajustada por `efficiency_factor`, destacando los centros sobre el 100%.
+- **Carga y capacidad**: Mostrar la carga por centro de trabajo contra la capacidad efectiva: en el resumen del período, `días hábiles × capacity_per_day_minutes × efficiency_factor`; en la tarjeta diaria, `capacity_per_day_minutes × efficiency_factor`. Destacar los centros sobre el 100 % solo en el panel de planta; el balance usa su propio umbral de 95 %.
 - **OEE derivado**: Calcular el OEE (Disponibilidad × Rendimiento × Calidad) por centro y período (diario, semanal, mensual), derivado de `planned_time_minutes`, `actual_time_minutes` como tiempo ejecutado observado, `operation_delays`, `maintenance_tickets.downtime_minutes` de intervenciones cerradas, `quantity_completed` y `scrap_quantity`; no se persiste. Fórmula única: `disponibilidad = (planned_time_minutes − downtime_minutes) / planned_time_minutes`, con `downtime_minutes = Σ operation_delays.duration_minutes + Σ maintenance_tickets.downtime_minutes` del período; `rendimiento = quantity_completed / (run_time_per_unit_minutes × quantity_planned)`; `calidad = quantity_completed / (quantity_completed + scrap_quantity)`; `OEE = disponibilidad × rendimiento × calidad`, acotado a `[0,1]`.
 - **Paradas acumuladas**: Resumir las paradas acumuladas por centro y motivo (`delay_reasons`), ordenadas de mayor a menor, sin atribuirlas a personas.
 - **Umbrales y alarmas**: Configurar umbrales críticos por indicador (ej. rendimiento < 75%), mostrar alarmas visibles y conservar los umbrales en el snapshot `erp.manufacturing.v2`.
@@ -194,13 +194,17 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 <details open>
 <summary><strong>FR-12: Balance de líneas (US-11)</strong></summary>
 
-**US-11**: Como Ingeniero de Producción, quiero consultar la utilización y la carga proyectada de cada centro de trabajo frente a su capacidad nominal, para identificar cuellos de botella, balancear la línea de producción, maximizar la eficiencia global de la línea y evaluar cómo optimizar las rutas de trabajo.
+**US-11**: Como Ingeniero de Producción, quiero consultar la utilización y la carga proyectada de cada centro de trabajo frente a su capacidad efectiva del período, para identificar cuellos críticos, balancear la línea de producción, maximizar la eficiencia global de la línea y evaluar cómo optimizar las rutas de trabajo, sin aplicar cambios reales desde esta vista.
 
 - **Analizar los tiempos estándar**: Medir y determinar los tiempos teóricos de cada preparación para cada paso de la fabricación.
-- **Identificar cuellos de botella**: Evaluar qué estaciones o máquinas tardan más tiempo en procesar un lote, detectando el punto crítico que limita la velocidad de la planta.
-- **Proponer ajustes (solo lectura)**: Señalar qué reasignaciones entre centros o cambios de secuencia reducirían el cuello de botella, sin mutar rutas ni operaciones en esta historia.
-- **Calcular y monitorear la capacidad nominal**: Comparar la demanda planificada frente a la capacidad nominal diaria (`capacity_per_day_minutes`); el `efficiency_factor` se reserva para la carga efectiva del panel de planta (US-08).
+- **Clasificar la utilización**: Normal (< 75 %) en verde o saludable, con capacidad ociosa; Estación restrictiva / Ajustada (75 % a < 95 %) en ámbar, con mayor carga relativa sin sobrecarga; Cuello de botella / Sobrecarga (≥ 95 %) en rojo. No hay intervalo sin clasificar entre 94 % y 95 %.
+- **Activar la alerta superior solo si existe al menos un centro con utilización ≥ 95 %**. Si ninguno alcanza ese umbral, la vista muestra exactamente “Línea balanceada · Sin cuellos de botella críticos”.
+- **Identificar cuellos de botella**: entre centros críticos gana la mayor utilización, luego la mayor carga absoluta y finalmente el identificador; nunca se muestra un ranking de personas.
+- **Proponer ajustes simulados**: solo se ofrecen cuando existe un cuello crítico. Las reasignaciones se permiten únicamente entre estaciones con el mismo `station_type`; la demo tiene 5 tipos y 6 estaciones físicas (Soldadura 1 y Soldadura 2). Ejemplo: “Reasignar 6.865 min de OP-3007 desde Estación de Soldadura 1 a Estación de Soldadura 2 · Sec. 20.”
+- **Aceptar de forma simulada**: la propuesta requiere confirmación explícita y marca la fila como `Solicitud simulada`; no se registra en el store, no se persiste y no muta rutas, operaciones ni asignaciones.
+- **Calcular y monitorear la capacidad del período**: Comparar la demanda planificada frente a la capacidad calculada como días hábiles del período × `capacity_per_day_minutes` × `efficiency_factor`. El factor de eficiencia también aplica aquí; la vista debe etiquetar la capacidad como efectiva del período.
 - **Recomendar mejoras de eficiencia**: Identificar oportunidades para reducir tiempos muertos y maximizar la tasa de salida, sin modificar la asignación de recursos ni el personal desde esta vista.
+- **Consultar órdenes por estación en un popover**: al activar una fila de “Carga por centro”, se abre una ventana compacta con las órdenes que consumen esa estación, la carga en el centro y el porcentaje de participación por orden. La sección independiente “Órdenes por centro” no forma parte de la vista.
 
 </details>
 
@@ -239,7 +243,7 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 | AC-15 | US-06 | Inicio/fin de la operación activa con un único botón alterno y confirmación, tiempo real registrado y sin doble cierre | Verificado |
 | AC-16 | US-06 | Atrasos justificados con motivos predefinidos o personalizados; tiempo efectivo pausado y cierre permitido con atraso abierto para corrección posterior | Verificado |
 | AC-17 | US-06 | Dos contadores de piezas (turno y acumulado) incrementables, ajustables y validados; totales conservados al finalizar y recargar | Verificado |
-| AC-18 | US-07 | Semáforo en vivo por línea/máquina (*En operación, En pausa, En fallo, Cambio de formato*) y registro de asignación de operario (`ext_hr_employee_id`) en `shift_assignments` | Verificado |
+| AC-18 | US-07 | Semáforo en vivo por línea/máquina (*En operación, En pausa, En fallo, Cambio de formato*) y registro de asignación de operador (`ext_hr_employee_id`) en `shift_assignments` | Verificado |
 | AC-19 | US-07 | Aprobación de cierre de turno (`supervisor_validated = true`) tras verificar atrasos cerrados, y disparo de ticket urgente (`escalated_to_maint = true`) hacia `maintenance_tickets` pasando la máquina a *En fallo* | Verificado |
 | AC-20 | US-08 | Carga por centro destacada sobre la capacidad efectiva y bloqueo de programación en centros desactivados | Verificado |
 | AC-21 | US-09 | Bandeja de tickets escalados con prioridad, estado, centro y evento de parada vinculado, ordenada por prioridad y antigüedad | Verificado |
@@ -259,15 +263,16 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 | AC-35 | FR-13 | El hash mantiene el módulo activo y responde a enlaces profundos y navegación atrás | Verificado |
 | AC-36 | FR-13 | El panel inicial muestra actividad simulada y la etiqueta Operador de forma consistente, sin sección de accesos rápidos | Verificado |
 | AC-37 | US-11 | El panel muestra tiempos estándar por operación y totales por ruta (`setup + run × cantidad`) sin mutar rutas ni operaciones | Verificado |
-| AC-38 | US-11 | La carga proyectada y la utilización por centro se calculan para el período seleccionado contra capacidad nominal diaria, sin aplicar `efficiency_factor` | Verificado |
-| AC-39 | US-11 | El centro con mayor utilización proyectada se resalta como cuello de botella; en empate se usa mayor carga absoluta | Verificado |
-| AC-40 | US-11 | Las sugerencias de reasignación o cambio de secuencia son solo lectura y no modifican rutas, operaciones ni asignaciones | Verificado |
+| AC-39 | US-11 | La carga y la utilización se calculan para el período contra días hábiles × `capacity_per_day_minutes` × `efficiency_factor`; el estado es Normal (< 75 %) en verde, Ajustada (75 % a < 95 %) en ámbar o Cuello crítico (≥ 95 %) en rojo. La alerta superior se activa solo si algún centro alcanza el 95 %; si no, se muestra “Línea balanceada · Sin cuellos de botella críticos”. El cuello se desempata por mayor utilización, mayor carga y luego identificador | Verificado |
+| AC-40 | US-11 | Solo con cuello crítico se muestran propuestas de reasignación entre estaciones del mismo `station_type` o de revisión de secuencia; la aceptación explícita marca la fila como `Solicitud simulada`, sin registro en store, persistencia ni mutación de rutas, operaciones o asignaciones | Verificado |
 | AC-41 | FR-13 | El ingreso es genérico, valida credenciales simuladas y los datos de roles solo son visibles para la Jefa de Planta en `#/admin/roles` | Verificado |
 | AC-42 | FR-03 | El tablero permite arrastrar órdenes solo a estados siguientes válidos, sin mutar ante saltos inválidos | Verificado |
 | AC-43 | FR-07 | El acumulado de Estación se rechaza cuando supera la cantidad planificada, sin mutar turno ni operación | Verificado |
 | AC-44 | FR-01 a FR-13 | Los campos numéricos aceptan punto o coma decimal y hasta dos decimales, sin flechas de precisión y con errores inline para valores inválidos | Verificado |
+| AC-45 | US-11 | Al activar una fila de “Carga por centro” se abre un popover compacto centrado sobre esa sección, sin salirse del viewport, con las órdenes de la estación, la carga en el centro y la participación por orden; se cierra con botón, Escape, clic fuera o nueva activación, y no existe la sección “Órdenes por centro” | Verificado |
+| AC-46 | FR-06 / US-11 | En “Utilización por Centro de Trabajo” del Panel de Producción, activar un centro abre una ventana con sus operaciones pendientes, orden, secuencia, estado y minutos; en “Carga por centro” los días hábiles van entre paréntesis en el título del período y la columna “Utilización del día” repite el valor diario del panel, sin columna de días | Verificado |
 
-> **Nota de numeración**: los IDs AC son anclas históricas estables; no se renombran al añadir historias. La columna "Historia" disambigúa los rangos: AC-04..AC-07 y AC-20 pertenecen a US-08, AC-08..AC-14 a la base US-01..US-05/FR-06, y AC-37..AC-40 a US-11. No existen IDs duplicados ni un mismo criterio asignado a dos historias.
+> **Nota de numeración**: los IDs AC son anclas históricas estables; no se renombran al añadir historias. La columna "Historia" disambigúa los rangos: AC-04..AC-07 y AC-20 pertenecen a US-08, AC-08..AC-14 a la base US-01..US-05/FR-06, y AC-37, AC-39, AC-40 y AC-45 a US-11; AC-46 cubre la utilización diaria compartida entre FR-06 y US-11. AC-38 fue retirado y su cobertura de carga/utilización se integró en AC-39. No existen IDs duplicados ni un mismo criterio asignado a dos historias.
 
 ## 6. Entidades Clave
 
@@ -275,7 +280,7 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 - **WorkCenter / Routing / RoutingOperation**: capacidad, secuencia y tiempos estándar de fabricación.
 - **ProductionOrder / ProductionOrderOperation**: trabajo planificado, liberado y ejecutado, con tiempos y cantidades reales.
 - **ProductionShift / OperationDelay / DelayReason**: turno del operador, atrasos justificados y catálogo reutilizable de motivos.
-- **ShiftAssignment**: vínculo entre un operario de RR.HH. (`ext_hr_employee_id`) y un centro de trabajo por franja de turno.
+- **ShiftAssignment**: vínculo entre un operador de RR.HH. (`ext_hr_employee_id`) y un centro de trabajo por franja de turno.
 - **MaintenanceTicket**: ticket correctivo escalado desde piso, con prioridad, estado, centro, evento de parada, técnico y tiempos de intervención.
 - **PreventiveMaintenanceOrder**: orden de mantenimiento preventivo programada a partir del historial y del desgaste de la máquina.
 - **Umbral de indicador (ThresholdSetting)**: valor crítico configurable por indicador de planta, persistido en el snapshot.
@@ -283,7 +288,7 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 ## 7. Métricas de Éxito
 
 - **SC-01**: La Jefa de Planta obtiene la visión consolidada de carga, OEE, paradas y cumplimiento del período en menos de 1 minuto y sin salir del panel.
-- **SC-02**: El 100% de los centros con carga superior a su capacidad efectiva se resaltan y las alarmas por umbral se muestran al abrir el panel.
+- **SC-02**: El 100% de los centros con carga superior a su capacidad efectiva se resaltan y las alarmas por umbral se muestran al abrir el panel. Este resaltado pertenece a US-08; la alerta superior de US-11 usa regla propia de ≥ 95 % descrita en AC-39.
 - **SC-03**: El reporte consolidado se exporta en PDF y Excel con los datos del período seleccionado en menos de 10 segundos.
 - **SC-04**: Un Encargado de Mantenimiento identifica y toma el ticket urgente más antiguo en menos de 30 segundos desde que fue escalado.
 - **SC-05**: El 100% de las intervenciones cerradas registran su tiempo real de parada y dejan la máquina disponible (fuera de *En fallo*).
@@ -300,7 +305,7 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 - Los catálogos de RR.HH., calidad y ventas son datos simulados de solo lectura.
 - Los tiempos de turno y de parada se derivan de marcas de tiempo persistidas, no de temporizadores en memoria.
 - El OEE, la carga, la utilización, el cuello de botella y el indicador de desgaste son valores derivados y no se persisten.
-- `efficiency_factor` se aplica únicamente a la carga efectiva del panel de planta (US-08); el balance de líneas (US-11) usa capacidad nominal `capacity_per_day_minutes`.
+- `efficiency_factor` se aplica a la capacidad efectiva: `domain/capacity.js` deriva la tasa diaria (`capacity_per_day_minutes × efficiency_factor`) y la escala a días hábiles para el panel de planta (US-08) y el balance de líneas (US-11); el Panel de Producción (US-06) muestra esa tasa de un solo día. Cada panel conserva su propia definición de carga (pendiente, observada o proyectada) y `null` significa "sin capacidad válida".
 
 ## 9. Artefactos Spec-Kit
 
@@ -314,7 +319,8 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 | `contracts/operator-shift.md` | `specs/002-operations-manufacturing/contracts/operator-shift.md` | Contrato de store/UI para operador (US-06) y supervisor de línea (US-07) |
 | `contracts/plant-performance.md` | `specs/002-operations-manufacturing/contracts/plant-performance.md` | Contrato de panel de planta, umbrales, permisos y exportación (US-08) |
 | `contracts/order-scheduling.md` | `specs/002-operations-manufacturing/contracts/order-scheduling.md` | Contrato de planificación y fechas planificadas (US-10) |
-| `contracts/line-balance.md` | `specs/002-operations-manufacturing/contracts/line-balance.md` | Contrato de balance de líneas y cuellos de botella (US-11) |
+| `contracts/maintenance.md` | `specs/002-operations-manufacturing/contracts/maintenance.md` | Contrato de tickets, intervenciones y disponibilidad (US-09) |
+| `contracts/line-balance.md` | `specs/002-operations-manufacturing/contracts/line-balance.md` | Contrato de balance de líneas, umbrales y sugerencias simuladas (US-11) |
 | `quickstart.md` | `specs/002-operations-manufacturing/quickstart.md` | Guía de ejecución y validación de las historias de usuario |
 | `tasks.md` | `specs/002-operations-manufacturing/tasks.md` | Tareas atómicas por fase e historia de usuario |
 
@@ -323,6 +329,6 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 - **Stack**: Vanilla JavaScript ES2022 + Vite + CSS. JSDoc para tipado (paridad con `001-erp-base-module`).
 - **Arquitectura**: `domain/` (lógica pura), `data/` (fixtures + store + puertos), `components/` (vistas), `styles/`.
 - **Estado**: `ManufacturingStore` en memoria con `EventTarget` para re-render reactivo y snapshot versionado en `localStorage` (`erp.manufacturing.v2`, con migración desde `v1`) para sobrevivir recargas.
-- **Puentes Inter-Modulares (US-07 / HU-04)**: `ext_hr_employee_id` consume catálogo simulado de operarios de RR.HH. (`src/data/fixtures/hr-employees.js`) y el escalamiento genera registros en `maintenance_tickets` consumibles por la vista de Mantenimiento (HU-06).
+- **Puentes Inter-Modulares (US-07 / HU-04)**: `ext_hr_employee_id` consume catálogo simulado de operadores de RR.HH. (`src/data/fixtures/hr-employees.js`) y el escalamiento genera registros en `maintenance_tickets` consumibles por la vista de Mantenimiento (HU-06).
 - **Ética**: agregación por centro/operación, sin rankings individuales; tiempos y asignaciones como dato de coordinación operativa.
 - **Navegación**: `src/domain/access-control.js` es la fuente única de roles, etiquetas y matriz de módulos; `src/manufacturing-main.js` sincroniza rol y hash; `src/data/fixtures/dashboard-demo.js` contiene sólo datos de demostración para el inicio.

@@ -8,6 +8,12 @@ import { elapsedMinutes, sumClosedDelayMinutes } from '../domain/shift-tracking.
 import { DelayCorrectionDialog } from './DelayCorrectionDialog.js';
 import { decimalInput, parseDecimal } from './numeric-field.js';
 
+function formatDelayStart(iso) {
+  const text = String(iso ?? '');
+  const match = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/.exec(text);
+  return match ? `${match[3]}/${match[2]} ${match[4]}:${match[5]}` : text;
+}
+
 /**
  * @param {import('../data/ManufacturingStore.js').ManufacturingStore} store
  * @returns {HTMLElement}
@@ -48,7 +54,7 @@ export function OperatorWorkstationPanel(store) {
     selectEl.innerHTML = list
       .map((op) => {
         const order = store.orderById(op.production_order_id);
-        return `<option value="${op.id}">${escapeHtml(order ? order.order_number : op.production_order_id)} · op ${op.sequence} (${OP_STATUS_LABEL[op.status]})</option>`;
+        return `<option value="${escapeHtml(op.id)}">${escapeHtml(order ? order.order_number : op.production_order_id)} · op ${escapeHtml(op.sequence)} (${OP_STATUS_LABEL[op.status]})</option>`;
       })
       .join('');
     if (selectedOperationId) selectEl.value = selectedOperationId;
@@ -62,6 +68,10 @@ export function OperatorWorkstationPanel(store) {
     }
     const order = store.orderById(operation.production_order_id);
     const plannedQuantity = Number(order?.quantity_planned) || 0;
+    const cumulativePercent =
+      plannedQuantity > 0
+        ? Math.min(100, Math.max(0, (Number(operation.quantity_completed) / plannedQuantity) * 100))
+        : 0;
     const atLimit = Number(operation.quantity_completed) >= plannedQuantity;
     const shift = store.activeShiftFor(operation.id);
     const openDelay = store.openDelayFor(operation.id);
@@ -83,17 +93,19 @@ export function OperatorWorkstationPanel(store) {
 
     const reasons = shift ? store.reasonsForShift(shift.id) : [];
     const reasonOptions = reasons
-      .map((reason) => `<option value="${reason.id}">${escapeHtml(reason.label)}</option>`)
+      .map(
+        (reason) => `<option value="${escapeHtml(reason.id)}">${escapeHtml(reason.label)}</option>`,
+      )
       .join('');
 
     const delayRows = delays
       .map((delay) => {
         const reason = store.delayReasons.find((row) => row.id === delay.delay_reason_id);
-        return `<tr data-delay-row="${delay.id}">
+        return `<tr data-delay-row="${escapeHtml(delay.id)}">
           <td>${escapeHtml(reason ? reason.label : delay.delay_reason_id)}</td>
-          <td>${escapeHtml(delay.started_at)}</td>
+          <td class="delay-start" title="${escapeHtml(delay.started_at)}">${escapeHtml(formatDelayStart(delay.started_at))}</td>
           <td>${delay.duration_minutes != null ? fmtNumber(delay.duration_minutes, 2) : 'Abierto'}</td>
-          <td>${delay.status === 'open' ? '<span class="badge badge--warn">Abierto — pendiente de corrección</span>' : 'Cerrado'}</td>
+          <td>${delay.status === 'open' ? '<span class="badge badge--warn badge--delay-open">Abierto — pendiente de corrección</span>' : 'Cerrado'}</td>
         </tr>`;
       })
       .join('');
@@ -107,7 +119,7 @@ export function OperatorWorkstationPanel(store) {
 
     bodyEl.innerHTML = `
       <div class="operator-layout">
-        <article class="panel">
+        <article class="panel operator-panel operator-panel--operation">
           <header class="panel__header">
             <h2>${escapeHtml(order ? order.order_number : operation.production_order_id)} · ${escapeHtml(workCenter ? workCenter.name : operation.work_center_id)}</h2>
             <p class="panel__subtitle">${escapeHtml(store.productById(order?.product_id)?.name || '')}</p>
@@ -126,7 +138,7 @@ export function OperatorWorkstationPanel(store) {
           </div>
         </article>
 
-        <article class="panel">
+        <article class="panel operator-panel operator-panel--counters">
           <header class="panel__header"><h3>Contadores</h3></header>
           <div class="panel__body">
             <div class="counter-row">
@@ -140,7 +152,7 @@ export function OperatorWorkstationPanel(store) {
           </div>
         </article>
 
-        <article class="panel">
+        <article class="panel operator-panel operator-panel--delays">
           <header class="panel__header"><h3>Atrasos justificados</h3></header>
           <div class="panel__body">
             <div class="table-wrap">

@@ -87,5 +87,4 @@ La etiqueta visible es **Operador de Máquina** (o **Operador** en selectores co
 
 ## Deuda conocida
 
-- `T002`: Vitest no configura jsdom globalmente; las suites que necesitan DOM crean su propio `JSDOM`.
-- `T084`: 12 suites heredadas de `001-erp-base-module` importan `src/app.js`, `src/storage.js` y `src/module-config.js`, que no existen en este módulo. Están documentadas en `specs/002-operations-manufacturing/tasks.md`.
+- Sin deuda pendiente de Fase 16. `T002` quedó cerrado con `environment: 'jsdom'` global en `vitest.config.mjs` y `T084` con el aislamiento de las 12 suites heredadas de `001-erp-base-module` que importan `src/app.js`, `src/storage.js` y `src/module-config.js`: se excluyen en `test.exclude` (conservando los excludes por defecto), sin borrarlas. Detalle en `specs/002-operations-manufacturing/tasks.md`.

@@ -88,33 +88,32 @@ describe('Autoría de recetas BOM', () => {
     expect(document.querySelector('[data-role="modal-root"]').innerHTML).toBe('');
   });
 
-  it('modifica la cantidad de un material y avisa cuando el cambio queda vacío', () => {
+  it('modifica la cantidad de un material y avisa cuando el cambio queda vacío', async () => {
     document.body.appendChild(BomExplorer(store));
     click('[data-role="edit-recipe"]');
     setValue('.modal [name="change_value"]', '3');
     submit('.modal [data-role="form"]');
     expect(store.bomMaterials('bom_bici')[0].quantity_per_unit).toBe(3);
 
-    const confirm = window.confirm;
-    window.confirm = () => false;
     click('[data-role="edit-recipe"]');
     setValue('.modal [name="field"]', 'code');
     setValue('.modal [name="change_value"]', '');
     submit('.modal [data-role="form"]');
     expect(document.querySelector('.modal [data-role="error"]').textContent).toContain('vacío');
+    click('dialog [data-role="cancel"]');
+    await Promise.resolve();
     expect(store.billOfMaterials.some((bom) => bom.id === 'bom_bici')).toBe(true);
-    window.confirm = confirm;
   });
 
-  it('elimina la receta seleccionada por nombre de producto tras confirmar', () => {
+  it('elimina la receta seleccionada por nombre de producto tras confirmar', async () => {
     document.body.appendChild(BomExplorer(store));
-    const confirm = window.confirm;
-    window.confirm = () => true;
     click('[data-role="delete-recipe"]');
     setValue('.modal [name="bom_id"]', 'bom_rueda');
     submit('.modal [data-role="form"]');
+    expect(document.querySelector('dialog [data-role="confirm"]')).toBeTruthy();
+    click('dialog [data-role="confirm"]');
+    await Promise.resolve();
     expect(store.billOfMaterials.some((bom) => bom.id === 'bom_rueda')).toBe(false);
     expect(store.bomComponents.some((component) => component.bom_id === 'bom_rueda')).toBe(false);
-    window.confirm = confirm;
   });
 });

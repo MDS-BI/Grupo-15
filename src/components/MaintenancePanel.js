@@ -6,6 +6,7 @@
 
 import { computeDowntimeMinutes, buildPreventiveOrderFromHistory } from '../domain/maintenance.js';
 import { escapeHtml, el, fmtNumber } from './format.js';
+import { notifyDialog } from './ConfirmDialog.js';
 
 const TICKET_STATUS_LABEL = {
   open: 'Abierto',
@@ -65,17 +66,17 @@ function fmtDateTime(value) {
 }
 
 function priorityBadge(priority) {
-  return `<span class="prio prio--${priority}">${PRIORITY_LABEL[priority] || priority}</span>`;
+  return `<span class="prio prio--${escapeHtml(priority)}">${escapeHtml(PRIORITY_LABEL[priority] || priority)}</span>`;
 }
 
 function ticketStatusBadge(status) {
-  return `<span class="maint-badge maint-badge--${status}">${TICKET_STATUS_LABEL[status] || status}</span>`;
+  return `<span class="maint-badge maint-badge--${escapeHtml(status)}">${escapeHtml(TICKET_STATUS_LABEL[status] || status)}</span>`;
 }
 
 function preventiveStatusBadge(status) {
-  return `<span class="maint-badge maint-badge--${status}">${
-    PREVENTIVE_STATUS_LABEL[status] || status
-  }</span>`;
+  return `<span class="maint-badge maint-badge--${escapeHtml(status)}">${escapeHtml(
+    PREVENTIVE_STATUS_LABEL[status] || status,
+  )}</span>`;
 }
 
 /**
@@ -115,7 +116,7 @@ export function MaintenancePanel(store) {
             <select data-role="filter-work-center" aria-label="Filtrar por centro de trabajo">
               <option value="">Todos</option>
               ${store.workCenters
-                .map((wc) => `<option value="${wc.id}">${escapeHtml(wc.name)}</option>`)
+                .map((wc) => `<option value="${escapeHtml(wc.id)}">${escapeHtml(wc.name)}</option>`)
                 .join('')}
             </select>
           </label>
@@ -203,7 +204,7 @@ export function MaintenancePanel(store) {
             const minutes = since
               ? Math.max(0, Math.round((Date.now() - new Date(since).getTime()) / 60000))
               : null;
-            return `<div class="fault-banner__item" data-fault-ticket="${ticket.id}">
+            return `<div class="fault-banner__item" data-fault-ticket="${escapeHtml(ticket.id)}">
               <span>${escapeHtml(ticket.ticket_code)} · ${escapeHtml(
                 workCenterName(ticket.work_center_id),
               )}</span>
@@ -218,14 +219,14 @@ export function MaintenancePanel(store) {
   function actionButton(ticket) {
     if (ticket.ticket_status === 'open') {
       const blocked = Boolean(store.activeInterventionForWorkCenter(ticket.work_center_id));
-      return `<button type="button" class="btn btn--small btn--primary" data-take="${ticket.id}" ${
+      return `<button type="button" class="btn btn--small btn--primary" data-take="${escapeHtml(ticket.id)}" ${
         blocked ? 'disabled title="El centro ya tiene una intervención activa"' : ''
       }>Tomar intervención</button>`;
     }
     if (ticket.ticket_status === 'in_progress') {
-      return `<button type="button" class="btn btn--small btn--primary" data-resolve="${ticket.id}">Resolver</button>`;
+      return `<button type="button" class="btn btn--small btn--primary" data-resolve="${escapeHtml(ticket.id)}">Resolver</button>`;
     }
-    return `<button type="button" class="btn btn--small" data-view="${ticket.id}">Ver historial</button>`;
+    return `<button type="button" class="btn btn--small" data-view="${escapeHtml(ticket.id)}">Ver historial</button>`;
   }
 
   function renderTickets() {
@@ -238,7 +239,7 @@ export function MaintenancePanel(store) {
     ticketListEl.innerHTML = tickets
       .map((ticket) => {
         const active = ticket.id === selectedTicketId ? 'is-selected' : '';
-        return `<tr class="${active}" data-ticket-row="${ticket.id}">
+        return `<tr class="${active}" data-ticket-row="${escapeHtml(ticket.id)}">
           <td><strong>${escapeHtml(ticket.ticket_code)}</strong></td>
           <td>${escapeHtml(workCenterName(ticket.work_center_id))}</td>
           <td>${priorityBadge(ticket.priority)}</td>
@@ -322,7 +323,7 @@ export function MaintenancePanel(store) {
           ${store.workCenters
             .map(
               (wc) =>
-                `<option value="${wc.id}" ${wc.id === workCenterId ? 'selected' : ''}>${escapeHtml(
+                `<option value="${escapeHtml(wc.id)}" ${wc.id === workCenterId ? 'selected' : ''}>${escapeHtml(
                   wc.name,
                 )}</option>`,
             )
@@ -358,17 +359,17 @@ export function MaintenancePanel(store) {
     const buttons = [];
     if (order.status === 'planned') {
       buttons.push(
-        `<button type="button" class="btn btn--small btn--primary" data-preventive-action="start" data-order="${order.id}">Iniciar</button>`,
+        `<button type="button" class="btn btn--small btn--primary" data-preventive-action="start" data-order="${escapeHtml(order.id)}">Iniciar</button>`,
       );
     }
     if (order.status === 'in_progress') {
       buttons.push(
-        `<button type="button" class="btn btn--small btn--primary" data-preventive-action="complete" data-order="${order.id}">Completar</button>`,
+        `<button type="button" class="btn btn--small btn--primary" data-preventive-action="complete" data-order="${escapeHtml(order.id)}">Completar</button>`,
       );
     }
     if (order.status === 'planned' || order.status === 'in_progress') {
       buttons.push(
-        `<button type="button" class="btn btn--small" data-preventive-action="cancel" data-order="${order.id}">Cancelar</button>`,
+        `<button type="button" class="btn btn--small" data-preventive-action="cancel" data-order="${escapeHtml(order.id)}">Cancelar</button>`,
       );
     }
     return buttons.join('');
@@ -387,7 +388,7 @@ export function MaintenancePanel(store) {
           <tbody>
             ${orders
               .map(
-                (order) => `<tr data-preventive-row="${order.id}">
+                (order) => `<tr data-preventive-row="${escapeHtml(order.id)}">
                   <td><strong>${escapeHtml(order.order_code)}</strong></td>
                   <td>${escapeHtml(workCenterName(order.work_center_id))}</td>
                   <td>${escapeHtml(order.title)}</td>
@@ -581,11 +582,11 @@ export function MaintenancePanel(store) {
     showModal(`
       <h2 id="preventive-title">Programar preventiva · ${escapeHtml(workCenterName(centerId))}</h2>
       <form data-role="preventive-form" class="stack-form">
-        <p class="context-note">Desgaste ${WEAR_LABEL[wear.wear_level] || wear.wear_level}: ${
-          wear.failure_count
-        } fallo(s), ${fmtNumber(wear.total_downtime_minutes, 2)} min de parada.</p>
+        <p class="context-note">Desgaste ${escapeHtml(WEAR_LABEL[wear.wear_level] || wear.wear_level)}: ${escapeHtml(
+          wear.failure_count,
+        )} fallo(s), ${fmtNumber(wear.total_downtime_minutes, 2)} min de parada.</p>
         <label>Fecha objetivo
-          <input type="date" name="plannedDate" value="${suggestion.planned_date}" required />
+          <input type="date" name="plannedDate" value="${escapeHtml(suggestion.planned_date)}" required />
         </label>
         <label>Título
           <input type="text" name="title" value="${escapeHtml(suggestion.title)}" required />
@@ -623,7 +624,7 @@ export function MaintenancePanel(store) {
     });
   }
 
-  function handlePreventiveAction(orderId, action) {
+  async function handlePreventiveAction(orderId, action) {
     try {
       if (action === 'start') {
         store.transitionPreventiveMaintenanceOrder(orderId, 'in_progress');
@@ -637,9 +638,10 @@ export function MaintenancePanel(store) {
         store.cancelPreventiveMaintenanceOrder(orderId, { reason });
       }
     } catch (error) {
-      if (typeof window !== 'undefined' && typeof window.alert === 'function') {
-        window.alert(error.message);
-      }
+      await notifyDialog({
+        title: 'No se pudo completar la acción',
+        message: error.message,
+      });
     }
   }
 

@@ -119,9 +119,9 @@ export function SupervisorLinePanel(store) {
               (op) => op.id === shift.po_operation_id,
             );
             const order = operation ? store.orderById(operation.production_order_id) : null;
-            return `<div class="closure-row" data-shift-row="${shift.id}">
+            return `<div class="closure-row" data-shift-row="${escapeHtml(shift.id)}">
               <span>${escapeHtml(order ? order.order_number : shift.po_operation_id)} · turno ${shift.shift_number} · ${fmtNumber(shift.quantity_counted)} piezas</span>
-              <button type="button" class="btn btn--tiny btn--primary" data-validate="${shift.id}">Validar cierre</button>
+              <button type="button" class="btn btn--tiny btn--primary" data-validate="${escapeHtml(shift.id)}">Validar cierre</button>
             </div>`;
           })
           .join('')

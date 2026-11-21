@@ -1,6 +1,6 @@
 /**
  * @file Reglas puras de supervisión de línea (US-07): semáforo, asignación de
- * operarios, validación de cierres y escalamiento de incidentes.
+ * operadores, validación de cierres y escalamiento de incidentes.
  */
 
 import { WorkCenterOperationalStatus } from './types.js';
@@ -33,7 +33,7 @@ export function deriveWorkCenterTrafficLight(workCenter, operations = [], active
 }
 
 /**
- * Una sola asignación activa por centro+franja y por operario+franja.
+ * Una sola asignación activa por centro+franja y por operador+franja.
  * @param {Array<import('./types.js').ShiftAssignment>} assignments
  * @param {{work_center_id:string, shift_band:string, ext_hr_employee_id:string}} candidate
  */

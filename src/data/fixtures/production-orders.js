@@ -113,6 +113,24 @@ export const productionOrders = [
     priority: 'normal',
     notes: 'Cancelada por cambio de diseño.',
   },
+  {
+    id: 'po_3007',
+    company_id: 'cmp_1',
+    order_number: 'OP-3007',
+    product_id: 'prod_cuadro',
+    bom_id: 'bom_cuadro',
+    routing_id: 'rt_cuadro',
+    sales_order_id: null,
+    warehouse_id: 'wh_wip',
+    quantity_planned: 380,
+    status: 'released',
+    planned_start_date: '2026-10-05',
+    planned_end_date: '2026-10-30',
+    actual_start_date: null,
+    actual_end_date: null,
+    priority: 'high',
+    notes: 'Lote de cuadros para la demanda de bicicletas de noviembre.',
+  },
 ];
 
 /**
