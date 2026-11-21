@@ -11,6 +11,7 @@ import {
   orderStatusBadge,
   ORDER_STATUS_LABEL,
   OP_STATUS_LABEL,
+  PRIORITY_LABEL,
   QUALITY_LABEL,
 } from './format.js';
 import { OperatorWorkstationPanel } from './OperatorWorkstationPanel.js';
@@ -59,7 +60,7 @@ export function ProductionOrders(store) {
             <span>${ORDER_STATUS_LABEL[status]}</span>
             <span class="kanban-col__count">${orders.length}</span>
           </header>
-          <div class="kanban-col__body">${cards || '<p class="empty-note">Sin órdenes.</p>'}</div>
+          <div class="kanban-col__body">${cards || '<p class="empty-note">Sin órdenes. Crea una con Nueva Orden.</p>'}</div>
         </div>`;
     }).join('');
 
@@ -135,7 +136,7 @@ export function ProductionOrders(store) {
       <button type="button" class="order-card ${active}" data-order="${order.id}" draggable="true" title="Arrastra a otra columna para cambiar el estado">
         <div class="order-card__top">
           <strong>${escapeHtml(order.order_number)}</strong>
-          <span class="priority priority--${order.priority}">${order.priority}</span>
+          <span class="priority priority--${order.priority}">${PRIORITY_LABEL[order.priority] || order.priority}</span>
         </div>
         <div class="order-card__product">${escapeHtml(product ? product.name : order.product_id)}</div>
         <div class="order-card__meta">
@@ -225,8 +226,8 @@ export function ProductionOrders(store) {
           <div><dt>Planificado</dt><dd>${fmtNumber(order.quantity_planned)} u</dd></div>
           <div><dt>Producido</dt><dd>${fmtNumber(produced)} u</dd></div>
           <div><dt>Merma</dt><dd>${fmtNumber(scrap)} u</dd></div>
-          <div><dt>Yield</dt><dd>${fmtPercent(yieldRatio)}</dd></div>
-          <div><dt>Scrap rate</dt><dd>${fmtPercent(scrapRate)}</dd></div>
+          <div><dt>Rendimiento</dt><dd>${fmtPercent(yieldRatio)}</dd></div>
+          <div><dt>Tasa de merma</dt><dd>${fmtPercent(scrapRate)}</dd></div>
           <div><dt>Calidad (derivada)</dt><dd><span class="badge badge--qc-${quality}">${QUALITY_LABEL[quality]}</span></dd></div>
           <div><dt>Tiempo plan / real</dt><dd>${fmtNumber(plannedTotal)} / ${fmtNumber(actualTotal)} min</dd></div>
           <div><dt>Origen</dt><dd>${order.sales_order_id ? `MTO (${escapeHtml(order.sales_order_id)})` : 'Stock'}</dd></div>

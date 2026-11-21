@@ -332,6 +332,23 @@
 
 ---
 
+## Fase 18: Marco de navegación, roles efectivos y sistema visual (2026-11-17)
+
+**Propósito**: separar el rol real del efectivo, convertir la barra lateral en un drawer accesible en pantallas angostas y unificar la estética del módulo con tipografía, tokens y tablas legibles.
+
+- [X] T111 [P] Separar `realRole` y `role` efectivo en `src/manufacturing-main.js`, restringir «Ver como» y «Entrar como…» a la Jefa de Planta y mostrar «Viendo como: <rol>» en la barra superior
+- [X] T112 [P] Redirigir el logo (`aria-label="Ir al inicio"`) al módulo de inicio del rol efectivo y mover «Cerrar sesión» al menú de usuario con avatar de iniciales, operable con teclado
+- [X] T113 [P] Crear `src/components/icons.js` con iconos SVG inline (`currentColor`, `aria-hidden="true"`) para los módulos y controles, y mostrarlos en la barra lateral
+- [X] T114 [P] Reemplazar la barra lateral comprimida por un drawer bajo 900 px con hamburguesa (`aria-expanded`/`aria-controls`), fondo oscurecido, cierre con Escape/clic fuera y devolución del foco
+- [X] T115 [P] Compactar el contexto por rol en `src/components/DashboardOverview.js`, subir «Situación actual» y traducir etiquetas y prioridades con `PRIORITY_LABEL` en `src/components/format.js`
+- [X] T116 [P] Instalar `@fontsource-variable/inter`, importarlo en `src/manufacturing-main.js`, definir tokens de superficies/estados en `src/styles/manufacturing.css`, mejorar contraste de advertencia y aplicar encabezado fijo, scroll y alineación numérica en tablas
+- [X] T117 [P] Añadir monograma, nombre del módulo, botón accesible de contraseña y estado de carga de 400 ms en `renderLogin`, sin mostrar credenciales ni pistas de roles
+- [X] T118 Actualizar `README.md` y las pruebas de integración de login y panel; ejecutar `npm test -- --run`, `npm run lint` y `npm run format:check`
+
+**Punto de control**: el login determina el rol real, solo la Jefa de Planta puede cambiar el rol efectivo, el drawer y el menú son accesibles y el sistema visual usa tokens, tipografía Inter y tablas legibles; T084 permanece como deuda heredada.
+
+---
+
 ## Dependencias y Orden de Ejecución
 
 ### Dependencias por fase

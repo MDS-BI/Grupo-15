@@ -41,7 +41,9 @@ El inicio es un login genérico: no muestra roles, descripciones ni pistas sobre
 | `jefa.planta` | `Pl4nta2026` | Jefa de Planta (administrador) |
 | `usuario` | `usuario` | Jefa de Planta (administrador) |
 
-No hay autenticación real: es una simulación frontend para demostrar permisos. El formulario valida las credenciales con `src/data/fixtures/demo-accounts.js`, guarda el rol en `erp.manufacturing.role` y vuelve al login al cargar la página o al pulsar **Cerrar sesión**. El selector de la barra superior permite cambiar de rol sin recargar, y la navegación lateral se filtra con `src/domain/access-control.js`.
+No hay autenticación real: es una simulación frontend para demostrar permisos. El formulario valida las credenciales con `src/data/fixtures/demo-accounts.js`, guarda el rol real y el efectivo en `erp.manufacturing.role` y vuelve al login al cargar la página o al pulsar **Cerrar sesión**. El rol real es el que proviene del login; el rol efectivo es el que filtra la navegación con `src/domain/access-control.js`.
+
+Solo la Jefa de Planta (rol real) puede usar **Ver como** en el menú de usuario, ubicado en la barra superior; al hacerlo se muestra la etiqueta «Viendo como: <rol>» y puede volver a su rol real desde el mismo menú. El logo lleva al módulo de inicio del rol efectivo. Para el resto de roles, la página **Roles** es solo informativa y no muestra botones «Entrar como…». Cerrar sesión descarta ambos roles.
 
 | Rol | Módulos principales |
 |---|---|
@@ -59,6 +61,7 @@ La etiqueta visible es **Operador de Máquina** (o **Operador** en selectores co
 - El módulo activo se sincroniza con el hash (`#/dashboard`, `#/plant`, `#/scheduling`, ...), por lo que funcionan enlaces profundos y el botón atrás del navegador.
 - Si un rol abre por URL un módulo no permitido, la app lo redirige a su módulo de inicio.
 - El panel **Roles** muestra las páginas disponibles para cada rol; **Datos de roles** (`#/admin/roles`) está restringido a la Jefa de Planta.
+- En pantallas de hasta 900 px la barra lateral se convierte en un drawer: se abre con el botón hamburguesa, se cierra con Escape, con clic fuera o al elegir un módulo, y devuelve el foco al botón. El menú de usuario (avatar, rol efectivo, «Ver como» y «Cerrar sesión») se opera con teclado y se cierra con Escape o clic fuera.
 - El panel inicial ofrece avisos de situación (alarmas, tickets, cierres y atrasos) y actividad reciente simulada; la navegación lateral cubre todos los destinos por rol.
 - En Órdenes, las tarjetas del tablero se pueden arrastrar a la siguiente columna válida; los botones del detalle siguen siendo la alternativa accesible.
 
@@ -67,7 +70,7 @@ La etiqueta visible es **Operador de Máquina** (o **Operador** en selectores co
 - `src/data/fixtures/`: maestros, BOM, rutas, órdenes, turnos, atrasos, asignaciones, mantenimiento y umbrales.
 - `src/data/fixtures/dashboard-demo.js`: actividad reciente del inicio; no se persiste.
 - `src/data/persistence.js`: snapshot vigente `erp.manufacturing.v2`, con migración desde `v1`.
-- El rol activo se guarda por separado en `erp.manufacturing.role`.
+- Los roles real y efectivo se guardan por separado del snapshot en `erp.manufacturing.role` (formato `real|efectivo`).
 
 ## Captura de datos
 
