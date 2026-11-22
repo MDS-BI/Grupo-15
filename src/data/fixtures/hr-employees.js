@@ -35,6 +35,24 @@ export const hrEmployees = [
     specialty: 'Pintura',
   },
   {
+    ext_hr_employee_id: 'ext_hr_tec_01',
+    name: 'Ana Soto',
+    role: 'technician',
+    specialty: 'Mecánica',
+  },
+  {
+    ext_hr_employee_id: 'ext_hr_tec_02',
+    name: 'Bruno Díaz',
+    role: 'technician',
+    specialty: 'Electromecánica',
+  },
+  {
+    ext_hr_employee_id: 'ext_hr_tec_03',
+    name: 'Carla Méndez',
+    role: 'technician',
+    specialty: 'Instrumentación',
+  },
+  {
     ext_hr_employee_id: 'emp_sup_01',
     name: 'Inés Vidal',
     role: 'supervisor',

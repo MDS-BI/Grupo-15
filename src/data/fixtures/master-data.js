@@ -3,6 +3,8 @@
  * Solo lectura para el módulo de manufactura. Ver data-model.md §3.1–3.5, §3.15.
  */
 
+import { relativeDay } from './demo-dates.js';
+
 export const companies = [
   {
     id: 'cmp_1',
@@ -141,7 +143,7 @@ export const salesOrders = [
     order_number: 'PV-1001',
     status: 'confirmed',
     make_to_order: true,
-    requested_date: '2026-11-15',
+    requested_date: relativeDay(-7),
   },
   {
     id: 'so_1002',
@@ -150,7 +152,7 @@ export const salesOrders = [
     order_number: 'PV-1002',
     status: 'confirmed',
     make_to_order: true,
-    requested_date: '2026-11-22',
+    requested_date: relativeDay(0),
   },
   {
     id: 'so_1003',
@@ -159,7 +161,7 @@ export const salesOrders = [
     order_number: 'PV-1003',
     status: 'open',
     make_to_order: false,
-    requested_date: '2026-12-01',
+    requested_date: relativeDay(9),
   },
 ];
 

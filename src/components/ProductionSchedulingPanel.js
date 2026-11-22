@@ -4,6 +4,7 @@
  */
 
 import { escapeHtml, el, orderStatusBadge } from './format.js';
+import { showToast } from './Toast.js';
 
 const PRIORITY_LABEL = { low: 'Baja', normal: 'Normal', high: 'Alta' };
 
@@ -117,6 +118,7 @@ export function ProductionSchedulingPanel(store) {
         planned_end_date: clear ? null : endInput.value || null,
       });
       errorEl.textContent = '';
+      showToast(clear ? 'Fechas eliminadas' : 'Fechas guardadas', { tone: 'success' });
       render();
     } catch (err) {
       errorEl.textContent = err.message;

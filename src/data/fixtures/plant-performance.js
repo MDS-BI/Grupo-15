@@ -3,6 +3,8 @@
  * matriz rol×acción simulada. Ver data-model.md §3.21–3.22.
  */
 
+import { relativeTimestamp } from './demo-dates.js';
+
 export const thresholdSettings = [
   {
     id: 'th_load',
@@ -10,7 +12,7 @@ export const thresholdSettings = [
     indicator: 'load',
     threshold: 0.85,
     comparison: 'gt',
-    updated_at: '2026-11-01T08:00:00Z',
+    updated_at: relativeTimestamp(-21, '08:00'),
   },
   {
     id: 'th_oee',
@@ -18,7 +20,7 @@ export const thresholdSettings = [
     indicator: 'oee',
     threshold: 0.7,
     comparison: 'lt',
-    updated_at: '2026-11-01T08:00:00Z',
+    updated_at: relativeTimestamp(-21, '08:00'),
   },
   {
     id: 'th_downtime',
@@ -26,7 +28,7 @@ export const thresholdSettings = [
     indicator: 'downtime',
     threshold: 120,
     comparison: 'gt',
-    updated_at: '2026-11-01T08:00:00Z',
+    updated_at: relativeTimestamp(-21, '08:00'),
   },
   {
     id: 'th_fulfillment',
@@ -34,7 +36,7 @@ export const thresholdSettings = [
     indicator: 'fulfillment',
     threshold: 0.9,
     comparison: 'lt',
-    updated_at: '2026-11-01T08:00:00Z',
+    updated_at: relativeTimestamp(-21, '08:00'),
   },
 ];
 
@@ -60,6 +62,6 @@ export const rolePermissions = Object.entries(ALLOWED).flatMap(([role, actions])
     role,
     action,
     allowed: actions.includes(action),
-    updated_at: '2026-11-01T08:00:00Z',
+    updated_at: relativeTimestamp(-21, '08:00'),
   })),
 );

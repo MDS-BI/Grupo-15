@@ -19,6 +19,40 @@ export function fmtPercent(ratio, decimals = 1) {
   return `${(v * 100).toFixed(decimals)}%`;
 }
 
+function toDisplayDate(value) {
+  if (!value) return null;
+  const input =
+    typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00` : value;
+  const date = new Date(input);
+  return Number.isFinite(date.getTime()) ? date : null;
+}
+
+export function formatLocalDate(value) {
+  const date = toDisplayDate(value);
+  if (!date) return '—';
+  return new Intl.DateTimeFormat('es-CL', { dateStyle: 'short' }).format(date);
+}
+
+export function formatLocalDateTime(value) {
+  const date = toDisplayDate(value);
+  if (!date) return '—';
+  return new Intl.DateTimeFormat('es-CL', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  }).format(date);
+}
+
+/** @param {number} minutes */
+export function formatDurationLong(minutes) {
+  if (minutes === null || minutes === undefined || minutes === '') return '—';
+  const total = Math.round(Number(minutes));
+  if (!Number.isFinite(total) || total < 0) return '—';
+  const days = Math.floor(total / 1440);
+  const hours = Math.floor((total % 1440) / 60);
+  const mins = total % 60;
+  return `${days} d ${hours} h ${mins} min`;
+}
+
 /** @param {string} value */
 export function escapeHtml(value) {
   return String(value ?? '')

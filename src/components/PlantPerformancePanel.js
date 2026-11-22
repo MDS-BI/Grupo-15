@@ -3,10 +3,18 @@
  * umbrales, acciones sobre órdenes y exportación local.
  */
 
-import { escapeHtml, el, fmtNumber, fmtPercent, ORDER_STATUS_LABEL } from './format.js';
+import {
+  escapeHtml,
+  el,
+  fmtNumber,
+  fmtPercent,
+  formatDurationLong,
+  ORDER_STATUS_LABEL,
+} from './format.js';
 import { downloadCsv, printReport } from '../data/exporters/plant-report.js';
 import { decimalInput, parseDecimal } from './numeric-field.js';
 import { notifyDialog } from './ConfirmDialog.js';
+import { showToast } from './Toast.js';
 
 const PERIODS = {
   october: { from: '2026-10-01', to: '2026-10-31', label: 'Octubre 2026' },
@@ -23,8 +31,34 @@ const INDICATOR_LABEL = {
 
 function formatIndicator(indicator, value) {
   if (value === null || value === undefined) return '—';
-  if (indicator === 'downtime') return `${fmtNumber(value, 2)} min`;
+  if (indicator === 'downtime') return formatDurationLong(value);
   return fmtPercent(value);
+}
+
+function barWidth(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.min(100, Math.max(0, numeric * 100));
+}
+
+function loadTone(value) {
+  if (value === null || value === undefined) return 'bar--normal';
+  if (value >= 1) return 'bar--bottleneck';
+  if (value >= 0.85) return 'bar--tight';
+  return 'bar--normal';
+}
+
+function oeeTone(value) {
+  if (value === null || value === undefined) return 'bar--normal';
+  if (value < 0.4) return 'bar--bottleneck';
+  if (value < 0.6) return 'bar--tight';
+  return 'bar--normal';
+}
+
+function downtimeTone(share) {
+  if (share >= 0.5) return 'bar--bottleneck';
+  if (share >= 0.25) return 'bar--tight';
+  return 'bar--normal';
 }
 
 const PRIORITY_LABEL = { low: 'Baja', normal: 'Normal', high: 'Alta' };
@@ -39,7 +73,7 @@ export function PlantPerformancePanel(store, options = {}) {
   let role = options.role || 'plant_manager';
 
   const root = el(`
-    <section class="view">
+    <section class="view plant-view">
       <header class="view__header">
         <div>
           <h1>Desempeño de Planta</h1>
@@ -86,13 +120,21 @@ export function PlantPerformancePanel(store, options = {}) {
     const canCancel = store.canPerformActionFor(role, 'cancel_order');
     const canExport = store.canPerformActionFor(role, 'export_report');
 
+    const thresholdHint = (indicator) => {
+      const setting = data.thresholds.find((row) => row.indicator === indicator);
+      if (!setting || setting.threshold === null) return 'Sin umbral configurado';
+      const comparison = setting.comparison === 'gt' ? '>' : '<';
+      return `Umbral ${comparison} ${formatIndicator(indicator, setting.threshold)}`;
+    };
+
     const kpis = ['load', 'oee', 'downtime', 'fulfillment']
       .map(
         (indicator) => `
-        <div class="mini-stat" data-kpi="${indicator}">
-          <span class="mini-stat__value">${formatIndicator(indicator, data.indicators[indicator])}</span>
-          <span class="mini-stat__label">${INDICATOR_LABEL[indicator]}</span>
-        </div>`,
+        <article class="kpi-card" data-kpi="${indicator}">
+          <span class="kpi-card__label">${INDICATOR_LABEL[indicator]}</span>
+          <span class="kpi-card__value">${formatIndicator(indicator, data.indicators[indicator])}</span>
+          <span class="kpi-card__hint">${thresholdHint(indicator)}</span>
+        </article>`,
       )
       .join('');
 
@@ -112,10 +154,37 @@ export function PlantPerformancePanel(store, options = {}) {
         const oee = data.oee_by_work_center[workCenter.id];
         return `<tr data-wc="${escapeHtml(workCenter.id)}">
           <td>${escapeHtml(workCenter.name)}</td>
-          <td>${load.invalid_capacity ? '—' : `${fmtNumber(load.load_minutes, 2)} / ${fmtNumber(load.capacity_minutes, 2)}`}</td>
-          <td>${load.load_ratio === null ? '—' : fmtPercent(load.load_ratio)}</td>
-          <td>${oee && oee.oee !== null ? fmtPercent(oee.oee) : '—'}</td>
+          <td class="cell--nowrap">${load.invalid_capacity ? '—' : `${fmtNumber(load.load_minutes, 2)} / ${fmtNumber(load.capacity_minutes, 2)}`}</td>
+          <td class="cell--nowrap">${load.load_ratio === null ? '—' : fmtPercent(load.load_ratio)}</td>
+          <td class="cell--nowrap">${oee && oee.oee !== null ? fmtPercent(oee.oee) : '—'}</td>
         </tr>`;
+      })
+      .join('');
+
+    const centerChart = store.workCenters
+      .map((workCenter) => {
+        const load = data.load_by_work_center[workCenter.id];
+        const oee = data.oee_by_work_center[workCenter.id];
+        const loadValue = load && !load.invalid_capacity ? load.load_ratio : null;
+        const oeeValue = oee && oee.oee !== null ? oee.oee : null;
+        const name = escapeHtml(workCenter.name);
+        const loadText = loadValue === null ? '—' : fmtPercent(loadValue);
+        const oeeText = oeeValue === null ? '—' : fmtPercent(oeeValue);
+        return `<div class="plant-chart__row" data-chart-wc="${escapeHtml(workCenter.id)}">
+          <span class="plant-chart__name">${name}</span>
+          <div class="plant-chart__bars">
+            <div class="balance-chart__track" role="img" aria-label="${name}: carga ${loadText}">
+              <div class="balance-chart__fill ${loadTone(loadValue)}" style="width:${barWidth(loadValue)}%"></div>
+            </div>
+            <div class="balance-chart__track" role="img" aria-label="${name}: OEE ${oeeText}">
+              <div class="balance-chart__fill ${oeeTone(oeeValue)}" style="width:${barWidth(oeeValue)}%"></div>
+            </div>
+          </div>
+          <div class="plant-chart__values">
+            <span>Carga ${loadText}</span>
+            <span>OEE ${oeeText}</span>
+          </div>
+        </div>`;
       })
       .join('');
 
@@ -123,10 +192,31 @@ export function PlantPerformancePanel(store, options = {}) {
       ? data.downtime_by_reason
           .map(
             (row) =>
-              `<tr data-downtime="${escapeHtml(row.reason_id)}"><td>${escapeHtml(row.reason_label)}</td><td>${fmtNumber(row.downtime_minutes, 2)}</td></tr>`,
+              `<tr data-downtime="${escapeHtml(row.reason_id)}"><td>${escapeHtml(row.reason_label)}</td><td class="cell--nowrap">${formatDurationLong(row.downtime_minutes)}</td></tr>`,
           )
           .join('')
       : '<tr><td colspan="2" class="empty-cell">Sin paradas cerradas en el período.</td></tr>';
+
+    const downtimeMax = data.downtime_by_reason.reduce(
+      (max, row) => Math.max(max, Number(row.downtime_minutes) || 0),
+      0,
+    );
+    const downtimeChart = data.downtime_by_reason.length
+      ? data.downtime_by_reason
+          .map((row) => {
+            const share = downtimeMax > 0 ? (Number(row.downtime_minutes) || 0) / downtimeMax : 0;
+            const label = escapeHtml(row.reason_label);
+            const minutesText = formatDurationLong(row.downtime_minutes);
+            return `<div class="plant-chart__row" data-downtime-chart="${escapeHtml(row.reason_id)}">
+              <span class="plant-chart__name">${label}</span>
+              <div class="balance-chart__track" role="img" aria-label="${label}: ${minutesText}">
+                <div class="balance-chart__fill ${downtimeTone(share)}" style="width:${barWidth(share)}%"></div>
+              </div>
+              <span class="balance-chart__label">${minutesText}</span>
+            </div>`;
+          })
+          .join('')
+      : '<p class="empty-note">Sin paradas cerradas en el período.</p>';
 
     const actionOrders = store.productionOrders.filter(
       (order) => order.status !== 'completed' && order.status !== 'cancelled',
@@ -138,7 +228,7 @@ export function PlantPerformancePanel(store, options = {}) {
           <td>${escapeHtml(order.order_number)}</td>
           <td>${escapeHtml(ORDER_STATUS_LABEL[order.status] || order.status)}</td>
           <td>
-            <select data-priority="${escapeHtml(order.id)}" ${priorityDisabled ? 'disabled' : ''}>
+            <select class="priority-select" data-priority="${escapeHtml(order.id)}" ${priorityDisabled ? 'disabled' : ''}>
               ${['low', 'normal', 'high']
                 .map(
                   (priority) =>
@@ -187,8 +277,11 @@ export function PlantPerformancePanel(store, options = {}) {
       </div>
       <article class="panel">
         <header class="panel__header"><h3>Carga y OEE por centro</h3></header>
-        <div class="table-wrap">
-          <table class="data-table">
+        <div class="plant-chart plant-chart--centers" role="group" aria-label="Barras de carga y OEE por centro">
+          ${centerChart}
+        </div>
+        <div class="table-wrap table-wrap--plant">
+          <table class="data-table plant-table">
             <thead><tr><th>Centro</th><th title="Capacidad del período = días hábiles × min/día × eficiencia">Carga / capacidad (min)</th><th title="Carga del período ÷ capacidad del período">Utilización</th><th>OEE</th></tr></thead>
             <tbody>${centerRows}</tbody>
           </table>
@@ -196,8 +289,11 @@ export function PlantPerformancePanel(store, options = {}) {
       </article>
       <article class="panel">
         <header class="panel__header"><h3>Paradas por motivo</h3></header>
-        <div class="table-wrap">
-          <table class="data-table">
+        <div class="plant-chart plant-chart--downtime" role="group" aria-label="Barras de paradas por motivo">
+          ${downtimeChart}
+        </div>
+        <div class="table-wrap table-wrap--plant">
+          <table class="data-table plant-table">
             <thead><tr><th>Motivo</th><th>Minutos</th></tr></thead>
             <tbody>${downtimeRows}</tbody>
           </table>
@@ -205,8 +301,8 @@ export function PlantPerformancePanel(store, options = {}) {
       </article>
       <article class="panel">
         <header class="panel__header"><h3>Acciones sobre órdenes</h3></header>
-        <div class="table-wrap">
-          <table class="data-table">
+        <div class="table-wrap table-wrap--plant">
+          <table class="data-table plant-table">
             <thead><tr><th>Orden</th><th>Estado</th><th>Prioridad</th><th></th></tr></thead>
             <tbody>${orderRows || '<tr><td colspan="4" class="empty-cell">Sin órdenes accionables.</td></tr>'}</tbody>
           </table>
@@ -217,6 +313,7 @@ export function PlantPerformancePanel(store, options = {}) {
       select.addEventListener('change', async () => {
         try {
           store.changeOrderPriority(select.getAttribute('data-priority'), select.value);
+          showToast('Prioridad actualizada', { tone: 'success' });
           render();
         } catch (err) {
           await notifyDialog({ title: 'No se pudo cambiar la prioridad', message: err.message });
@@ -241,6 +338,7 @@ export function PlantPerformancePanel(store, options = {}) {
           }),
           comparison: dataForm.get('comparison'),
         });
+        showToast('Umbral actualizado', { tone: 'success' });
         render();
       } catch (err) {
         bodyEl.querySelector('[data-role="threshold-error"]').textContent = err.message;
@@ -284,6 +382,7 @@ export function PlantPerformancePanel(store, options = {}) {
       const data = new FormData(form);
       try {
         store.cancelOrderFromPanel(orderId, { reason: data.get('reason') });
+        showToast('Orden cancelada', { tone: 'warning' });
         close();
         render();
       } catch (err) {
@@ -305,6 +404,7 @@ export function PlantPerformancePanel(store, options = {}) {
       const report = store.consolidatedReportFor(currentPeriod());
       if (button.getAttribute('data-export') === 'csv') downloadCsv(report);
       else printReport(report);
+      showToast('Reporte generado', { tone: 'info' });
     });
   }
   roleEl.value = role;

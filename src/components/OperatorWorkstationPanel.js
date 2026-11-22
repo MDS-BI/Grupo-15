@@ -3,10 +3,19 @@
  * atrasos justificados y contadores de turno/acumulado.
  */
 
-import { escapeHtml, el, fmtNumber, OP_STATUS_LABEL } from './format.js';
+import {
+  escapeHtml,
+  el,
+  fmtNumber,
+  formatDurationLong,
+  formatLocalDate,
+  OP_STATUS_LABEL,
+} from './format.js';
 import { elapsedMinutes, sumClosedDelayMinutes } from '../domain/shift-tracking.js';
 import { DelayCorrectionDialog } from './DelayCorrectionDialog.js';
+import { operationLabel, stopEventLabel } from './labels.js';
 import { decimalInput, parseDecimal } from './numeric-field.js';
+import { showToast } from './Toast.js';
 
 /**
  * @param {import('../data/ManufacturingStore.js').ManufacturingStore} store
@@ -48,7 +57,9 @@ export function OperatorWorkstationPanel(store) {
     selectEl.innerHTML = list
       .map((op) => {
         const order = store.orderById(op.production_order_id);
-        return `<option value="${escapeHtml(op.id)}">${escapeHtml(order ? order.order_number : op.production_order_id)} · op ${escapeHtml(op.sequence)} (${OP_STATUS_LABEL[op.status]})</option>`;
+        return `<option value="${escapeHtml(op.id)}" title="${escapeHtml(op.id)}">${escapeHtml(
+          order ? order.order_number : op.production_order_id,
+        )} · ${escapeHtml(operationLabel(store, op))} (${OP_STATUS_LABEL[op.status]})</option>`;
       })
       .join('');
     if (selectedOperationId) selectEl.value = selectedOperationId;
@@ -90,12 +101,11 @@ export function OperatorWorkstationPanel(store) {
 
     const delayRows = delays
       .map((delay) => {
-        const reason = store.delayReasons.find((row) => row.id === delay.delay_reason_id);
         return `<tr data-delay-row="${escapeHtml(delay.id)}">
-          <td>${escapeHtml(reason ? reason.label : delay.delay_reason_id)}</td>
-          <td>${escapeHtml(delay.started_at)}</td>
-          <td>${delay.duration_minutes != null ? fmtNumber(delay.duration_minutes, 2) : 'Abierto'}</td>
-          <td>${delay.status === 'open' ? '<span class="badge badge--warn">Abierto — pendiente de corrección</span>' : 'Cerrado'}</td>
+          <td title="${escapeHtml(delay.id)}">${escapeHtml(stopEventLabel(store, delay))}</td>
+          <td class="cell--nowrap">${formatLocalDate(delay.started_at)}</td>
+          <td class="cell--nowrap">${delay.duration_minutes != null ? formatDurationLong(delay.duration_minutes) : 'Abierto'}</td>
+          <td class="cell--nowrap">${delay.status === 'open' ? '<span class="badge badge--warn">Abierto — pendiente de corrección</span>' : 'Cerrado'}</td>
         </tr>`;
       })
       .join('');
@@ -115,9 +125,11 @@ export function OperatorWorkstationPanel(store) {
             <p class="panel__subtitle">${escapeHtml(store.productById(order?.product_id)?.name || '')}</p>
           </header>
           <div class="operator-summary">
-            <div class="mini-stat"><span class="mini-stat__value" data-role="timer">${fmtNumber(timerMinutes, 2)} min</span><span class="mini-stat__label">Tiempo efectivo del turno</span></div>
-            <div class="mini-stat"><span class="mini-stat__value">${fmtNumber(operation.planned_time_minutes)}</span><span class="mini-stat__label">Tiempo planificado</span></div>
-            <div class="mini-stat"><span class="mini-stat__value">${fmtNumber(operation.delay_time_minutes || 0, 2)}</span><span class="mini-stat__label">Atrasos cerrados</span></div>
+            <div class="mini-stat"><span class="mini-stat__value" data-role="timer">${formatDurationLong(timerMinutes)}</span><span class="mini-stat__label">Tiempo efectivo del turno</span></div>
+            <div class="mini-stat"><span class="mini-stat__value">${formatDurationLong(
+              operation.planned_time_minutes,
+            )}</span><span class="mini-stat__label">Tiempo planificado</span></div>
+            <div class="mini-stat"><span class="mini-stat__value">${formatDurationLong(operation.delay_time_minutes || 0)}</span><span class="mini-stat__label">Atrasos cerrados</span></div>
             <div class="mini-stat"><span class="mini-stat__value">${fmtNumber(operation.quantity_completed)} / ${fmtNumber(plannedQuantity)}</span><span class="mini-stat__label">Avance acumulado</span></div>
           </div>
           <div class="detail-actions">
@@ -128,20 +140,41 @@ export function OperatorWorkstationPanel(store) {
 
         <article class="panel">
           <header class="panel__header"><h3>Contadores</h3></header>
-          <div class="counter-row">
-            <span>Turno: <strong data-role="shift-counter">${fmtNumber(shift ? shift.quantity_counted : 0)}</strong></span>
-            <button type="button" class="btn btn--tiny" data-counter="dec">−</button>
-            ${decimalInput({ name: 'counter', value: String(shift ? shift.quantity_counted : 0), min: 0, decimals: 0, label: 'El contador del turno', extra: `data-role="counter-input" ${shift ? '' : 'disabled'}` })}
-            <button type="button" class="btn btn--tiny" data-counter="inc" ${atLimit ? 'disabled' : ''}>+</button>
-            <button type="button" class="btn btn--tiny" data-role="set-counter" ${shift ? '' : 'disabled'}>Fijar</button>
+          <div class="counter-grid">
+            <section class="counter-block counter-block--shift" aria-label="Contador del turno">
+              <span class="counter-block__label">Turno</span>
+              <div class="counter-block__value">
+                <strong data-role="shift-counter">${fmtNumber(shift ? shift.quantity_counted : 0)}</strong>
+                <span>piezas</span>
+              </div>
+              <div class="counter-controls">
+                <button type="button" class="btn btn--tiny" data-counter="dec">−</button>
+                ${decimalInput({ name: 'counter', value: String(shift ? shift.quantity_counted : 0), min: 0, decimals: 0, label: 'El contador del turno', extra: `data-role="counter-input" ${shift ? '' : 'disabled'}` })}
+                <button type="button" class="btn btn--tiny" data-counter="inc" ${atLimit ? 'disabled' : ''}>+</button>
+                <button type="button" class="btn btn--tiny btn--primary" data-role="set-counter" ${shift ? '' : 'disabled'}>Fijar</button>
+              </div>
+            </section>
+            <section class="counter-block counter-block--total" aria-label="Acumulado de la operación">
+              <span class="counter-block__label">Acumulado</span>
+              <div class="counter-block__value">
+                <strong data-role="cumulative-counter">${fmtNumber(operation.quantity_completed)}</strong>
+                <span>/ ${fmtNumber(plannedQuantity)} piezas</span>
+              </div>
+              <span class="counter-block__hint">Total de la operación; no se reinicia por turno.</span>
+            </section>
           </div>
-          <p class="counter-row">Acumulado: <strong data-role="cumulative-counter">${fmtNumber(operation.quantity_completed)}</strong> / ${fmtNumber(plannedQuantity)}</p>
         </article>
 
         <article class="panel">
           <header class="panel__header"><h3>Atrasos justificados</h3></header>
-          <div class="table-wrap">
-            <table class="data-table data-table--compact">
+          <div class="table-wrap table-wrap--delays">
+            <table class="data-table data-table--compact station-delay-table">
+              <colgroup>
+                <col class="station-delay-table__reason" />
+                <col class="station-delay-table__date" />
+                <col class="station-delay-table__minutes" />
+                <col class="station-delay-table__status" />
+              </colgroup>
               <thead><tr><th>Motivo</th><th>Inicio</th><th>Duración</th><th>Estado</th></tr></thead>
               <tbody>${delayRows || '<tr><td colspan="4" class="empty-cell">Sin atrasos.</td></tr>'}</tbody>
             </table>
@@ -159,10 +192,10 @@ export function OperatorWorkstationPanel(store) {
             <label>Nota
               <input type="text" data-role="delay-note" placeholder="Detalle opcional" />
             </label>
-            <div class="detail-actions">
-              <button type="button" class="btn" data-role="start-delay" ${shift && !openDelay ? '' : 'disabled'}>Registrar atraso</button>
-              <button type="button" class="btn btn--primary" data-role="close-delay" ${openDelay ? '' : 'disabled'}>Finalizar atraso</button>
-              <button type="button" class="btn" data-role="correct-delay" ${operation.status === 'completed' && openDelay ? '' : 'disabled'}>Corregir atraso abierto</button>
+            <div class="delay-actions" role="group" aria-label="Acciones de atrasos">
+              <button type="button" class="btn btn--small" data-role="start-delay" ${shift && !openDelay ? '' : 'disabled'}>Registrar atraso</button>
+              <button type="button" class="btn btn--small btn--primary" data-role="close-delay" ${openDelay ? '' : 'disabled'}>Finalizar atraso</button>
+              <button type="button" class="btn btn--small" data-role="correct-delay" ${operation.status === 'completed' && openDelay ? '' : 'disabled'}>Corregir atraso abierto</button>
             </div>
           </div>
           <p class="form-error" data-role="delay-error" role="alert"></p>
@@ -182,6 +215,7 @@ export function OperatorWorkstationPanel(store) {
         store.startShift(operation.id, {
           operator_id: assignment ? assignment.ext_hr_employee_id : null,
         });
+        showToast('Turno iniciado', { tone: 'info' });
         render();
       } catch (err) {
         errorEl.textContent = err.message;
@@ -206,6 +240,7 @@ export function OperatorWorkstationPanel(store) {
           customLabel,
           note: bodyEl.querySelector('[data-role="delay-note"]').value,
         });
+        showToast('Atraso registrado', { tone: 'warning' });
         render();
       } catch (err) {
         delayError.textContent = err.message;
@@ -215,6 +250,7 @@ export function OperatorWorkstationPanel(store) {
     bodyEl.querySelector('[data-role="close-delay"]').addEventListener('click', () => {
       try {
         store.closeDelay(openDelay.id);
+        showToast('Atraso cerrado', { tone: 'success' });
         render();
       } catch (err) {
         delayError.textContent = err.message;
@@ -231,6 +267,7 @@ export function OperatorWorkstationPanel(store) {
           const delta = button.getAttribute('data-counter') === 'inc' ? 1 : -1;
           store.adjustShiftCounter(operation.id, delta);
           render();
+          showToast('Contador del turno actualizado', { tone: 'success' });
         } catch (err) {
           errorEl.textContent = err.message;
         }
@@ -249,6 +286,7 @@ export function OperatorWorkstationPanel(store) {
           }),
         );
         render();
+        showToast('Contador del turno guardado', { tone: 'success' });
       } catch (err) {
         errorEl.textContent = err.message;
       }
@@ -280,6 +318,7 @@ export function OperatorWorkstationPanel(store) {
     modalRoot.querySelector('[data-role="confirm-finish"]').addEventListener('click', () => {
       try {
         const result = store.finishOperation(operation.id);
+        showToast('Operación finalizada', { tone: 'success' });
         close();
         render();
         if (result.openDelays.length > 0) {

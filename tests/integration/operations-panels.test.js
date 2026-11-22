@@ -98,11 +98,16 @@ describe('Estación del operador (US-06)', () => {
     expect(document.body.textContent).toContain('no evaluación de desempeño');
     expect(document.body.textContent).not.toMatch(/ranking/i);
     expect(document.querySelector('[data-role="operation-select"]').value).toBe('poo_3002_2');
+    expect(document.body.textContent).toContain('Operación 20');
     expect(document.querySelector('[data-delay-row]')).toBeTruthy();
+    expect(document.querySelector('[data-delay-row] td[title]').getAttribute('title')).toBe(
+      'od_1001',
+    );
     expect(document.querySelector('[data-role="close-delay"]').disabled).toBe(false);
 
     click('[data-role="close-delay"]');
     expect(store.openDelayFor('poo_3002_2')).toBeNull();
+    expect(document.body.textContent).toContain('Atraso cerrado');
 
     click('[data-role="toggle"]');
     expect(document.querySelector('[data-role="finish-confirmation"]')).toBeTruthy();
@@ -126,6 +131,9 @@ describe('Estación del operador (US-06)', () => {
 
     click('[data-counter="inc"]');
     expect(document.querySelector('[data-role="shift-counter"]').textContent).toBe('1');
+    expect(document.querySelector('[data-role="toast"]').textContent).toContain(
+      'Contador del turno actualizado',
+    );
 
     change('[data-role="delay-reason"]', 'dr_falta_material');
     click('[data-role="start-delay"]');
@@ -173,12 +181,40 @@ describe('Tablero de órdenes', () => {
     expect(dragover.defaultPrevented).toBe(false);
     expect(store.orderById('po_3004').status).toBe('planned');
   });
+
+  it('filtra el kanban por número, producto y prioridad', () => {
+    document.body.appendChild(ProductionOrders(store));
+    const search = document.querySelector('[data-role="kanban-search"]');
+    const priority = document.querySelector('[data-role="kanban-priority"]');
+
+    search.value = 'OP-3004';
+    search.dispatchEvent(new window.Event('input', { bubbles: true }));
+    expect(document.querySelectorAll('[data-order]')).toHaveLength(1);
+    expect(document.querySelector('[data-order="po_3004"]')).toBeTruthy();
+
+    search.value = 'Rueda Armada';
+    search.dispatchEvent(new window.Event('input', { bubbles: true }));
+    expect(document.querySelectorAll('[data-order]')).toHaveLength(1);
+    expect(document.querySelector('[data-order="po_3004"]')).toBeTruthy();
+
+    search.value = '';
+    search.dispatchEvent(new window.Event('input', { bubbles: true }));
+    priority.value = 'high';
+    priority.dispatchEvent(new window.Event('change', { bubbles: true }));
+    expect(document.querySelectorAll('[data-order]')).toHaveLength(3);
+
+    search.value = 'OP-3004';
+    search.dispatchEvent(new window.Event('input', { bubbles: true }));
+    expect(document.querySelectorAll('[data-order]')).toHaveLength(0);
+  });
 });
 
 describe('Supervisión de línea (US-07)', () => {
   it('muestra semáforos, asigna operario y escala un incidente', () => {
     document.body.appendChild(SupervisorLinePanel(store));
     expect(document.querySelectorAll('[data-wc]')).toHaveLength(6);
+    const activeCell = document.querySelector('[data-wc="wc_armado"] td[title]');
+    expect(activeCell.getAttribute('title')).toContain('poo_');
     expect(document.querySelector('[data-light="wc_corte"]').textContent).toBe('En fallo');
     expect(document.querySelector('[data-light="wc_armado"]').textContent).toBe('En operación');
 
@@ -187,6 +223,7 @@ describe('Supervisión de línea (US-07)', () => {
     change('[data-role="assign-form"] [name="shift_band"]', 'morning');
     submit('[data-role="assign-form"]');
     expect(store.activeAssignmentForWorkCenter('wc_pintura').ext_hr_employee_id).toBe('emp_op_05');
+    expect(document.body.textContent).toContain('Operario asignado');
 
     click('[data-escalate="wc_pintura"]');
     fill('[data-role="escalate-form"] [name="description"]', 'Fuga de pintura');
@@ -197,6 +234,7 @@ describe('Supervisión de línea (US-07)', () => {
       ),
     ).toBe(true);
     expect(store.workCenterById('wc_pintura').operational_status).toBe('fault');
+    expect(document.body.textContent).toContain('Incidente escalado');
   });
 
   it('valida un cierre pendiente desde la bandeja', () => {
@@ -215,7 +253,11 @@ describe('Supervisión de línea (US-07)', () => {
 describe('Integración de estación y supervisión en órdenes (T021/T031)', () => {
   it('abre ambos paneles embebidos desde el detalle de una orden', () => {
     document.body.appendChild(ProductionOrders(store));
-    click('[data-order]');
+    click('[data-order="po_3002"]');
+    const operationRow = document.querySelector('[data-op]');
+    expect(operationRow.querySelector('td[title]').getAttribute('title')).toBe(
+      operationRow.dataset.op,
+    );
     click('[data-role="open-operator"]');
     expect(document.querySelector('[data-role="embedded-panel"]')).toBeTruthy();
     expect(document.querySelector('[data-role="embedded-body"]').textContent).toContain(

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>overflow-check</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      const params = new URLSearchParams(location.search);
+      localStorage.setItem('erp.manufacturing.role', 'plant_manager|plant_manager');
+      await import('./src/manufacturing-main.js');
+      const moduleId = params.get('module');
+      if (moduleId) {
+        location.hash = `#/${moduleId}`;
+        globalThis.dispatchEvent(new HashChangeEvent('hashchange'));
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const width = globalThis.innerWidth;
+      const overflow = [...document.querySelectorAll('body *')]
+        .filter((node) => {
+          const rect = node.getBoundingClientRect();
+          return rect.width > 0 && rect.right > width + 1;
+        })
+        .slice(0, 20)
+        .map((node) => {
+          const rect = node.getBoundingClientRect();
+          return `${node.tagName.toLowerCase()}.${node.className || ''}@${Math.round(rect.right)}`;
+        });
+      const report = {
+        width,
+        scrollWidth: document.documentElement.scrollWidth,
+        module: moduleId || 'dashboard',
+        overflow,
+      };
+      const pre = document.createElement('pre');
+      pre.id = 'overflow-report';
+      pre.textContent = JSON.stringify(report);
+      document.body.appendChild(pre);
+    </script>
+  </body>
+</html>

@@ -3,6 +3,8 @@
  * causas. Ver data-model.md §3.19 y contracts/maintenance.md §2.
  */
 
+import { relativeTimestamp } from './demo-dates.js';
+
 export const technicians = [
   { ext_hr_employee_id: 'ext_hr_tec_01', name: 'Ana Soto', specialty: 'Mecánica' },
   { ext_hr_employee_id: 'ext_hr_tec_02', name: 'Bruno Díaz', specialty: 'Electromecánica' },
@@ -37,7 +39,7 @@ export const maintenanceTickets = [
     downtime_minutes: null,
     cause_reason_id: null,
     resolution_notes: null,
-    created_at: '2026-11-01T07:45:00Z',
+    created_at: relativeTimestamp(-21, '07:45'),
   },
   {
     id: 'mt_1002',
@@ -52,14 +54,14 @@ export const maintenanceTickets = [
     ticket_status: 'in_progress',
     escalated_to_maint: true,
     technician_ext_hr_employee_id: 'ext_hr_tec_02',
-    intervention_started_at: '2026-11-02T08:40:00Z',
+    intervention_started_at: relativeTimestamp(-20, '08:40'),
     resolved_at: null,
-    downtime_started_at: '2026-11-02T08:40:00Z',
+    downtime_started_at: relativeTimestamp(-20, '08:40'),
     downtime_ended_at: null,
     downtime_minutes: null,
     cause_reason_id: null,
     resolution_notes: null,
-    created_at: '2026-11-02T08:10:00Z',
+    created_at: relativeTimestamp(-20, '08:10'),
   },
   {
     id: 'mt_1003',
@@ -81,7 +83,7 @@ export const maintenanceTickets = [
     downtime_minutes: null,
     cause_reason_id: null,
     resolution_notes: null,
-    created_at: '2026-11-02T10:15:00Z',
+    created_at: relativeTimestamp(-20, '10:15'),
   },
   {
     id: 'mt_1004',
@@ -96,14 +98,14 @@ export const maintenanceTickets = [
     ticket_status: 'resolved',
     escalated_to_maint: true,
     technician_ext_hr_employee_id: 'ext_hr_tec_01',
-    intervention_started_at: '2026-10-20T09:30:00Z',
-    resolved_at: '2026-10-20T11:00:00Z',
-    downtime_started_at: '2026-10-20T09:30:00Z',
-    downtime_ended_at: '2026-10-20T11:00:00Z',
+    intervention_started_at: relativeTimestamp(-33, '09:30'),
+    resolved_at: relativeTimestamp(-33, '11:00'),
+    downtime_started_at: relativeTimestamp(-33, '09:30'),
+    downtime_ended_at: relativeTimestamp(-33, '11:00'),
     downtime_minutes: 90,
     cause_reason_id: 'dr_mecanico',
     resolution_notes: 'Reemplazo de rodamiento y lubricación.',
-    created_at: '2026-10-20T09:00:00Z',
+    created_at: relativeTimestamp(-33, '09:00'),
   },
   {
     id: 'mt_1005',
@@ -125,7 +127,7 @@ export const maintenanceTickets = [
     downtime_minutes: null,
     cause_reason_id: null,
     resolution_notes: null,
-    created_at: '2026-11-02T11:30:00Z',
+    created_at: relativeTimestamp(-20, '11:30'),
   },
   {
     id: 'mt_1006',
@@ -147,7 +149,7 @@ export const maintenanceTickets = [
     downtime_minutes: null,
     cause_reason_id: null,
     resolution_notes: null,
-    created_at: '2026-11-02T12:00:00Z',
+    created_at: relativeTimestamp(-20, '12:00'),
   },
   {
     id: 'mt_1007',
@@ -162,13 +164,13 @@ export const maintenanceTickets = [
     ticket_status: 'resolved',
     escalated_to_maint: true,
     technician_ext_hr_employee_id: 'ext_hr_tec_03',
-    intervention_started_at: '2026-10-25T13:00:00Z',
-    resolved_at: '2026-10-25T13:30:00Z',
-    downtime_started_at: '2026-10-25T13:00:00Z',
-    downtime_ended_at: '2026-10-25T13:30:00Z',
+    intervention_started_at: relativeTimestamp(-28, '13:00'),
+    resolved_at: relativeTimestamp(-28, '13:30'),
+    downtime_started_at: relativeTimestamp(-28, '13:00'),
+    downtime_ended_at: relativeTimestamp(-28, '13:30'),
     downtime_minutes: 30,
     cause_reason_id: 'dr_calibracion',
     resolution_notes: 'Recalibración del sensor.',
-    created_at: '2026-10-25T12:45:00Z',
+    created_at: relativeTimestamp(-28, '12:45'),
   },
 ];

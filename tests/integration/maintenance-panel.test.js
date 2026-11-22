@@ -78,6 +78,21 @@ describe('Panel de mantenimiento (US-09)', () => {
     expect(openRows).not.toContain('mt_1002');
   });
 
+  it('muestra nombres legibles con el ID de auditoría en el título', () => {
+    const fault = document.querySelector('[data-fault-ticket="mt_1002"]');
+    expect(fault.textContent).toContain('Bruno Díaz');
+    expect(fault.textContent).toMatch(/\d+ d \d+ h \d+ min/);
+
+    const eventCell = document.querySelector('[data-ticket-row="mt_1002"] td:nth-child(6)');
+    expect(eventCell.getAttribute('title')).toBe('od_1002');
+    expect(eventCell.textContent).not.toContain('od_1002');
+
+    const sourceTicket = store.maintenanceTickets.find((ticket) => ticket.id === 'mt_1004');
+    const originCell = document.querySelector('[data-preventive-row="pmo_2001"] td:nth-child(6)');
+    expect(originCell.getAttribute('title')).toBe('mt_1004');
+    expect(originCell.textContent).toContain(sourceTicket.ticket_code);
+  });
+
   it('toma una intervención, la resuelve y conserva el estado tras recargar', () => {
     click('[data-take="mt_1001"]');
     expect(document.querySelector('[data-role="take-form"]')).toBeTruthy();
@@ -87,6 +102,8 @@ describe('Panel de mantenimiento (US-09)', () => {
     const taken = store.maintenanceTickets.find((t) => t.id === 'mt_1001');
     expect(taken.ticket_status).toBe('in_progress');
     expect(store.workCenterById('wc_solda').operational_status).toBe('fault');
+    expect(document.body.textContent).toContain('Ana Soto');
+    expect(document.body.textContent).toContain('Intervención iniciada');
 
     click('[data-resolve="mt_1001"]');
     expect(document.querySelector('[data-role="resolve-form"]')).toBeTruthy();
@@ -99,6 +116,7 @@ describe('Panel de mantenimiento (US-09)', () => {
     expect(taken.ticket_status).toBe('resolved');
     expect(taken.downtime_minutes).toBe(60);
     expect(store.workCenterById('wc_solda').operational_status).toBe('available');
+    expect(document.body.textContent).toContain('Ticket resuelto');
 
     expect(JSON.parse(storage.getItem(SNAPSHOT_KEY)).data.maintenanceTickets).toBeDefined();
     const reloaded = new ManufacturingStore({ storage });
@@ -137,5 +155,6 @@ describe('Panel de mantenimiento (US-09)', () => {
     click(`[data-preventive-action="complete"][data-order="${order.id}"]`);
     expect(order.status).toBe('completed');
     expect(order.completed_at).toBeTruthy();
+    expect(document.body.textContent).toContain('Orden preventiva completada');
   });
 });

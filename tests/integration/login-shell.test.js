@@ -53,6 +53,8 @@ describe('Ingreso genérico y roles de administrador', () => {
     await boot();
 
     expect(document.querySelector('[data-role="login-form"]')).toBeTruthy();
+    expect(document.querySelector('#toast-region')).toBeTruthy();
+    expect(document.querySelector('#toast-region').getAttribute('role')).toBe('status');
     expect(document.body.textContent).toContain('Iniciar sesión');
     for (const role of ROLE_ORDER)
       expect(document.body.textContent).not.toContain(ROLE_LABELS[role]);
@@ -163,5 +165,52 @@ describe('Ingreso genérico y roles de administrador', () => {
     document.querySelector('[data-module="roles"]').click();
     expect(document.querySelectorAll('[data-select-role]')).toHaveLength(0);
     expect(document.body.textContent).toContain('Páginas disponibles');
+  });
+
+  it('permite reiniciar la demo solo a la jefa real y sin cerrar sesión', async () => {
+    await boot();
+    await enter('jefa.planta', 'Pl4nta2026');
+
+    document.querySelector('[data-role="user-menu-toggle"]').click();
+    const resetButton = document.querySelector('[data-reset-demo]');
+    expect(resetButton).toBeTruthy();
+
+    resetButton.click();
+    await vi.waitFor(() =>
+      expect(document.querySelector('[data-role="confirm-dialog"]')).toBeTruthy(),
+    );
+    document.querySelector('[data-role="confirm"]').click();
+
+    await vi.waitFor(() =>
+      expect(document.querySelector('[data-role="confirm-dialog"]')).toBeNull(),
+    );
+    expect(document.querySelector('[data-role="login-form"]')).toBeNull();
+    expect(localStorage.getItem('erp.manufacturing.role')).toBe('plant_manager|plant_manager');
+    expect(document.body.textContent).toContain('Datos de demo reiniciados');
+  });
+
+  it('oculta el reinicio de la demo para roles que no son jefa real', async () => {
+    await boot();
+    const account = accountFor('operator');
+    await enter(account.username, account.password);
+
+    document.querySelector('[data-role="user-menu-toggle"]').click();
+
+    expect(document.querySelector('[data-reset-demo]')).toBeNull();
+  });
+
+  it('oculta el reinicio de la demo mientras se visualiza como otro rol', async () => {
+    await boot();
+    await enter('jefa.planta', 'Pl4nta2026');
+
+    document.querySelector('[data-role="user-menu-toggle"]').click();
+    const select = document.querySelector('[data-role="role-select"]');
+    select.value = 'operator';
+    select.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+
+    document.querySelector('[data-role="user-menu-toggle"]').click();
+
+    expect(document.querySelector('[data-reset-demo]')).toBeNull();
+    expect(localStorage.getItem('erp.manufacturing.role')).toBe('plant_manager|operator');
   });
 });

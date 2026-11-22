@@ -5,8 +5,17 @@
  */
 
 import { computeDowntimeMinutes, buildPreventiveOrderFromHistory } from '../domain/maintenance.js';
-import { escapeHtml, el, fmtNumber } from './format.js';
+import {
+  escapeHtml,
+  el,
+  fmtNumber,
+  formatDurationLong,
+  formatLocalDate,
+  formatLocalDateTime,
+} from './format.js';
 import { notifyDialog } from './ConfirmDialog.js';
+import { stopEventLabel, technicianLabel } from './labels.js';
+import { showToast } from './Toast.js';
 
 const TICKET_STATUS_LABEL = {
   open: 'Abierto',
@@ -59,10 +68,7 @@ function localToIso(value) {
 }
 
 function fmtDateTime(value) {
-  if (!value) return '—';
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return '—';
-  return date.toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' });
+  return formatLocalDateTime(value);
 }
 
 function priorityBadge(priority) {
@@ -130,8 +136,8 @@ export function MaintenancePanel(store) {
           <h2>Bandeja de tickets</h2>
           <span class="panel__subtitle" data-role="ticket-count"></span>
         </header>
-        <div class="table-wrap">
-          <table class="data-table">
+        <div class="table-wrap table-wrap--tickets">
+          <table class="data-table maintenance-ticket-table">
             <thead>
               <tr>
                 <th>Código</th><th>Centro</th><th>Prioridad</th><th>Estado</th>
@@ -204,8 +210,12 @@ export function MaintenancePanel(store) {
               <span>${escapeHtml(ticket.ticket_code)} · ${escapeHtml(
                 workCenterName(ticket.work_center_id),
               )}</span>
-              <span>Técnico: ${escapeHtml(ticket.technician_ext_hr_employee_id || '—')}</span>
-              <span>Parada: ${minutes === null ? '—' : `${fmtNumber(minutes)} min`}</span>
+              <span title="${escapeHtml(ticket.technician_ext_hr_employee_id || '')}">Técnico: ${escapeHtml(
+                ticket.technician_ext_hr_employee_id
+                  ? technicianLabel(ticket.technician_ext_hr_employee_id)
+                  : '—',
+              )}</span>
+              <span>Parada: ${minutes === null ? '—' : formatDurationLong(minutes)}</span>
             </div>`;
           })
           .join('')}
@@ -236,12 +246,16 @@ export function MaintenancePanel(store) {
       .map((ticket) => {
         const active = ticket.id === selectedTicketId ? 'is-selected' : '';
         return `<tr class="${active}" data-ticket-row="${escapeHtml(ticket.id)}">
-          <td><strong>${escapeHtml(ticket.ticket_code)}</strong></td>
+          <td class="maint-code"><strong>${escapeHtml(ticket.ticket_code)}</strong></td>
           <td>${escapeHtml(workCenterName(ticket.work_center_id))}</td>
           <td>${priorityBadge(ticket.priority)}</td>
           <td>${ticketStatusBadge(ticket.ticket_status)}</td>
-          <td>${fmtDateTime(ticket.created_at)}</td>
-          <td>${ticket.operation_delay_id ? escapeHtml(ticket.operation_delay_id) : '—'}</td>
+          <td class="maint-date">${formatLocalDate(ticket.created_at)}</td>
+          <td class="maint-code" title="${escapeHtml(ticket.operation_delay_id || '')}">${
+            ticket.operation_delay_id
+              ? escapeHtml(stopEventLabel(store, ticket.operation_delay_id))
+              : '—'
+          }</td>
           <td class="cell--actions">${actionButton(ticket)}</td>
         </tr>`;
       })
@@ -263,16 +277,26 @@ export function MaintenancePanel(store) {
       <dl class="detail-list">
         <div><dt>Prioridad</dt><dd>${priorityBadge(ticket.priority)}</dd></div>
         <div><dt>Origen</dt><dd>${ticket.escalated_to_maint ? 'Escalado desde piso' : 'Registro manual'}</dd></div>
-        <div><dt>Creado</dt><dd>${fmtDateTime(ticket.created_at)}</dd></div>
-        <div><dt>Evento de parada</dt><dd>${escapeHtml(ticket.operation_delay_id || '—')}</dd></div>
-        <div><dt>Técnico</dt><dd>${escapeHtml(ticket.technician_ext_hr_employee_id || '—')}</dd></div>
-        <div><dt>Inicio intervención</dt><dd>${fmtDateTime(ticket.intervention_started_at)}</dd></div>
-        <div><dt>Inicio parada</dt><dd>${fmtDateTime(ticket.downtime_started_at)}</dd></div>
-        <div><dt>Fin parada</dt><dd>${fmtDateTime(ticket.downtime_ended_at)}</dd></div>
-        <div><dt>Parada total</dt><dd>${
-          ticket.downtime_minutes === null ? '—' : `${fmtNumber(ticket.downtime_minutes, 2)} min`
+        <div><dt>Creado</dt><dd class="nowrap">${fmtDateTime(ticket.created_at)}</dd></div>
+        <div><dt>Evento de parada</dt><dd class="nowrap" title="${escapeHtml(
+          ticket.operation_delay_id || '',
+        )}">${escapeHtml(
+          ticket.operation_delay_id ? stopEventLabel(store, ticket.operation_delay_id) : '—',
+        )}</dd></div>
+        <div><dt>Técnico</dt><dd class="nowrap" title="${escapeHtml(
+          ticket.technician_ext_hr_employee_id || '',
+        )}">${escapeHtml(
+          ticket.technician_ext_hr_employee_id
+            ? technicianLabel(ticket.technician_ext_hr_employee_id)
+            : '—',
+        )}</dd></div>
+        <div><dt>Inicio intervención</dt><dd class="nowrap">${fmtDateTime(ticket.intervention_started_at)}</dd></div>
+        <div><dt>Inicio parada</dt><dd class="nowrap">${fmtDateTime(ticket.downtime_started_at)}</dd></div>
+        <div><dt>Fin parada</dt><dd class="nowrap">${fmtDateTime(ticket.downtime_ended_at)}</dd></div>
+        <div><dt>Parada total</dt><dd class="nowrap">${
+          ticket.downtime_minutes === null ? '—' : formatDurationLong(ticket.downtime_minutes)
         }</dd></div>
-        <div><dt>Resuelto</dt><dd>${fmtDateTime(ticket.resolved_at)}</dd></div>
+        <div><dt>Resuelto</dt><dd class="nowrap">${fmtDateTime(ticket.resolved_at)}</dd></div>
       </dl>
       <p class="maintenance-description">${escapeHtml(ticket.description)}</p>
       ${
@@ -298,10 +322,14 @@ export function MaintenancePanel(store) {
     const rows = history
       .map(
         (ticket) => `<tr>
-          <td>${escapeHtml(ticket.ticket_code)}</td>
-          <td>${fmtDateTime(ticket.resolved_at)}</td>
-          <td>${fmtNumber(ticket.downtime_minutes || 0, 2)} min</td>
-          <td>${escapeHtml(ticket.cause_reason_id || '—')}</td>
+          <td class="maint-code">${escapeHtml(ticket.ticket_code)}</td>
+          <td class="maint-date">${formatLocalDate(ticket.resolved_at)}</td>
+          <td class="cell--nowrap">${formatDurationLong(ticket.downtime_minutes || 0)}</td>
+          <td class="maint-code">${escapeHtml(
+            store.maintenanceCauses.find((cause) => cause.id === ticket.cause_reason_id)?.label ||
+              ticket.cause_reason_id ||
+              '—',
+          )}</td>
         </tr>`,
       )
       .join('');
@@ -323,8 +351,8 @@ export function MaintenancePanel(store) {
       <p class="context-note">Indicadores agregados por máquina · solo contexto operativo, no evaluación de desempeño.</p>
       <dl class="detail-list">
         <div><dt>Fallas resueltas</dt><dd>${fmtNumber(wear.failure_count)}</dd></div>
-        <div><dt>Parada acumulada</dt><dd>${fmtNumber(wear.total_downtime_minutes, 2)} min</dd></div>
-        <div><dt>MTTR</dt><dd>${fmtNumber(wear.mttr_minutes, 2)} min</dd></div>
+        <div><dt>Parada acumulada</dt><dd>${formatDurationLong(wear.total_downtime_minutes)}</dd></div>
+        <div><dt>MTTR</dt><dd>${formatDurationLong(wear.mttr_minutes)}</dd></div>
         <div><dt>Desgaste</dt><dd><span class="wear wear--${escapeHtml(wear.wear_level)}">${escapeHtml(
           WEAR_LABEL[wear.wear_level] || wear.wear_level,
         )}</span></dd></div>
@@ -337,9 +365,6 @@ export function MaintenancePanel(store) {
             '<tr><td colspan="4" class="empty-cell">Sin fallos resueltos en esta máquina.</td></tr>'
           }</tbody>
         </table>
-      </div>
-      <div class="detail-actions">
-        <button type="button" class="btn btn--small" data-preventive-create data-center="${escapeHtml(workCenterId)}">Programar preventiva</button>
       </div>`;
   }
 
@@ -375,17 +400,22 @@ export function MaintenancePanel(store) {
           <thead><tr><th>Código</th><th>Centro</th><th>Título</th><th>Fecha objetivo</th><th>Estado</th><th>Origen</th><th>Acción</th></tr></thead>
           <tbody>
             ${orders
-              .map(
-                (order) => `<tr data-preventive-row="${escapeHtml(order.id)}">
-                  <td><strong>${escapeHtml(order.order_code)}</strong></td>
+              .map((order) => {
+                const sourceTicket = order.source_ticket_id
+                  ? ticketById(order.source_ticket_id)
+                  : null;
+                return `<tr data-preventive-row="${escapeHtml(order.id)}">
+                  <td class="maint-code"><strong>${escapeHtml(order.order_code)}</strong></td>
                   <td>${escapeHtml(workCenterName(order.work_center_id))}</td>
                   <td>${escapeHtml(order.title)}</td>
-                  <td>${escapeHtml(order.planned_date)}</td>
+                  <td class="maint-date">${formatLocalDate(order.planned_date)}</td>
                   <td>${preventiveStatusBadge(order.status)}</td>
-                  <td>${escapeHtml(order.source_ticket_id || '—')}</td>
+                  <td class="maint-code" title="${escapeHtml(order.source_ticket_id || '')}">${escapeHtml(
+                    sourceTicket?.ticket_code || '—',
+                  )}</td>
                   <td class="cell--actions">${preventiveActions(order)}</td>
-                </tr>`,
-              )
+                </tr>`;
+              })
               .join('')}
           </tbody>
         </table>
@@ -470,6 +500,7 @@ export function MaintenancePanel(store) {
         store.startMaintenanceIntervention(ticketId, {
           technician_ext_hr_employee_id: technician,
         });
+        showToast('Intervención iniciada', { tone: 'info' });
         closeModal();
       } catch (error) {
         errorEl.textContent = error.message;
@@ -521,7 +552,7 @@ export function MaintenancePanel(store) {
         const start = localToIso(startedInput.value);
         const end = localToIso(endedInput.value);
         const minutes = computeDowntimeMinutes(start, end);
-        preview.textContent = `${fmtNumber(minutes, 2)} min`;
+        preview.textContent = formatDurationLong(minutes);
       } catch {
         preview.textContent = '—';
       }
@@ -545,6 +576,7 @@ export function MaintenancePanel(store) {
           causeReasonId: causeReasonId || null,
           notes,
         });
+        showToast('Ticket resuelto', { tone: 'success' });
         closeModal();
       } catch (error) {
         errorEl.textContent = error.message;
@@ -572,7 +604,7 @@ export function MaintenancePanel(store) {
       <form data-role="preventive-form" class="stack-form">
         <p class="context-note">Desgaste ${escapeHtml(WEAR_LABEL[wear.wear_level] || wear.wear_level)}: ${escapeHtml(
           wear.failure_count,
-        )} fallo(s), ${fmtNumber(wear.total_downtime_minutes, 2)} min de parada.</p>
+        )} fallo(s), ${formatDurationLong(wear.total_downtime_minutes)} de parada.</p>
         <label>Fecha objetivo
           <input type="date" name="plannedDate" value="${escapeHtml(suggestion.planned_date)}" required />
         </label>
@@ -605,6 +637,7 @@ export function MaintenancePanel(store) {
           title,
           technician_ext_hr_employee_id: technician || null,
         });
+        showToast('Orden preventiva creada', { tone: 'success' });
         closeModal();
       } catch (error) {
         errorEl.textContent = error.message;
@@ -616,14 +649,17 @@ export function MaintenancePanel(store) {
     try {
       if (action === 'start') {
         store.transitionPreventiveMaintenanceOrder(orderId, 'in_progress');
+        showToast('Orden preventiva iniciada', { tone: 'info' });
       } else if (action === 'complete') {
         store.transitionPreventiveMaintenanceOrder(orderId, 'completed');
+        showToast('Orden preventiva completada', { tone: 'success' });
       } else if (action === 'cancel') {
         const reason =
           typeof window !== 'undefined' && typeof window.prompt === 'function'
             ? window.prompt('Motivo de cancelación de la orden preventiva:') || ''
             : '';
         store.cancelPreventiveMaintenanceOrder(orderId, { reason });
+        showToast('Orden preventiva cancelada', { tone: 'warning' });
       }
     } catch (error) {
       await notifyDialog({

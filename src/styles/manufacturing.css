@@ -37,6 +37,35 @@
   box-sizing: border-box;
 }
 
+.nowrap,
+.cell--nowrap,
+.maint-code,
+.maint-date,
+.prio,
+.maint-badge,
+.tag,
+.priority,
+.badge,
+.wear,
+.kpi-card__value,
+.mini-stat__value,
+.detail-list dd,
+.order-card__top strong,
+.order-card__product,
+.order-card__meta > span,
+.kanban-col__count,
+.closure-row span,
+.balance-chart__label,
+.plant-chart__name,
+.plant-chart__values span {
+  white-space: nowrap;
+}
+
+.order-card__product {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 body {
   margin: 0;
   font-family:
@@ -150,6 +179,7 @@ button {
 .shell__body {
   display: flex;
   flex: 1;
+  min-width: 0;
 }
 
 .sidebar {
@@ -197,6 +227,8 @@ button {
 
 .content {
   flex: 1;
+  min-width: 0;
+  width: 100%;
   padding: 1.5rem 2rem;
   max-width: 1400px;
 }
@@ -211,6 +243,8 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
 }
 
 .view__header h1 {
@@ -300,6 +334,8 @@ button {
 }
 
 .table-wrap {
+  min-width: 0;
+  max-width: 100%;
   max-height: 420px;
   overflow: auto;
 }
@@ -516,6 +552,7 @@ button {
   border: 1px solid var(--erp-border);
   border-radius: 6px;
   background: var(--erp-surface);
+  white-space: nowrap;
 }
 
 .btn--primary {
@@ -540,6 +577,22 @@ button {
   padding: 0 1.25rem;
 }
 
+.orders-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.orders-toolbar .inline-field {
+  min-width: 220px;
+}
+
+.orders-toolbar input,
+.orders-toolbar select {
+  min-width: 180px;
+}
+
 .orders-layout {
   display: grid;
   grid-template-columns: 1fr 360px;
@@ -549,11 +602,15 @@ button {
 
 .orders-board {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(260px, 1fr));
   gap: 0.75rem;
+  min-width: 0;
+  overflow-x: auto;
+  padding-bottom: 0.35rem;
 }
 
 .kanban-col {
+  min-width: 260px;
   background: var(--erp-bg);
   border: 1px solid var(--erp-border);
   border-radius: 8px;
@@ -640,6 +697,12 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.order-card__top strong,
+.order-card__meta > span {
+  white-space: nowrap;
 }
 
 .badge {
@@ -928,12 +991,18 @@ button {
 }
 
 .maintenance-filters select {
-  height: 34px;
-  min-width: 150px;
-  padding: 0 0.5rem;
-  border: 1px solid var(--erp-border);
-  border-radius: 6px;
-  background: var(--erp-surface);
+  min-width: 140px;
+}
+
+.table-wrap--tickets {
+  width: 100%;
+  max-height: none;
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+.maintenance-ticket-table {
+  min-width: 880px;
 }
 
 .maintenance-grid {
@@ -1139,6 +1208,99 @@ button {
   border: 1px solid var(--erp-border);
   border-radius: 6px;
   font: inherit;
+}
+
+.counter-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.counter-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--erp-border);
+  border-radius: 8px;
+  background: var(--erp-surface);
+}
+
+.counter-block--total {
+  background: var(--erp-bg);
+}
+
+.counter-block__label {
+  color: var(--erp-text-muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.counter-block__value {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.counter-block__value strong {
+  font-size: 1.6rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.counter-block__hint {
+  color: var(--erp-text-muted);
+  font-size: 0.85rem;
+}
+
+.counter-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.counter-controls input {
+  width: 76px;
+  height: 26px;
+  padding: 0 0.4rem;
+  border: 1px solid var(--erp-border);
+  border-radius: 6px;
+  font: inherit;
+  text-align: right;
+}
+
+.delay-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 1.25rem 1rem;
+}
+
+.table-wrap--delays {
+  max-height: 300px;
+  overflow: auto;
+}
+
+.station-delay-table {
+  min-width: 520px;
+}
+
+.station-delay-table__reason {
+  width: 34%;
+}
+
+.station-delay-table__date {
+  width: 24%;
+}
+
+.station-delay-table__minutes {
+  width: 14%;
+}
+
+.station-delay-table__status {
+  width: 28%;
 }
 
 .closure-row {
@@ -1370,6 +1532,61 @@ button {
 
 [data-role='balance-suggestions'] .data-table td:last-child {
   white-space: nowrap;
+}
+
+.plant-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+}
+
+.plant-chart__row {
+  display: grid;
+  grid-template-columns: minmax(110px, 160px) minmax(120px, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.plant-chart__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plant-chart__bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.plant-chart__bars .balance-chart__track {
+  height: 10px;
+}
+
+.plant-chart__values {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.15rem;
+  color: var(--erp-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.plant-chart__label {
+  min-width: 72px;
+  text-align: right;
+}
+
+.table-wrap--plant {
+  overflow-x: auto;
+}
+
+.plant-table {
+  min-width: 640px;
 }
 
 .badge--success {
@@ -1861,6 +2078,7 @@ button {
 button:focus-visible,
 select:focus-visible,
 input:focus-visible,
+textarea:focus-visible,
 [tabindex]:focus-visible {
   outline: 2px solid var(--erp-accent);
   outline-offset: 2px;
@@ -2179,6 +2397,160 @@ input:focus-visible,
   }
 }
 
+select:not([hidden]) {
+  height: 36px;
+  max-width: 100%;
+  padding: 0 0.6rem;
+  border: 1px solid var(--erp-border);
+  border-radius: 6px;
+  background: var(--erp-surface);
+  color: var(--erp-text);
+  font: inherit;
+}
+
+.toast-region {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: min(360px, calc(100vw - 2rem));
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--erp-border);
+  border-left: 4px solid var(--erp-accent);
+  border-radius: 8px;
+  background: var(--erp-surface);
+  box-shadow: 0 12px 30px rgb(15 23 42 / 18%);
+  color: var(--erp-text);
+  animation: toast-in 180ms var(--erp-ease);
+}
+
+.toast--success {
+  border-left-color: #16803c;
+}
+
+.toast--warning {
+  border-left-color: #b7791f;
+}
+
+.toast--danger {
+  border-left-color: var(--erp-danger);
+}
+
+.toast__message {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.toast__close {
+  border: 0;
+  background: transparent;
+  color: var(--erp-text-muted);
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.toast--no-motion {
+  animation: none;
+  transition: none;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 480px) {
+  .view__header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .view__header .inline-field,
+  .view__header .inline-field select {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .btn--header-action {
+    align-self: flex-start;
+  }
+
+  .maintenance-filters {
+    width: 100%;
+  }
+
+  .maintenance-filters label {
+    flex: 1 1 140px;
+  }
+
+  .maintenance-filters select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .orders-toolbar .inline-field,
+  .orders-toolbar input,
+  .orders-toolbar select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .orders-board {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+  }
+
+  .kanban-col {
+    flex: 0 0 min(280px, 84vw);
+    scroll-snap-align: start;
+  }
+
+  .counter-grid,
+  .plant-chart__row {
+    grid-template-columns: 1fr;
+  }
+
+  .counter-block__value {
+    justify-content: space-between;
+  }
+
+  .delay-actions,
+  .detail-actions {
+    flex-wrap: wrap;
+  }
+
+  .plant-chart__values {
+    align-items: flex-start;
+    flex-direction: row;
+    gap: 1rem;
+  }
+
+  .toast-region {
+    right: 0.5rem;
+    bottom: 0.5rem;
+    left: 0.5rem;
+    max-width: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .btn,
   .sidebar__btn,
@@ -2191,8 +2563,18 @@ input:focus-visible,
   .sidebar__chevron,
   .content > .view,
   .confirm-dialog,
-  .confirm-dialog::backdrop {
+  .confirm-dialog::backdrop,
+  .toast {
     animation: none;
     transition: none;
+  }
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

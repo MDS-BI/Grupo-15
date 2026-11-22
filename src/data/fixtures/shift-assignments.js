@@ -3,6 +3,8 @@
  * Ver data-model.md §3.8 y contracts/operator-shift.md.
  */
 
+import { relativeTimestamp } from './demo-dates.js';
+
 export const shiftAssignments = [
   {
     id: 'sa_1',
@@ -10,7 +12,7 @@ export const shiftAssignments = [
     work_center_id: 'wc_corte',
     ext_hr_employee_id: 'emp_op_01',
     shift_band: 'morning',
-    assigned_at: '2026-11-01T06:50:00Z',
+    assigned_at: relativeTimestamp(-21, '06:50'),
     active: true,
   },
   {
@@ -19,7 +21,7 @@ export const shiftAssignments = [
     work_center_id: 'wc_armado',
     ext_hr_employee_id: 'emp_op_02',
     shift_band: 'morning',
-    assigned_at: '2026-11-01T06:50:00Z',
+    assigned_at: relativeTimestamp(-21, '06:50'),
     active: true,
   },
   {
@@ -28,7 +30,7 @@ export const shiftAssignments = [
     work_center_id: 'wc_solda',
     ext_hr_employee_id: 'emp_op_03',
     shift_band: 'morning',
-    assigned_at: '2026-11-01T06:50:00Z',
+    assigned_at: relativeTimestamp(-21, '06:50'),
     active: true,
   },
   {
@@ -37,7 +39,7 @@ export const shiftAssignments = [
     work_center_id: 'wc_calidad',
     ext_hr_employee_id: 'emp_op_04',
     shift_band: 'morning',
-    assigned_at: '2026-11-01T06:50:00Z',
+    assigned_at: relativeTimestamp(-21, '06:50'),
     active: true,
   },
   {
@@ -46,7 +48,7 @@ export const shiftAssignments = [
     work_center_id: 'wc_pintura',
     ext_hr_employee_id: 'emp_op_05',
     shift_band: 'morning',
-    assigned_at: '2026-11-01T06:50:00Z',
+    assigned_at: relativeTimestamp(-21, '06:50'),
     active: true,
   },
 ];

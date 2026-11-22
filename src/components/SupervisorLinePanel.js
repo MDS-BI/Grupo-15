@@ -4,6 +4,8 @@
  */
 
 import { escapeHtml, el, fmtNumber } from './format.js';
+import { operationLabel } from './labels.js';
+import { showToast } from './Toast.js';
 
 const LIGHT_LABEL = {
   in_operation: 'En operación',
@@ -80,6 +82,8 @@ export function SupervisorLinePanel(store) {
             <tbody>
               ${rows
                 .map(({ work_center, status, assignment, active_operation }) => {
+                  const escalateClass =
+                    status === 'fault' ? 'btn btn--tiny btn--danger' : 'btn btn--tiny';
                   const employee = assignment
                     ? store.hrEmployees.find(
                         (row) => row.ext_hr_employee_id === assignment.ext_hr_employee_id,
@@ -89,8 +93,10 @@ export function SupervisorLinePanel(store) {
                     <td>${escapeHtml(work_center.name)}</td>
                     <td><span class="badge badge--light-${escapeHtml(status)}" data-light="${escapeHtml(work_center.id)}">${escapeHtml(LIGHT_LABEL[status] || status)}</span></td>
                     <td>${employee ? escapeHtml(employee.name) : '—'}</td>
-                    <td>${active_operation ? escapeHtml(active_operation.id) : '—'}</td>
-                    <td><button type="button" class="btn btn--tiny btn--danger" data-escalate="${escapeHtml(work_center.id)}">Escalar incidente</button></td>
+                    <td title="${escapeHtml(active_operation?.id || '')}">${
+                      active_operation ? escapeHtml(operationLabel(store, active_operation)) : '—'
+                    }</td>
+                    <td><button type="button" class="${escalateClass}" data-escalate="${escapeHtml(work_center.id)}">Escalar incidente</button></td>
                   </tr>`;
                 })
                 .join('')}
@@ -127,6 +133,7 @@ export function SupervisorLinePanel(store) {
           store.validateShiftClosure(button.getAttribute('data-validate'), {
             supervisor_notes: 'Validado desde supervisión de línea.',
           });
+          showToast('Cierre validado', { tone: 'success' });
           render();
         } catch (err) {
           assignError.textContent = err.message;
@@ -169,6 +176,7 @@ export function SupervisorLinePanel(store) {
           workCenterId,
           description: data.get('description'),
         });
+        showToast('Incidente escalado', { tone: 'warning' });
         close();
         render();
       } catch (err) {
@@ -186,6 +194,7 @@ export function SupervisorLinePanel(store) {
         shift_band: data.get('shift_band'),
       });
       assignError.textContent = '';
+      showToast('Operario asignado', { tone: 'success' });
       render();
     } catch (err) {
       assignError.textContent = err.message;

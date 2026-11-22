@@ -17,7 +17,9 @@ import { ProductionSchedulingPanel } from './components/ProductionSchedulingPane
 import { LineBalancePanel } from './components/LineBalancePanel.js';
 import { RoleAccessPanel } from './components/RoleAccessPanel.js';
 import { el, escapeHtml } from './components/format.js';
+import { confirmDialog } from './components/ConfirmDialog.js';
 import { icon } from './components/icons.js';
+import { mountToastRegion, showToast } from './components/Toast.js';
 import { authenticate } from './data/fixtures/demo-accounts.js';
 import {
   DEFAULT_ROLE,
@@ -223,6 +225,25 @@ function logout() {
   renderApp();
 }
 
+async function resetDemoData() {
+  state.userMenuOpen = false;
+  renderShell();
+  const confirmed = await confirmDialog({
+    title: 'Reiniciar datos de demo',
+    message:
+      'Se descartarán los cambios de la sesión y volverán los datos iniciales. Tu sesión no se cerrará.',
+    confirmLabel: 'Reiniciar datos',
+    danger: true,
+  });
+  if (!confirmed) return;
+
+  const restored = store.resetDemoData();
+  showToast(restored ? 'Datos de demo reiniciados' : 'No se pudieron reiniciar los datos de demo', {
+    tone: restored ? 'success' : 'danger',
+  });
+  renderContent();
+}
+
 function visibleModules() {
   return MODULES.filter((module) => isModuleAllowed(state.role, module.id));
 }
@@ -357,6 +378,7 @@ function roleOptions() {
 }
 
 function userMenu() {
+  const canResetDemo = state.realRole === 'plant_manager' && state.role === state.realRole;
   const switcher = isAdmin(state.realRole)
     ? `<div class="user-menu__group">
         <p class="user-menu__label" id="view-as-label">Ver como</p>
@@ -382,6 +404,13 @@ function userMenu() {
           ? `<div class="user-menu__panel" role="menu" aria-label="Menú de usuario">
         <p class="user-menu__current"><span>Rol efectivo</span><strong>${escapeHtml(ROLE_LABELS[state.role])}</strong></p>
         ${switcher}
+        ${
+          canResetDemo
+            ? `<button type="button" class="user-menu__item" data-reset-demo role="menuitem">
+          ${icon('refresh')}<span>Reiniciar datos de demo</span>
+        </button>`
+            : ''
+        }
         <button type="button" class="user-menu__item" data-logout role="menuitem">
           ${icon('logout')}<span>Cerrar sesión</span>
         </button>
@@ -434,6 +463,7 @@ function renderShell() {
   });
 
   app.querySelector('[data-logout]')?.addEventListener('click', logout);
+  app.querySelector('[data-reset-demo]')?.addEventListener('click', resetDemoData);
 
   const menuToggle = app.querySelector('[data-role="user-menu-toggle"]');
   menuToggle.addEventListener('click', () => {
@@ -441,7 +471,7 @@ function renderShell() {
     state.drawerOpen = false;
     renderShell();
     const focusTarget = state.userMenuOpen
-      ? app.querySelector('[data-role="role-select"], [data-logout]')
+      ? app.querySelector('[data-role="role-select"], [data-reset-demo], [data-logout]')
       : app.querySelector('[data-role="user-menu-toggle"]');
     focusTarget?.focus();
   });
@@ -512,6 +542,7 @@ function setupGlobalHandlers() {
 globalThis.addEventListener?.('popstate', handleLocationChange);
 globalThis.addEventListener?.('hashchange', handleLocationChange);
 setupGlobalHandlers();
+mountToastRegion();
 
 const saved = loadRole();
 if (saved) {

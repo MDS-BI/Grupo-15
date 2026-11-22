@@ -87,18 +87,21 @@ describe('Panel de desempeño de planta (US-08)', () => {
     change('[data-role="threshold-form"] [name="comparison"]', 'gt');
     submit('[data-role="threshold-form"]');
     expect(store.thresholdSettings.find((row) => row.indicator === 'downtime').threshold).toBe(100);
+    expect(document.body.textContent).toContain('Umbral actualizado');
   });
 
   it('cambia prioridad y cancela una orden desde el panel', () => {
     document.body.appendChild(PlantPerformancePanel(store));
     change('[data-priority="po_3004"]', 'high');
     expect(store.orderById('po_3004').priority).toBe('high');
+    expect(document.body.textContent).toContain('Prioridad actualizada');
 
     click('[data-cancel="po_3004"]');
     fill('[data-role="cancel-form"] [name="reason"]', 'Cambio de demanda');
     submit('[data-role="cancel-form"]');
     expect(store.orderById('po_3004').status).toBe('cancelled');
     expect(document.querySelector('[data-order="po_3004"]')).toBeNull();
+    expect(document.body.textContent).toContain('Orden cancelada');
   });
 });
 
@@ -114,6 +117,7 @@ describe('Planificación de producción (US-10)', () => {
     fill('[data-date="end"][data-order="po_3004"]', '2026-11-10');
     click('[data-save="po_3004"]');
     expect(store.orderById('po_3004').planned_start_date).toBe('2026-11-01');
+    expect(document.body.textContent).toContain('Fechas guardadas');
 
     fill('[data-date="start"][data-order="po_3004"]', '2026-11-20');
     click('[data-save="po_3004"]');

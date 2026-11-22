@@ -3,6 +3,31 @@
  * migración desde `erp.manufacturing.v1`. Ver contracts/maintenance.md §6.
  */
 
+import { billOfMaterials, bomComponents } from './fixtures/boms.js';
+import { delayReasons } from './fixtures/delay-reasons.js';
+import {
+  companies,
+  products,
+  qualityInspections,
+  salesOrders,
+  unitsOfMeasure,
+  warehouses,
+} from './fixtures/master-data.js';
+import { maintenanceTickets } from './fixtures/maintenance-tickets.js';
+import { hrEmployees } from './fixtures/hr-employees.js';
+import { thresholdSettings, rolePermissions } from './fixtures/plant-performance.js';
+import { preventiveMaintenanceOrders } from './fixtures/preventive-maintenance-orders.js';
+import {
+  materialConsumption,
+  productionOrderOperations,
+  productionOrders,
+  productionOutput,
+} from './fixtures/production-orders.js';
+import { operationDelays, productionShifts } from './fixtures/production-shifts.js';
+import { routings, routingOperations } from './fixtures/routings.js';
+import { shiftAssignments } from './fixtures/shift-assignments.js';
+import { workCenters } from './fixtures/work-centers.js';
+
 export const SNAPSHOT_KEY = 'erp.manufacturing.v2';
 export const LEGACY_SNAPSHOT_KEY = 'erp.manufacturing.v1';
 export const SNAPSHOT_VERSION = 2;
@@ -171,6 +196,44 @@ export function saveSnapshot(data, storage = defaultStorage()) {
   } catch {
     return false;
   }
+}
+
+function cloneFixture(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+export function createFixtureSnapshot() {
+  return {
+    companies: cloneFixture(companies),
+    unitsOfMeasure: cloneFixture(unitsOfMeasure),
+    warehouses: cloneFixture(warehouses),
+    products: cloneFixture(products),
+    salesOrders: cloneFixture(salesOrders),
+    qualityInspections: cloneFixture(qualityInspections),
+    billOfMaterials: cloneFixture(billOfMaterials),
+    bomComponents: cloneFixture(bomComponents),
+    workCenters: cloneFixture(workCenters),
+    routings: cloneFixture(routings),
+    routingOperations: cloneFixture(routingOperations),
+    productionOrders: cloneFixture(productionOrders),
+    productionOrderOperations: cloneFixture(productionOrderOperations),
+    materialConsumption: cloneFixture(materialConsumption),
+    productionOutput: cloneFixture(productionOutput),
+    maintenanceTickets: cloneFixture(maintenanceTickets),
+    preventiveMaintenanceOrders: cloneFixture(preventiveMaintenanceOrders),
+    productionShifts: cloneFixture(productionShifts),
+    operationDelays: cloneFixture(operationDelays),
+    delayReasons: cloneFixture(delayReasons),
+    shiftAssignments: cloneFixture(shiftAssignments),
+    hrEmployees: cloneFixture(hrEmployees),
+    thresholdSettings: cloneFixture(thresholdSettings),
+    rolePermissions: cloneFixture(rolePermissions),
+  };
+}
+
+export function resetDemoSnapshot(storage = defaultStorage()) {
+  clearSnapshot(storage, { includeLegacy: true });
+  return saveSnapshot(createFixtureSnapshot(), storage);
 }
 
 /**

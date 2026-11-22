@@ -415,6 +415,29 @@
 
 ---
 
+## Fase 24: Pulido visual y funcional para la demo (2026-11-22)
+
+**Propósito**: cerrar el pulido visual y funcional de la demo sin cambiar las reglas de negocio: tablas y tarjetas legibles, kanban y mantenimiento sin desbordes, panel de planta con gráficos propios, nombres en lugar de IDs, fechas relativas, reinicio de datos y avisos accesibles. Los IDs T146–T159 continúan la secuencia de T145.
+
+- [X] T146 [P] Añadir en `src/components/format.js` los helpers `formatLocalDate`, `formatLocalDateTime` y `formatDurationLong`, usando `Intl.DateTimeFormat('es-CL', ...)` para fechas y el formato `X d Y h Z min` para duraciones largas, sin librerías externas
+- [X] T147 [P] Reestructurar `src/components/OperatorWorkstationPanel.js` para envolver la tabla de atrasos en un contenedor con scroll horizontal interno, compactar columnas, mostrar fechas con `formatLocalDate`, agrupar las acciones de atraso en una sola fila de botones con clases consistentes y redistribuir la tarjeta "Contadores" en dos columnas con jerarquía clara entre turno y acumulado
+- [X] T148 [P] Añadir en `src/components/ProductionOrders.js` un buscador por número de orden/producto y un filtro por prioridad que se apliquen a las columnas del kanban; envolver cantidades y chips en `white-space: nowrap`, dar ancho mínimo a cada columna, adaptar el encabezado para que "Nueva Orden" no se desborde en móvil y conservar el drag & drop con transiciones válidas (AC-42)
+- [X] T149 [P] Ajustar `src/components/MaintenancePanel.js` para mostrar códigos y fechas sin corte (`white-space: nowrap` y fecha corta con `formatLocalDate`), listar todos los tickets de la bandeja sin `max-height` ni recorte de filas, dejar un único botón "Programar preventiva" por contexto y conservar filtros, toma de intervención y resolución (AC-21–AC-24)
+- [X] T150 [P] Replantear `src/components/PlantPerformancePanel.js` para reutilizar las clases `.kpi-card` del panel, dibujar barras CSS/SVG de carga y OEE por centro y de paradas por motivo con etiquetas accesibles (`role="img"`/`aria-label`) y sin librerías de gráficos, manteniendo los cálculos derivados vigentes (AC-04)
+- [X] T151 [P] Ajustar `src/components/SupervisorLinePanel.js` para que los controles de prioridad usen el tamaño normal, "Escalar incidente" sea un botón secundario salvo en centros *En fallo* (donde conserva el estilo de peligro) y la selección de operador use el estilo único de `<select>`
+- [X] T152 Sustituir en `src/components/*.js` y `src/manufacturing-main.js` todo texto visible "operations" por "operaciones", sin renombrar identificadores, claves, rutas ni contratos de datos
+- [X] T153 Crear `src/components/labels.js` con resolvers de nombres legibles y usarlos en `src/components/MaintenancePanel.js`, `src/components/ProductionOrders.js`, `src/components/SupervisorLinePanel.js` y `src/components/OperatorWorkstationPanel.js`: operación como `Operación <secuencia> · <centro>`, técnico desde `src/data/fixtures/hr-employees.js`, evento de parada desde motivo/centro y pedido de venta desde `src/data/fixtures/master-data.js`; conservar los IDs en `title`/datos para auditoría
+- [X] T154 [P] Crear `src/data/fixtures/demo-dates.js` con helpers relativos a hoy y actualizar `src/data/fixtures/production-orders.js`, `src/data/fixtures/production-shifts.js`, `src/data/fixtures/maintenance-tickets.js`, `src/data/fixtures/preventive-maintenance-orders.js`, `src/data/fixtures/master-data.js`, `src/data/fixtures/plant-performance.js` y `src/data/fixtures/shift-assignments.js` para que todas las marcas sean relativas a la fecha actual y las duraciones largas se muestren con `formatDurationLong` en estación, mantenimiento y planta
+- [X] T155 Añadir `createFixtureSnapshot` y `resetDemoSnapshot` en `src/data/persistence.js`, exponer `resetDemoData` en `src/data/ManufacturingStore.js` reconstruyendo todas las colecciones desde `src/data/fixtures/` y guardando `erp.manufacturing.v2`, y agregar en `src/manufacturing-main.js` la opción "Reiniciar datos de demo" al menú de usuario solo cuando `realRole === 'plant_manager'`, usando `confirmDialog` de `src/components/ConfirmDialog.js` y recargando la vista tras confirmar
+- [X] T156 [P] Crear `src/components/Toast.js` con `showToast(message, { tone })`, un contenedor `role="status" aria-live="polite"`, auto-ocultado y cierre manual, y montarlo desde `src/manufacturing-main.js` sin reemplazar los diálogos de error existentes
+- [X] T157 Invocar `showToast` en `src/components/OperatorWorkstationPanel.js` al guardar contadores y atrasos, en `src/components/ProductionSchedulingPanel.js` al guardar fechas, en `src/components/PlantPerformancePanel.js` al guardar umbral/prioridad, en `src/components/SupervisorLinePanel.js` al asignar y escalar, en `src/components/MaintenancePanel.js` al tomar y resolver tickets y en `src/components/ProductionOrders.js` al cambiar el estado de una orden
+- [X] T158 Unificar en `src/styles/manufacturing.css` los estilos de Fase 24: scroll y columnas compactas de atrasos, tarjeta de contadores, ancho mínimo/scroll del kanban y botón "Nueva Orden" adaptable, filas completas de mantenimiento, tarjetas KPI y barras de planta, un único estilo para todos los `<select>`, controles de prioridad de tamaño normal, botón de escalamiento secundario/peligro según estado y toast accesible, con ajustes móviles sin librerías externas
+- [X] T159 Ejecutar `npm test -- --run`, `npm run lint`, `npm run format:check` y `npm run build` sobre `src/components/`, `src/data/` y `src/styles/manufacturing.css`; verificar en el navegador estación, kanban, mantenimiento, planta, menú de Jefa de Planta y toasts sin desbordes a 375 px
+
+**Punto de control**: la demo se ve sin desbordes ni IDs crudos, las fechas son relativas y legibles, el reinicio de datos está restringido a la Jefa de Planta con confirmación, las acciones clave confirman visualmente con `aria-live` y el gate de calidad sigue en verde.
+
+---
+
 ## Dependencias y Orden de Ejecución
 
 ### Dependencias por fase
@@ -440,6 +463,7 @@
 - **Popover de órdenes por centro (Fase 21)**: depende de Fases 2 y 19; reutiliza el balance derivado sin cambiar el snapshot `v2`.
 - **Consolidación de fórmulas/AC-46 (Fase 22)**: depende de Fases 2, 13, 19 y 21; no cambia el snapshot `v2` y cierra hallazgos documentales y de cálculo sin reabrir otras historias.
 - **Pulido MVP (Fase 23)**: depende de Fases 14 y 22; no cambia el snapshot `v2`; cierra la deuda heredada T084 y T002.
+- **Pulido visual y funcional para la demo (Fase 24)**: depende de Fases 14, 22 y 23; no introduce dependencias externas ni cambia el snapshot `v2`, salvo el restablecimiento controlado desde fixtures para la Jefa de Planta.
 
 ### Dependencias dentro de cada historia
 

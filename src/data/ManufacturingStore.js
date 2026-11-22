@@ -17,7 +17,7 @@ import * as assignmentFx from './fixtures/shift-assignments.js';
 import * as hrFx from './fixtures/hr-employees.js';
 import * as plantFx from './fixtures/plant-performance.js';
 import { InventoryPort, QualityPort } from './ports/index.js';
-import { loadSnapshot, saveSnapshot } from './persistence.js';
+import { loadSnapshot, resetDemoSnapshot, saveSnapshot } from './persistence.js';
 import {
   assertTransition,
   canScheduleOnWorkCenter,
@@ -128,6 +128,16 @@ export class ManufacturingStore extends EventTarget {
 
     if (hydrate && this.storage) this.#hydrate();
     this.#resetInventory();
+  }
+
+  resetDemoData() {
+    if (!this.storage || !resetDemoSnapshot(this.storage)) return false;
+    this.#hydrate();
+    this.technicians = clone(mtFx.technicians);
+    this.maintenanceCauses = clone(mtFx.maintenanceCauses);
+    this.#resetInventory();
+    this.#emit();
+    return true;
   }
 
   #hydrate() {
