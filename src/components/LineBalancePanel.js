@@ -25,7 +25,7 @@ const CHART_SCALE = 1.2;
 function formatMinutes(minutes) {
   const value = Number(minutes);
   if (!Number.isFinite(value)) return '—';
-  return `${fmtNumber(value, 0)} min <span class="minutes-hours">(${fmtNumber(value / 60, 1)} h)</span>`;
+  return `<span class="minutes-main">${fmtNumber(value, 0)} min</span> <span class="minutes-hours">(${fmtNumber(value / 60, 1)} h)</span>`;
 }
 
 function statusBadge(status) {
@@ -197,21 +197,18 @@ export function LineBalancePanel(store) {
     const section = bodyEl.querySelector('[data-role="load-section"]');
     const popover = popoverRoot.querySelector('[data-role="center-popover"]');
     if (!section || !popover) return;
+    const row = [...bodyEl.querySelectorAll('tr[data-wc]')].find(
+      (item) => item.dataset.wc === popoverCenterId,
+    );
     const sectionRect = section.getBoundingClientRect();
+    const rowRect = row?.getBoundingClientRect?.() ?? sectionRect;
     const viewportWidth = window.innerWidth || 1024;
     const viewportHeight = window.innerHeight || 768;
     const width = popover.offsetWidth || 420;
     const height = popover.offsetHeight || 260;
-    const halfWidth = width / 2;
-    const halfHeight = height / 2;
-    const left = Math.max(
-      halfWidth + 12,
-      Math.min(sectionRect.left + sectionRect.width / 2, viewportWidth - halfWidth - 12),
-    );
-    const top = Math.max(
-      halfHeight + 12,
-      Math.min(sectionRect.top + sectionRect.height / 2, viewportHeight - halfHeight - 12),
-    );
+    const centeredLeft = sectionRect.left + sectionRect.width / 2 - width / 2;
+    const left = Math.max(16, Math.min(centeredLeft, viewportWidth - width - 16));
+    const top = Math.max(16, Math.min(rowRect.top, viewportHeight - height - 16));
     popover.style.left = `${left}px`;
     popover.style.top = `${top}px`;
   }
@@ -259,7 +256,7 @@ export function LineBalancePanel(store) {
         const dailyUtil = dailyUtilization.get(row.work_center_id);
         const dailyRow = { utilization: dailyUtil, status: utilizationStatus(dailyUtil) };
         return `<tr data-wc="${escapeHtml(row.work_center_id)}" data-status="${row.status}" tabindex="0" role="button" aria-pressed="${isSelected}" aria-expanded="${popoverOpen}" ${popoverOpen ? 'aria-controls="center-orders-popover"' : ''} class="status--${row.status}${isBottleneck ? ' is-bottleneck' : ''}${isSelected ? ' is-selected' : ''}">
-          <td>${escapeHtml(row.name)} ${statusBadge(row.status)}</td>
+          <td class="balance-center"><span class="balance-center__name">${escapeHtml(row.name)}</span>${statusBadge(row.status)}</td>
           <td class="num">${formatMinutes(row.load_minutes)}</td>
           <td class="num">${formatMinutes(row.capacity_minutes)}</td>
           <td class="num" title="Capacidad efectiva de 1 día = min/día × eficiencia; se multiplica por los días hábiles del período">${row.effective_per_day_minutes === null ? '—' : formatMinutes(row.effective_per_day_minutes)}</td>
@@ -303,9 +300,10 @@ export function LineBalancePanel(store) {
           .map((row) => {
             const load = orderDetail.load_by_work_center[row.work_center_id];
             const linked = row.work_center_id === selectedWorkCenterId ? ' is-selected' : '';
+            const emptyLoad = !load || Number(load.load_minutes) === 0 ? ' is-empty-load' : '';
             const sequence =
               row.sequence === null || row.sequence === undefined ? '—' : `Sec. ${row.sequence}`;
-            return `<tr data-order-wc="${escapeHtml(row.work_center_id)}" data-sequence="${row.sequence ?? ''}" class="${linked}">
+            return `<tr data-order-wc="${escapeHtml(row.work_center_id)}" data-sequence="${row.sequence ?? ''}" class="${linked}${emptyLoad}">
               <td><span class="order-sequence">${sequence}</span>${escapeHtml(row.name)}</td>
               <td class="num">${formatMinutes(load ? load.load_minutes : 0)}</td>
               <td>${row.utilization === null ? '—' : fmtPercent(row.utilization)}</td>
@@ -322,14 +320,16 @@ export function LineBalancePanel(store) {
               `${requestPeriodKey}|${suggestion.suggestion_id}`,
             );
             const typeLabel = suggestion.type === 'sequence' ? 'Secuencia' : 'Reasignación';
+            const typeBadge =
+              suggestion.type === 'sequence' ? 'badge--type-sequence' : 'badge--type-reassign';
             return `<tr data-suggestion="${suggestion.suggestion_id}">
-              <td>${typeLabel}</td>
+              <td><span class="badge ${typeBadge}">${typeLabel}</span></td>
               <td>${suggestionDescription(store, suggestion)}</td>
               <td class="num">${fmtNumber(suggestion.minutes, 0)} min</td>
               <td>${
                 accepted
-                  ? '<span class="badge badge--success">Solicitud simulada</span>'
-                  : `<button type="button" class="btn btn--tiny" data-request="${suggestion.suggestion_id}">Solicitar</button>`
+                  ? '<span class="badge badge--simulated">Solicitud simulada</span>'
+                  : `<button type="button" class="btn btn--tiny btn--request" data-request="${suggestion.suggestion_id}">Solicitar</button>`
               }</td>
             </tr>`;
           })
@@ -343,23 +343,15 @@ export function LineBalancePanel(store) {
           <p class="panel__subtitle" data-unscheduled>Órdenes sin fechas excluidas: ${unscheduled.length} (${escapeHtml(unscheduledText)})</p>
           <p class="panel__subtitle">Capacidad = días hábiles × min/día × factor de eficiencia. Haz clic en un centro para ver sus órdenes en una ventana compacta.</p>
         </header>
-        <div class="table-wrap">
-          <table class="data-table balance-table">
-            <thead>
-              <tr>
-                <th>Centro</th>
-                <th class="num" title="Carga proyectada de las órdenes que solapan el período">Carga (min)</th>
-                <th class="num" title="Días hábiles × min/día × factor de eficiencia">Capacidad del período (min)</th>
-                <th class="num" title="Capacidad efectiva de 1 día, la misma tasa que muestra el Panel de Producción">Capacidad/día (min)</th>
-                <th class="num">Holgura (min / h)</th>
-                <th title="Carga proyectada del período ÷ capacidad del período">Utilización</th>
-                <th title="Carga pendiente ÷ capacidad de 1 día, igual que en el Panel de Producción">Utilización del día</th>
-                <th class="num">Setup estándar</th>
-                <th class="num">Run estándar /u</th>
-              </tr>
-            </thead>
-            <tbody>${rows}</tbody>
-          </table>
+        <div class="panel__body">
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr><th>Centro</th><th>Carga (min)</th><th>Capacidad (min)</th><th>Utilización</th><th>Setup estándar</th><th>Run estándar /u</th></tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
         </div>
       </article>
       <article class="panel">
@@ -376,7 +368,7 @@ export function LineBalancePanel(store) {
           <h3>Sugerencias de balanceo</h3>
           <p class="panel__subtitle" data-role="suggestions-note">Propuestas simuladas: al aceptarlas solo se marca la fila en esta vista; no se registra, persiste ni cambia rutas, operaciones o asignaciones.</p>
         </header>
-        <div class="table-wrap" data-role="balance-suggestions">
+        <div class="table-wrap table-wrap--full" data-role="balance-suggestions">
           <table class="data-table data-table--compact">
             <thead><tr><th>Tipo</th><th>Propuesta</th><th class="num">Carga</th><th>Acción</th></tr></thead>
             <tbody>${suggestionRows}</tbody>
@@ -398,11 +390,13 @@ export function LineBalancePanel(store) {
             </select>
           </label>
         </header>
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead><tr><th>Sec. · Centro</th><th class="num">Carga de la orden (min)</th><th>Utilización del período</th></tr></thead>
-            <tbody>${orderRows || '<tr><td colspan="3" class="empty-cell">Sin orden seleccionada.</td></tr>'}</tbody>
-          </table>
+        <div class="panel__body">
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>Centro</th><th>Carga de la orden (min)</th><th>Utilización del período</th></tr></thead>
+              <tbody>${orderRows || '<tr><td colspan="3" class="empty-cell">Sin orden seleccionada.</td></tr>'}</tbody>
+            </table>
+          </div>
         </div>
       </article>`;
 
@@ -513,6 +507,14 @@ export function LineBalancePanel(store) {
   window.addEventListener('resize', () => {
     if (popoverCenterId) positionPopover();
   });
+
+  window.addEventListener(
+    'scroll',
+    () => {
+      if (popoverCenterId) positionPopover();
+    },
+    true,
+  );
 
   periodEl.addEventListener('change', () => {
     periodKey = periodEl.value;

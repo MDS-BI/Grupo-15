@@ -9,7 +9,7 @@ import {
   fmtNumber,
   fmtPercent,
   formatDurationLong,
-  ORDER_STATUS_LABEL,
+  orderStatusBadge,
 } from './format.js';
 import { downloadCsv, printReport } from '../data/exporters/plant-report.js';
 import { decimalInput, parseDecimal } from './numeric-field.js';
@@ -99,7 +99,7 @@ export function PlantPerformancePanel(store, options = {}) {
           <button type="button" class="btn" data-export="pdf">Exportar PDF</button>
         </div>
       </header>
-      <div data-role="body"></div>
+      <div class="performance-body" data-role="body"></div>
       <div class="modal-root" data-role="modal-root"></div>
     </section>`);
 
@@ -127,10 +127,13 @@ export function PlantPerformancePanel(store, options = {}) {
       return `Umbral ${comparison} ${formatIndicator(indicator, setting.threshold)}`;
     };
 
+    const breachedIndicators = new Set(
+      data.thresholds.filter((row) => row.breached).map((row) => row.indicator),
+    );
     const kpis = ['load', 'oee', 'downtime', 'fulfillment']
       .map(
         (indicator) => `
-        <article class="kpi-card" data-kpi="${indicator}">
+        <article class="kpi-card kpi-card--plant ${breachedIndicators.has(indicator) ? 'kpi-card--alert' : ''}" data-kpi="${indicator}">
           <span class="kpi-card__label">${INDICATOR_LABEL[indicator]}</span>
           <span class="kpi-card__value">${formatIndicator(indicator, data.indicators[indicator])}</span>
           <span class="kpi-card__hint">${thresholdHint(indicator)}</span>
@@ -226,8 +229,8 @@ export function PlantPerformancePanel(store, options = {}) {
         const priorityDisabled = !canChangePriority || order.status !== 'planned';
         return `<tr data-order="${escapeHtml(order.id)}">
           <td>${escapeHtml(order.order_number)}</td>
-          <td>${escapeHtml(ORDER_STATUS_LABEL[order.status] || order.status)}</td>
-          <td>
+          <td>${orderStatusBadge(order.status)}</td>
+          <td class="perf-select">
             <select class="priority-select" data-priority="${escapeHtml(order.id)}" ${priorityDisabled ? 'disabled' : ''}>
               ${['low', 'normal', 'high']
                 .map(
@@ -237,20 +240,23 @@ export function PlantPerformancePanel(store, options = {}) {
                 .join('')}
             </select>
           </td>
-          <td><button type="button" class="btn btn--tiny btn--danger" data-cancel="${escapeHtml(order.id)}" ${canCancel ? '' : 'disabled'}>Cancelar</button></td>
+          <td class="perf-action"><button type="button" class="btn btn--tiny btn--danger" data-cancel="${escapeHtml(order.id)}" ${canCancel ? '' : 'disabled'}>Cancelar</button></td>
         </tr>`;
       })
       .join('');
 
     bodyEl.innerHTML = `
-      <div class="kpi-grid">${kpis}</div>
-      <div class="panel-grid">
+      <div class="kpi-grid kpi-grid--plant">${kpis}</div>
+      <div class="panel-grid panel-grid--plant">
         <article class="panel">
           <header class="panel__header"><h3>Alertas de umbral</h3></header>
+          <div class="panel__body">
           <ul class="alarm-list">${alarmRows}</ul>
+          </div>
         </article>
         <article class="panel">
           <header class="panel__header"><h3>Configurar umbral</h3></header>
+          <div class="panel__body">
           <form class="stack-form" data-role="threshold-form">
             <label>Indicador
               <select name="indicator">
@@ -273,10 +279,12 @@ export function PlantPerformancePanel(store, options = {}) {
             <button type="submit" class="btn btn--primary" ${canSetThreshold ? '' : 'disabled'}>Guardar umbral</button>
             <p class="empty-note">${canSetThreshold ? '' : 'El rol simulado no puede modificar umbrales.'}</p>
           </form>
+          </div>
         </article>
       </div>
       <article class="panel">
         <header class="panel__header"><h3>Carga y OEE por centro</h3></header>
+        <div class="panel__body">
         <div class="plant-chart plant-chart--centers" role="group" aria-label="Barras de carga y OEE por centro">
           ${centerChart}
         </div>
@@ -286,9 +294,11 @@ export function PlantPerformancePanel(store, options = {}) {
             <tbody>${centerRows}</tbody>
           </table>
         </div>
+        </div>
       </article>
       <article class="panel">
         <header class="panel__header"><h3>Paradas por motivo</h3></header>
+        <div class="panel__body">
         <div class="plant-chart plant-chart--downtime" role="group" aria-label="Barras de paradas por motivo">
           ${downtimeChart}
         </div>
@@ -298,14 +308,17 @@ export function PlantPerformancePanel(store, options = {}) {
             <tbody>${downtimeRows}</tbody>
           </table>
         </div>
+        </div>
       </article>
       <article class="panel">
         <header class="panel__header"><h3>Acciones sobre órdenes</h3></header>
+        <div class="panel__body">
         <div class="table-wrap table-wrap--plant">
           <table class="data-table plant-table">
             <thead><tr><th>Orden</th><th>Estado</th><th>Prioridad</th><th></th></tr></thead>
             <tbody>${orderRows || '<tr><td colspan="4" class="empty-cell">Sin órdenes accionables.</td></tr>'}</tbody>
           </table>
+        </div>
         </div>
       </article>`;
 

@@ -162,7 +162,9 @@ export function DashboardOverview(store, options = {}) {
           <h2>Actividad reciente</h2>
           <p class="panel__subtitle">Datos simulados para probar la interfaz.</p>
         </header>
-        <ol class="activity-list">${activityRows}</ol>
+        <div class="panel__body">
+          <ol class="activity-list">${activityRows}</ol>
+        </div>
       </section>
 
       <section class="panel">
@@ -170,19 +172,21 @@ export function DashboardOverview(store, options = {}) {
           <h2>Utilización por Centro de Trabajo</h2>
           <p class="panel__subtitle">Carga pendiente vs. capacidad diaria efectiva (operaciones no completadas). Haz clic en un centro para ver sus operaciones.</p>
         </header>
-        <div class="table-wrap">
-          <table class="data-table dashboard-capacity-table">
-            <thead>
-              <tr>
-                <th>Centro de Trabajo</th>
-                <th class="num">Carga Pendiente</th>
-                <th class="num" title="Capacidad efectiva de un solo día = min/día × eficiencia">Capacidad/día (1 día)</th>
-                <th class="num">Operaciones</th>
-                <th title="Carga pendiente de operaciones no completadas ÷ capacidad de 1 día">Utilización</th>
-              </tr>
-            </thead>
-            <tbody>${capacityRows}</tbody>
-          </table>
+        <div class="panel__body">
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Centro de Trabajo</th>
+                  <th class="num">Carga Pendiente</th>
+                  <th class="num">Capacidad/día</th>
+                  <th class="num">Operaciones</th>
+                  <th>Utilización</th>
+                </tr>
+              </thead>
+              <tbody>${capacityRows}</tbody>
+            </table>
+          </div>
         </div>
       </section>
       <div class="center-popover-root" data-role="capacity-popover-root"></div>
@@ -214,6 +218,23 @@ export function DashboardOverview(store, options = {}) {
     popoverRoot.innerHTML = '';
     if (restoreFocus) capacityAnchor?.focus();
     capacityAnchor = null;
+  }
+
+  function positionCapacityPopover() {
+    const popover = popoverRoot.querySelector('[data-role="capacity-popover"]');
+    const section = root.querySelector('.dashboard-capacity-table')?.closest('.panel');
+    if (!popover || !section) return;
+    const sectionRect = section.getBoundingClientRect();
+    const rowRect = capacityAnchor?.getBoundingClientRect?.() ?? sectionRect;
+    const viewportWidth = window.innerWidth || 1024;
+    const viewportHeight = window.innerHeight || 768;
+    const width = popover.offsetWidth || 420;
+    const height = popover.offsetHeight || 260;
+    const centeredLeft = sectionRect.left + sectionRect.width / 2 - width / 2;
+    const left = Math.max(16, Math.min(centeredLeft, viewportWidth - width - 16));
+    const top = Math.max(16, Math.min(rowRect.top, viewportHeight - height - 16));
+    popover.style.left = `${left}px`;
+    popover.style.top = `${top}px`;
   }
 
   function operationRowsFor(workCenterId) {
@@ -264,6 +285,7 @@ export function DashboardOverview(store, options = {}) {
           <tbody>${operationRowsFor(workCenterId)}</tbody>
         </table>
       </div>`;
+    positionCapacityPopover();
     const closeButton = popoverRoot.querySelector('[data-role="close-capacity-popover"]');
     closeButton.addEventListener('click', (event) => {
       event.stopPropagation();
@@ -300,6 +322,18 @@ export function DashboardOverview(store, options = {}) {
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') closeCapacityPopover(true);
   });
+
+  window.addEventListener('resize', () => {
+    if (openCapacityId) positionCapacityPopover();
+  });
+
+  window.addEventListener(
+    'scroll',
+    () => {
+      if (openCapacityId) positionCapacityPopover();
+    },
+    true,
+  );
 
   return root;
 }

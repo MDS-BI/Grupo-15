@@ -32,6 +32,7 @@ export function SupervisorLinePanel(store) {
       <div class="panel-grid">
         <article class="panel">
           <header class="panel__header"><h3>Asignar operador</h3></header>
+          <div class="panel__body">
           <form class="stack-form" data-role="assign-form">
             <label>Centro de trabajo
               <select name="work_center_id">${store.workCenters
@@ -57,10 +58,13 @@ export function SupervisorLinePanel(store) {
             <p class="form-error" data-role="assign-error" role="alert"></p>
             <button type="submit" class="btn btn--primary">Asignar</button>
           </form>
+          </div>
         </article>
         <article class="panel">
           <header class="panel__header"><h3>Cierres pendientes de validación</h3></header>
+          <div class="panel__body">
           <div data-role="closures"></div>
+          </div>
         </article>
       </div>
       <div class="modal-root" data-role="modal-root"></div>
@@ -76,6 +80,7 @@ export function SupervisorLinePanel(store) {
     lightsEl.innerHTML = `
       <div class="panel">
         <header class="panel__header"><h2>Semáforo de planta</h2></header>
+        <div class="panel__body">
         <div class="table-wrap">
           <table class="data-table">
             <thead><tr><th>Centro</th><th>Estado</th><th>Operador asignado</th><th>Operación activa</th><th>Alerta</th></tr></thead>
@@ -102,6 +107,7 @@ export function SupervisorLinePanel(store) {
                 .join('')}
             </tbody>
           </table>
+        </div>
         </div>
       </div>`;
 
@@ -194,7 +200,7 @@ export function SupervisorLinePanel(store) {
         shift_band: data.get('shift_band'),
       });
       assignError.textContent = '';
-      showToast('Operario asignado', { tone: 'success' });
+      showToast('Operador asignado', { tone: 'success' });
       render();
     } catch (err) {
       assignError.textContent = err.message;

@@ -179,7 +179,9 @@ export function ProductionOrders(store) {
     const order = store.orderById(selectedOrderId);
     if (!order) {
       detailEl.innerHTML = `<header class="panel__header"><h2>Detalle</h2></header>
-        <p class="empty-note">Selecciona una orden.</p>`;
+        <div class="panel__body">
+          <p class="empty-note">Selecciona una orden.</p>
+        </div>`;
       return;
     }
     const product = store.productById(order.product_id);
@@ -247,6 +249,7 @@ export function ProductionOrders(store) {
         <h2>${escapeHtml(order.order_number)} ${orderStatusBadge(order.status)}</h2>
         <p class="panel__subtitle">${escapeHtml(product ? product.name : order.product_id)}</p>
       </header>
+      <div class="panel__body">
       <dl class="detail-list">
         <div><dt>Planificado</dt><dd>${fmtNumber(order.quantity_planned)} u</dd></div>
         <div><dt>Producido</dt><dd>${fmtNumber(produced)} u</dd></div>
@@ -284,6 +287,7 @@ export function ProductionOrders(store) {
         <button type="button" class="btn btn--small btn--primary" data-role="output">Registrar Salida</button>
         <button type="button" class="btn btn--small" data-role="open-operator">Estación del operador</button>
         <button type="button" class="btn btn--small" data-role="open-supervisor">Supervisión de línea</button>
+        </div>
       </div>`;
 
     detailEl.querySelectorAll('[data-transition]').forEach((btn) => {

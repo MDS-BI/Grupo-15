@@ -103,9 +103,9 @@ export function OperatorWorkstationPanel(store) {
       .map((delay) => {
         return `<tr data-delay-row="${escapeHtml(delay.id)}">
           <td title="${escapeHtml(delay.id)}">${escapeHtml(stopEventLabel(store, delay))}</td>
-          <td class="cell--nowrap">${formatLocalDate(delay.started_at)}</td>
+          <td class="cell--nowrap delay-start" title="${escapeHtml(delay.started_at)}">${formatLocalDate(delay.started_at)}</td>
           <td class="cell--nowrap">${delay.duration_minutes != null ? formatDurationLong(delay.duration_minutes) : 'Abierto'}</td>
-          <td class="cell--nowrap">${delay.status === 'open' ? '<span class="badge badge--warn">Abierto — pendiente de corrección</span>' : 'Cerrado'}</td>
+          <td class="cell--nowrap">${delay.status === 'open' ? '<span class="badge badge--warn badge--delay-open">Abierto — pendiente de corrección</span>' : 'Cerrado'}</td>
         </tr>`;
       })
       .join('');
@@ -119,11 +119,12 @@ export function OperatorWorkstationPanel(store) {
 
     bodyEl.innerHTML = `
       <div class="operator-layout">
-        <article class="panel">
+        <article class="panel operator-panel operator-panel--operation">
           <header class="panel__header">
             <h2>${escapeHtml(order ? order.order_number : operation.production_order_id)} · ${escapeHtml(workCenter ? workCenter.name : operation.work_center_id)}</h2>
             <p class="panel__subtitle">${escapeHtml(store.productById(order?.product_id)?.name || '')}</p>
           </header>
+          <div class="panel__body">
           <div class="operator-summary">
             <div class="mini-stat"><span class="mini-stat__value" data-role="timer">${formatDurationLong(timerMinutes)}</span><span class="mini-stat__label">Tiempo efectivo del turno</span></div>
             <div class="mini-stat"><span class="mini-stat__value">${formatDurationLong(
@@ -136,10 +137,12 @@ export function OperatorWorkstationPanel(store) {
             <button type="button" class="btn btn--primary" data-role="toggle" aria-pressed="${operation.status === 'in_progress'}" ${operation.status === 'completed' ? 'disabled' : ''}>${toggleText}</button>
           </div>
           <p class="form-error" data-role="error" role="alert"></p>
+          </div>
         </article>
 
-        <article class="panel">
+        <article class="panel operator-panel operator-panel--counters">
           <header class="panel__header"><h3>Contadores</h3></header>
+          <div class="panel__body">
           <div class="counter-grid">
             <section class="counter-block counter-block--shift" aria-label="Contador del turno">
               <span class="counter-block__label">Turno</span>
@@ -163,10 +166,12 @@ export function OperatorWorkstationPanel(store) {
               <span class="counter-block__hint">Total de la operación; no se reinicia por turno.</span>
             </section>
           </div>
+          </div>
         </article>
 
-        <article class="panel">
+        <article class="panel operator-panel operator-panel--delays">
           <header class="panel__header"><h3>Atrasos justificados</h3></header>
+          <div class="panel__body">
           <div class="table-wrap table-wrap--delays">
             <table class="data-table data-table--compact station-delay-table">
               <colgroup>
@@ -199,6 +204,7 @@ export function OperatorWorkstationPanel(store) {
             </div>
           </div>
           <p class="form-error" data-role="delay-error" role="alert"></p>
+          </div>
         </article>
       </div>`;
 
