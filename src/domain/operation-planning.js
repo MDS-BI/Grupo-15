@@ -25,6 +25,24 @@ export function plannedTimeMinutes(operation, quantity) {
  * @param {number} quantity
  * @returns {number}
  */
+export function deriveBomStations(order, { routingOperations = [], workCenters = [] } = {}) {
+  if (!order?.routing_id) return [];
+  const quantity = Number(order.quantity_planned) || 0;
+  return routingOperations
+    .filter((operation) => operation?.routing_id === order.routing_id)
+    .slice()
+    .sort((a, b) => (Number(a.sequence) || 0) - (Number(b.sequence) || 0))
+    .map((operation) => {
+      const center = workCenters.find((workCenter) => workCenter.id === operation.work_center_id);
+      return {
+        work_center_id: operation.work_center_id,
+        name: center?.name || operation.work_center_id,
+        sequence: Number(operation.sequence) || 0,
+        planned_time_minutes: plannedTimeMinutes(operation, quantity),
+      };
+    });
+}
+
 export function totalPlannedTime(operations, quantity) {
   return round2((operations || []).reduce((sum, op) => sum + plannedTimeMinutes(op, quantity), 0));
 }

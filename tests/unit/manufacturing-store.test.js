@@ -316,4 +316,54 @@ describe('ManufacturingStore - persistencia de mantenimiento', () => {
     expect(corrupted.persistenceWarning).toMatch(/corrupto|inválido/);
     expect(corrupted.maintenanceTickets.length).toBeGreaterThan(0);
   });
+
+  it('deriva estaciones BOM al liberar, es idempotente y persiste la dotación', () => {
+    const storage = memoryStorage();
+    const store = new ManufacturingStore({ storage });
+
+    const created = store.createOrder({
+      product_id: 'prod_rueda',
+      bom_id: 'bom_rueda',
+      routing_id: 'rt_rueda',
+      warehouse_id: 'wh_wip',
+      quantity_planned: 5,
+    });
+    expect(store.orderStationsFor(created.id)).toEqual([]);
+    const operationsBefore = JSON.stringify(store.productionOrderOperations);
+    const shiftsBefore = JSON.stringify(store.productionShifts);
+    store.releaseProductionOrder(created.id);
+    const releasedStations = store.orderStationsFor(created.id);
+    expect(releasedStations.map((row) => row.sequence)).toEqual([10, 20]);
+    expect(releasedStations.every((row) => row.source === 'bom_derived')).toBe(true);
+
+    const first = store.ensureBomStationsForOrder('po_3002');
+    expect(first.map((row) => row.work_center_id)).toEqual(['wc_corte', 'wc_armado', 'wc_calidad']);
+    expect(store.ensureBomStationsForOrder('po_3002')).toHaveLength(first.length);
+    expect(store.orderStationsFor('po_3002')).toHaveLength(first.length);
+
+    store.setOrderStationStaffing('po_3002', [
+      {
+        work_center_id: 'wc_corte',
+        sequence: 10,
+        operator_ext_hr_employee_ids: ['emp_op_01', 'emp_op_02'],
+      },
+      { work_center_id: 'wc_armado', sequence: 20, operator_ext_hr_employee_ids: [] },
+    ]);
+    const staffed = store.orderStationsFor('po_3002');
+    expect(staffed).toHaveLength(2);
+    expect(staffed[0].operator_ext_hr_employee_ids).toEqual(['emp_op_01', 'emp_op_02']);
+    expect(staffed[0].source).toBe('manual');
+
+    const raw = JSON.parse(storage.getItem(SNAPSHOT_KEY));
+    expect(raw.version).toBe(2);
+    expect(raw.data.order_stations).toHaveLength(4);
+    expect(JSON.stringify(store.productionOrderOperations)).toBe(operationsBefore);
+    expect(JSON.stringify(store.productionShifts)).toBe(shiftsBefore);
+
+    const reloaded = new ManufacturingStore({ storage });
+    expect(reloaded.orderStationsFor('po_3002').map((row) => row.id)).toEqual(
+      staffed.map((row) => row.id),
+    );
+    expect(reloaded.orderStationsFor(created.id)).toHaveLength(2);
+  });
 });

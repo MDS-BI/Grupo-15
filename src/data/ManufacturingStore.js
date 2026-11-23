@@ -24,7 +24,11 @@ import {
   deriveOrderStatus,
 } from '../domain/order-state-machine.js';
 import { capacityFor } from '../domain/capacity.js';
-import { capacityUtilization, plannedTimeMinutes } from '../domain/operation-planning.js';
+import {
+  capacityUtilization,
+  deriveBomStations,
+  plannedTimeMinutes,
+} from '../domain/operation-planning.js';
 import { buildBomTree, flattenBom } from '../domain/bom-explosion.js';
 import {
   validateBom,
@@ -136,6 +140,8 @@ export class ManufacturingStore extends EventTarget {
 
     this.productionOrders = clone(poFx.productionOrders);
     this.productionOrderOperations = clone(poFx.productionOrderOperations);
+    this.orderStations = clone(poFx.orderStations);
+    this.focusedStationOrderId = null;
     this.materialConsumption = clone(poFx.materialConsumption);
     this.productionOutput = clone(poFx.productionOutput);
 
@@ -192,6 +198,7 @@ export class ManufacturingStore extends EventTarget {
       routingOperations: 'routingOperations',
       productionOrders: 'productionOrders',
       productionOrderOperations: 'productionOrderOperations',
+      order_stations: 'orderStations',
       materialConsumption: 'materialConsumption',
       productionOutput: 'productionOutput',
       maintenanceTickets: 'maintenanceTickets',
@@ -257,6 +264,7 @@ export class ManufacturingStore extends EventTarget {
       routingOperations: this.routingOperations,
       productionOrders: this.productionOrders,
       productionOrderOperations: this.productionOrderOperations,
+      order_stations: this.orderStations,
       materialConsumption: this.materialConsumption,
       productionOutput: this.productionOutput,
       maintenanceTickets: this.maintenanceTickets,
@@ -949,9 +957,122 @@ export class ManufacturingStore extends EventTarget {
     if (to === 'in_progress' && !order.actual_start_date)
       order.actual_start_date = now.slice(0, 10);
     if (to === 'completed' && !order.actual_end_date) order.actual_end_date = now.slice(0, 10);
+    if (to === 'released') this.ensureBomStationsForOrder(orderId);
     this.#persist();
     this.#emit();
     return order;
+  }
+
+  releaseProductionOrder(orderId) {
+    return this.transitionOrder(orderId, 'released');
+  }
+
+  ensureBomStationsForOrder(orderId) {
+    const order = this.orderById(orderId);
+    if (!order) throw new Error(`Orden no encontrada: ${orderId}`);
+    const derived = deriveBomStations(order, {
+      routingOperations: this.routingOperations,
+      workCenters: this.workCenters,
+    });
+    const now = new Date().toISOString();
+    let changed = false;
+    for (const station of derived) {
+      const exists = this.orderStations.some(
+        (row) =>
+          row.production_order_id === order.id &&
+          row.work_center_id === station.work_center_id &&
+          Number(row.sequence) === Number(station.sequence),
+      );
+      if (exists) continue;
+      this.orderStations.push({
+        id: makeId('os'),
+        company_id: order.company_id,
+        production_order_id: order.id,
+        work_center_id: station.work_center_id,
+        sequence: station.sequence,
+        operator_ext_hr_employee_ids: [],
+        source: 'bom_derived',
+        created_at: now,
+        updated_at: now,
+      });
+      changed = true;
+    }
+    if (changed) {
+      this.#persist();
+      this.#emit();
+    }
+    return this.orderStationsFor(orderId);
+  }
+
+  orderStationsFor(orderId) {
+    return this.orderStations
+      .filter((row) => row.production_order_id === orderId)
+      .slice()
+      .sort((a, b) => (Number(a.sequence) || 0) - (Number(b.sequence) || 0));
+  }
+
+  setOrderStationStaffing(orderId, stations) {
+    const order = this.orderById(orderId);
+    if (!order) throw new Error(`Orden no encontrada: ${orderId}`);
+    if (!Array.isArray(stations)) throw new Error('stations debe ser un arreglo.');
+
+    const now = new Date().toISOString();
+    const seen = new Set();
+    const incoming = stations.map((station) => {
+      const workCenterId = String(station?.work_center_id || '').trim();
+      const sequence = Number(station?.sequence);
+      if (!workCenterId || !Number.isInteger(sequence) || sequence < 10) {
+        throw new Error('Cada estación requiere work_center_id y sequence ≥ 10.');
+      }
+      const key = `${order.id}:${workCenterId}:${sequence}`;
+      if (seen.has(key)) throw new Error('No se pueden duplicar estaciones en una orden.');
+      seen.add(key);
+      const ids = Array.isArray(station.operator_ext_hr_employee_ids)
+        ? station.operator_ext_hr_employee_ids.map((id) => String(id)).filter(Boolean)
+        : [];
+      return { workCenterId, sequence, ids: [...new Set(ids)] };
+    });
+
+    const next = incoming.map((station) => {
+      const existing = this.orderStations.find(
+        (row) =>
+          row.production_order_id === order.id &&
+          row.work_center_id === station.workCenterId &&
+          Number(row.sequence) === station.sequence,
+      );
+      if (!existing) {
+        return {
+          id: makeId('os'),
+          company_id: order.company_id,
+          production_order_id: order.id,
+          work_center_id: station.workCenterId,
+          sequence: station.sequence,
+          operator_ext_hr_employee_ids: station.ids,
+          source: 'manual',
+          created_at: now,
+          updated_at: now,
+        };
+      }
+      return {
+        ...existing,
+        operator_ext_hr_employee_ids: station.ids,
+        source: 'manual',
+        updated_at: now,
+      };
+    });
+
+    this.orderStations = this.orderStations
+      .filter((row) => row.production_order_id !== order.id)
+      .concat(next);
+    this.#persist();
+    this.#emit();
+    return this.orderStationsFor(orderId);
+  }
+
+  setSupervisionFocusOrder(orderId) {
+    if (orderId && !this.orderById(orderId)) throw new Error(`Orden no encontrada: ${orderId}`);
+    this.focusedStationOrderId = orderId || null;
+    return this.focusedStationOrderId;
   }
 
   /** Recalcula el estado de la orden a partir de sus operaciones. */

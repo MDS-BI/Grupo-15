@@ -4,6 +4,7 @@ import {
   totalPlannedTime,
   effectiveCapacityPerDay,
   capacityUtilization,
+  deriveBomStations,
 } from '../../src/domain/operation-planning.js';
 
 const op = { setup_time_minutes: 15, run_time_per_unit_minutes: 3 };
@@ -42,5 +43,79 @@ describe('operation-planning', () => {
 
   it('devuelve null cuando el centro no tiene capacidad efectiva', () => {
     expect(capacityUtilization(240, { capacity_per_day_minutes: 0 })).toBeNull();
+  });
+});
+
+describe('deriveBomStations (US-14)', () => {
+  const order = { id: 'po_3002', routing_id: 'rt_bici', quantity_planned: 10 };
+  const routingOperations = [
+    {
+      id: 'ro_bici_3',
+      routing_id: 'rt_bici',
+      work_center_id: 'wc_calidad',
+      sequence: 30,
+      setup_time_minutes: 5,
+      run_time_per_unit_minutes: 2,
+    },
+    {
+      id: 'ro_bici_1',
+      routing_id: 'rt_bici',
+      work_center_id: 'wc_corte',
+      sequence: 10,
+      setup_time_minutes: 15,
+      run_time_per_unit_minutes: 3,
+    },
+    {
+      id: 'ro_bici_2',
+      routing_id: 'rt_bici',
+      work_center_id: 'wc_armado',
+      sequence: 20,
+      setup_time_minutes: 10,
+      run_time_per_unit_minutes: 12,
+    },
+    {
+      id: 'ro_rueda_1',
+      routing_id: 'rt_rueda',
+      work_center_id: 'wc_armado',
+      sequence: 10,
+      setup_time_minutes: 99,
+      run_time_per_unit_minutes: 99,
+    },
+  ];
+  const workCenters = [
+    { id: 'wc_corte', name: 'Estación de Corte' },
+    { id: 'wc_armado', name: 'Línea de Armado' },
+    { id: 'wc_calidad', name: 'Control de Calidad' },
+  ];
+
+  it('deriva estaciones = work_center, ordenadas por secuencia y con tiempo planificado', () => {
+    expect(deriveBomStations(order, { routingOperations, workCenters })).toEqual([
+      {
+        work_center_id: 'wc_corte',
+        name: 'Estación de Corte',
+        sequence: 10,
+        planned_time_minutes: 45,
+      },
+      {
+        work_center_id: 'wc_armado',
+        name: 'Línea de Armado',
+        sequence: 20,
+        planned_time_minutes: 130,
+      },
+      {
+        work_center_id: 'wc_calidad',
+        name: 'Control de Calidad',
+        sequence: 30,
+        planned_time_minutes: 25,
+      },
+    ]);
+  });
+
+  it('usa el id como nombre si el centro no existe y devuelve [] sin ruta', () => {
+    expect(deriveBomStations(order, { routingOperations, workCenters: [] })[0].name).toBe(
+      'wc_corte',
+    );
+    expect(deriveBomStations({ ...order, routing_id: null }, { routingOperations })).toEqual([]);
+    expect(deriveBomStations(order)).toEqual([]);
   });
 });

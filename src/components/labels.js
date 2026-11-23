@@ -17,6 +17,16 @@ export function operationLabel(store, operationOrId) {
   return `Operación ${operation.sequence} · ${center.name}`;
 }
 
+export function workCenterLabel(store, workCenterId) {
+  const center = store?.workCenterById?.(workCenterId);
+  return center?.name ? center.name : fallback(workCenterId);
+}
+
+export function employeeLabel(employeeId) {
+  const employee = hrEmployees.find((row) => row.ext_hr_employee_id === employeeId);
+  return employee?.name ? employee.name : fallback(employeeId);
+}
+
 export function technicianLabel(employeeId) {
   const employee = hrEmployees.find((row) => row.ext_hr_employee_id === employeeId);
   return employee?.name ? employee.name : fallback(employeeId);

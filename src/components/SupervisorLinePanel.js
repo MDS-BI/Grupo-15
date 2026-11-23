@@ -4,7 +4,7 @@
  */
 
 import { escapeHtml, el, fmtNumber } from './format.js';
-import { operationLabel } from './labels.js';
+import { employeeLabel, operationLabel } from './labels.js';
 import { showToast } from './Toast.js';
 
 const LIGHT_LABEL = {
@@ -29,6 +29,7 @@ export function SupervisorLinePanel(store) {
         </div>
       </header>
       <div data-role="lights"></div>
+      <div data-role="station-editor-host"></div>
       <div class="panel-grid">
         <article class="panel">
           <header class="panel__header"><h3>Asignar operador</h3></header>
@@ -71,9 +72,171 @@ export function SupervisorLinePanel(store) {
     </section>`);
 
   const lightsEl = root.querySelector('[data-role="lights"]');
+  const stationEditorHost = root.querySelector('[data-role="station-editor-host"]');
   const closuresEl = root.querySelector('[data-role="closures"]');
   const modalRoot = root.querySelector('[data-role="modal-root"]');
   const assignError = root.querySelector('[data-role="assign-error"]');
+  let stationDraft = null;
+  let editorExpanded = false;
+  let lastFocusedStationOrderId = null;
+
+  function draftRows() {
+    const orderId = store.focusedStationOrderId;
+    if (!orderId) return [];
+    if (!stationDraft) {
+      stationDraft = store.orderStationsFor(orderId).map((row) => ({
+        id: row.id,
+        work_center_id: row.work_center_id,
+        sequence: Number(row.sequence),
+        operator_ext_hr_employee_ids: [...(row.operator_ext_hr_employee_ids || [])],
+      }));
+    }
+    return stationDraft;
+  }
+
+  function renderStationEditor() {
+    const orderId = store.focusedStationOrderId;
+    const order = orderId ? store.orderById(orderId) : null;
+    if (!order) {
+      stationEditorHost.innerHTML = '';
+      return;
+    }
+    if (orderId !== lastFocusedStationOrderId) editorExpanded = true;
+    lastFocusedStationOrderId = orderId;
+    const rows = draftRows();
+    const operators = store.hrEmployees.filter((employee) => employee.role === 'operator');
+    const orderOptions = store.productionOrders
+      .filter((candidate) => candidate.status !== 'cancelled')
+      .map(
+        (candidate) =>
+          `<option value="${escapeHtml(candidate.id)}">${escapeHtml(candidate.order_number)}</option>`,
+      )
+      .join('');
+    const rowsHtml = rows
+      .map((row, index) => {
+        const centers = store.workCenters
+          .map(
+            (center) =>
+              `<option value="${escapeHtml(center.id)}"${row.work_center_id === center.id ? ' selected' : ''}>${escapeHtml(center.name)}</option>`,
+          )
+          .join('');
+        const assigned = new Set(row.operator_ext_hr_employee_ids || []);
+        const workers = operators
+          .map(
+            (employee) =>
+              `<option value="${escapeHtml(employee.ext_hr_employee_id)}"${assigned.has(employee.ext_hr_employee_id) ? ' selected' : ''}>${escapeHtml(employeeLabel(employee.ext_hr_employee_id))}</option>`,
+          )
+          .join('');
+        return `<div class="station-editor__row" data-station-id="${escapeHtml(row.work_center_id)}" data-station-index="${index}">
+          <label>Estación
+            <select data-station-work-center="${index}">${centers}</select>
+          </label>
+          <label>Secuencia
+            <input type="number" min="10" step="10" data-station-sequence="${index}" value="${escapeHtml(String(row.sequence))}" />
+          </label>
+          <label>Trabajadores
+            <select multiple size="4" data-station-operators="${escapeHtml(row.work_center_id)}" data-station-operators-index="${index}">${workers}</select>
+          </label>
+          <button type="button" class="btn btn--tiny btn--danger" data-station-remove="${index}">Quitar</button>
+        </div>`;
+      })
+      .join('');
+
+    stationEditorHost.innerHTML = `
+      <article class="panel station-editor" data-role="station-editor">
+        <header class="panel__header"><h2>Estaciones y trabajadores · ${escapeHtml(order.order_number)}</h2></header>
+        <div class="panel__body">
+          <div class="filter-row station-editor__toolbar">
+            <label>Orden
+              <select data-role="station-order-select">${orderOptions}</select>
+            </label>
+            <button type="button" class="btn btn--tiny" data-role="edit-stations">Editar estaciones y trabajadores</button>
+          </div>
+          ${
+            editorExpanded
+              ? `<div class="station-editor__rows">${rowsHtml || '<p class="empty-note">Sin estaciones. Agregue una estación para esta orden.</p>'}</div>
+                <div class="station-editor__actions">
+                  <button type="button" class="btn btn--tiny" data-role="add-station">Agregar estación</button>
+                  <button type="button" class="btn btn--tiny btn--primary" data-role="save-stations">Guardar estaciones</button>
+                </div>`
+              : '<p class="empty-note">Presione “Editar estaciones y trabajadores” para ajustar la dotación.</p>'
+          }
+          <p class="form-error" data-role="station-error" role="alert"></p>
+        </div>
+      </article>`;
+
+    const orderSelect = stationEditorHost.querySelector('[data-role="station-order-select"]');
+    orderSelect.value = orderId;
+    orderSelect.addEventListener('change', () => {
+      store.setSupervisionFocusOrder(orderSelect.value);
+      stationDraft = null;
+      renderStationEditor();
+    });
+    stationEditorHost.querySelector('[data-role="edit-stations"]').addEventListener('click', () => {
+      editorExpanded = true;
+      renderStationEditor();
+    });
+    stationEditorHost.querySelectorAll('[data-station-work-center]').forEach((select) => {
+      select.addEventListener('change', () => {
+        draftRows()[Number(select.dataset.stationWorkCenter)].work_center_id = select.value;
+        renderStationEditor();
+      });
+    });
+    stationEditorHost.querySelectorAll('[data-station-sequence]').forEach((input) => {
+      input.addEventListener('change', () => {
+        draftRows()[Number(input.dataset.stationSequence)].sequence = Number(input.value);
+      });
+    });
+    stationEditorHost.querySelectorAll('[data-station-operators-index]').forEach((select) => {
+      select.addEventListener('change', () => {
+        draftRows()[Number(select.dataset.stationOperatorsIndex)].operator_ext_hr_employee_ids =
+          Array.from(select.selectedOptions).map((option) => option.value);
+      });
+    });
+    stationEditorHost.querySelectorAll('[data-station-remove]').forEach((button) => {
+      button.addEventListener('click', () => {
+        draftRows().splice(Number(button.dataset.stationRemove), 1);
+        renderStationEditor();
+      });
+    });
+    const addButton = stationEditorHost.querySelector('[data-role="add-station"]');
+    if (addButton) {
+      addButton.addEventListener('click', () => {
+        const current = draftRows();
+        const nextSequence = current.length
+          ? Math.max(...current.map((row) => Number(row.sequence) || 0)) + 10
+          : 10;
+        current.push({
+          work_center_id: store.workCenters[0]?.id || '',
+          sequence: nextSequence,
+          operator_ext_hr_employee_ids: [],
+        });
+        renderStationEditor();
+      });
+    }
+    const saveButton = stationEditorHost.querySelector('[data-role="save-stations"]');
+    if (saveButton) {
+      saveButton.addEventListener('click', () => {
+        const errorEl = stationEditorHost.querySelector('[data-role="station-error"]');
+        try {
+          store.setOrderStationStaffing(
+            orderId,
+            draftRows().map((row) => ({
+              work_center_id: row.work_center_id,
+              sequence: Number(row.sequence),
+              operator_ext_hr_employee_ids: row.operator_ext_hr_employee_ids,
+            })),
+          );
+          errorEl.textContent = '';
+          stationDraft = null;
+          showToast('Estaciones guardadas', { tone: 'success' });
+          renderStationEditor();
+        } catch (err) {
+          errorEl.textContent = err.message;
+        }
+      });
+    }
+  }
 
   function renderLights() {
     const rows = store.trafficLightForWorkCenters();
@@ -208,7 +371,9 @@ export function SupervisorLinePanel(store) {
   });
 
   function render() {
+    stationDraft = null;
     renderLights();
+    renderStationEditor();
     renderClosures();
   }
 

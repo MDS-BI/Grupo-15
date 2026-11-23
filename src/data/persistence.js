@@ -20,6 +20,7 @@ import { ROLE_USERS, ROLE_USER_COLLECTION_KEYS } from './fixtures/demo-accounts.
 import { preventiveMaintenanceOrders } from './fixtures/preventive-maintenance-orders.js';
 import {
   materialConsumption,
+  orderStations,
   productionOrderOperations,
   productionOrders,
   productionOutput,
@@ -47,6 +48,7 @@ const COLLECTION_KEYS = [
   'routingOperations',
   'productionOrders',
   'productionOrderOperations',
+  'order_stations',
   'materialConsumption',
   'productionOutput',
   'productionShifts',
@@ -281,6 +283,7 @@ export function createFixtureSnapshot() {
     routingOperations: cloneFixture(routingOperations),
     productionOrders: cloneFixture(productionOrders),
     productionOrderOperations: cloneFixture(productionOrderOperations),
+    order_stations: cloneFixture(orderStations),
     materialConsumption: cloneFixture(materialConsumption),
     productionOutput: cloneFixture(productionOutput),
     maintenanceTickets: cloneFixture(maintenanceTickets),

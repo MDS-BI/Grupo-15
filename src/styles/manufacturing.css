@@ -3533,6 +3533,121 @@ select:not([hidden]) {
   color: var(--erp-muted);
 }
 
+.calendar-dialog__stations {
+  margin-top: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--erp-border);
+}
+
+.calendar-dialog__stations-title {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.calendar-dialog__stations-hint {
+  margin: 0.25rem 0 0.6rem;
+  font-size: 0.78rem;
+  color: var(--erp-muted);
+}
+
+.calendar-dialog__station-list {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.calendar-dialog__station {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--erp-border);
+  border-radius: 8px;
+  background: var(--erp-soft);
+  font-size: 0.82rem;
+}
+
+.calendar-dialog__station-sequence {
+  padding: 0.15rem 0.4rem;
+  border-radius: 999px;
+  background: var(--erp-surface);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.calendar-dialog__station-name {
+  font-weight: 600;
+}
+
+.calendar-dialog__station-workers {
+  color: var(--erp-muted);
+  white-space: nowrap;
+}
+
+.calendar-dialog__stations-actions {
+  margin-top: 0.75rem;
+}
+
+.station-editor {
+  margin-top: 1rem;
+}
+
+.station-editor__toolbar {
+  margin-bottom: 0.75rem;
+}
+
+.station-editor__toolbar label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.station-editor__rows {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.station-editor__row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.4fr) minmax(90px, 0.6fr) minmax(180px, 1.4fr) auto;
+  align-items: end;
+  gap: 0.6rem;
+  padding: 0.6rem;
+  border: 1px solid var(--erp-border);
+  border-radius: 8px;
+}
+
+.station-editor__row label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.station-editor__row select,
+.station-editor__row input {
+  min-height: 34px;
+  padding: 0 0.45rem;
+  border: 1px solid var(--erp-border);
+  border-radius: 6px;
+  font: inherit;
+}
+
+.station-editor__row select[multiple] {
+  min-height: 76px;
+  padding: 0.25rem;
+}
+
+.station-editor__actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.85rem;
+}
+
 .scheduling-focus-backdrop {
   position: fixed;
   inset: 0;

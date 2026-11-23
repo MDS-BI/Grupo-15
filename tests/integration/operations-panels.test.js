@@ -4,6 +4,7 @@ import { ManufacturingStore } from '../../src/data/ManufacturingStore.js';
 import { OperatorWorkstationPanel } from '../../src/components/OperatorWorkstationPanel.js';
 import { SupervisorLinePanel } from '../../src/components/SupervisorLinePanel.js';
 import { ProductionOrders } from '../../src/components/ProductionOrders.js';
+import { CalendarEventDialog } from '../../src/components/calendar/CalendarEventDialog.js';
 
 function memoryStorage() {
   const map = new Map();
@@ -270,5 +271,97 @@ describe('Integración de estación y supervisión en órdenes (T021/T031)', () 
     expect(document.querySelector('[data-role="embedded-body"]').textContent).toContain(
       'Supervisión de Línea',
     );
+  });
+});
+
+describe('Estaciones derivadas del BOM (US-14)', () => {
+  function orderEvent() {
+    const order = store.orderById('po_3002');
+    return {
+      kind: 'order',
+      sourceId: order.id,
+      title: `${order.order_number} · Bicicleta`,
+      status: order.status,
+      priority: order.priority,
+      start_date: order.planned_start_date,
+      end_date: order.planned_end_date,
+      start_time: '08:00',
+      end_time: '16:00',
+      work_center_id: 'wc_corte',
+      work_center_name: 'Estación de Corte',
+      operator_name: 'Diego Fuentes',
+    };
+  }
+
+  it('muestra Secuencia <N> sin doble numeración y abre la edición solo para roles permitidos', () => {
+    store.ensureBomStationsForOrder('po_3002');
+    store.setOrderStationStaffing('po_3002', [
+      {
+        work_center_id: 'wc_corte',
+        sequence: 10,
+        operator_ext_hr_employee_ids: ['emp_op_01', 'emp_op_02'],
+      },
+      {
+        work_center_id: 'wc_armado',
+        sequence: 20,
+        operator_ext_hr_employee_ids: ['emp_op_03'],
+      },
+      {
+        work_center_id: 'wc_calidad',
+        sequence: 30,
+        operator_ext_hr_employee_ids: [],
+      },
+    ]);
+    const event = orderEvent();
+
+    document.body.appendChild(CalendarEventDialog({ event, role: 'supervisor', store }));
+    const stations = document.querySelectorAll('[data-role="order-station"]');
+    expect(stations).toHaveLength(3);
+    expect(stations[0].getAttribute('title')).toContain('Estación de Corte');
+    expect(stations[0].textContent).toContain('Secuencia 10');
+    expect(stations[0].textContent).toContain('2 trabajadores');
+    expect(stations[0].textContent).not.toMatch(/\b1\.\s/);
+
+    click('[data-role="edit-stations"]');
+    expect(window.location.hash).toBe('#/supervision');
+    expect(store.focusedStationOrderId).toBe('po_3002');
+
+    document.body.innerHTML = '';
+    document.body.appendChild(CalendarEventDialog({ event, role: 'planner', store }));
+    expect(document.querySelector('[data-role="edit-stations"]')).toBeNull();
+  });
+
+  it('edita dotación desde supervisión y mantiene órdenes sin controles de dotación', () => {
+    store.ensureBomStationsForOrder('po_3002');
+    store.focusedStationOrderId = 'po_3002';
+    document.body.appendChild(SupervisorLinePanel(store));
+
+    expect(document.querySelector('[data-role="station-editor"]')).toBeTruthy();
+    expect(document.body.textContent).toContain('OP-3002');
+    expect(document.querySelectorAll('[data-station-id]')).toHaveLength(3);
+
+    const operatorSelect = document.querySelector('[data-station-operators="wc_calidad"]');
+    expect(operatorSelect).toBeTruthy();
+    Array.from(operatorSelect.options).forEach((option) => {
+      option.selected = option.value === 'emp_op_04';
+    });
+    operatorSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
+    click('[data-role="save-stations"]');
+
+    const calidad = store
+      .orderStationsFor('po_3002')
+      .find((row) => row.work_center_id === 'wc_calidad');
+    expect(calidad.operator_ext_hr_employee_ids).toEqual(['emp_op_04']);
+    expect(document.body.textContent).toContain('Estaciones guardadas');
+
+    document.body.innerHTML = '';
+    document.body.appendChild(ProductionOrders(store));
+    expect(document.querySelector('[data-role="kanban-search"]')).toBeTruthy();
+    expect(document.querySelector('[data-role="kanban-priority"]')).toBeTruthy();
+    expect(
+      document.querySelector(
+        '[data-role="station-editor"], [data-role="edit-stations"], [data-role="order-station"], [data-station-id], [data-station-operators]',
+      ),
+    ).toBeNull();
   });
 });

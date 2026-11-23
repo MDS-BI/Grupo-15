@@ -397,3 +397,5 @@ export const productionOutput = [
     recorded_by: null,
   },
 ];
+
+export const orderStations = [];

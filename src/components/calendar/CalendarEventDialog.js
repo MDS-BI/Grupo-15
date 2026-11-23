@@ -1,6 +1,7 @@
 import { el, escapeHtml, formatLocalDate, ORDER_STATUS_LABEL, PRIORITY_LABEL } from '../format.js';
 import { icon } from '../icons.js';
 import { showToast } from '../Toast.js';
+import { workCenterLabel } from '../labels.js';
 import { canEditOrderSchedule } from '../../domain/calendar-scheduling.js';
 
 const SC08_NOTE = 'solo contexto operativo — no evaluación de desempeño';
@@ -31,6 +32,23 @@ export function CalendarEventDialog({ event, role = 'planner', store, onBack } =
   const personLabel = isOrder ? 'Operador' : 'Técnico';
   const personName = isOrder ? event.operator_name : event.technician_name;
   const personFallback = isOrder ? 'sin operador asignado' : 'sin técnico asignado';
+  const canEditStations = isOrder && ['supervisor', 'plant_manager'].includes(role);
+  const stations =
+    isOrder && typeof store?.orderStationsFor === 'function'
+      ? store.orderStationsFor(event.sourceId)
+      : [];
+  const stationRows = stations
+    .map((station) => {
+      const name = workCenterLabel(store, station.work_center_id);
+      const workers = station.operator_ext_hr_employee_ids?.length || 0;
+      const title = `Estación derivada de la ruta/BOM · ${name} · Secuencia ${station.sequence}`;
+      return `<li class="calendar-dialog__station" data-role="order-station" title="${escapeHtml(title)}">
+        <span class="calendar-dialog__station-sequence">Secuencia ${escapeHtml(String(station.sequence))}</span>
+        <span class="calendar-dialog__station-name">${escapeHtml(name)}</span>
+        <span class="calendar-dialog__station-workers">${workers} trabajador${workers === 1 ? '' : 'es'}</span>
+      </li>`;
+    })
+    .join('');
 
   const root = el(`
     <section class="calendar-dialog" data-role="event-dialog" aria-label="Detalle de tarea" draggable="false">
@@ -61,6 +79,22 @@ export function CalendarEventDialog({ event, role = 'planner', store, onBack } =
           ${detailRow(personLabel, escapeHtml(displayName(personName, role, personFallback)))}
         </dl>
         ${
+          isOrder && stationRows
+            ? `<div class="calendar-dialog__stations">
+                <h3 class="calendar-dialog__stations-title">Estaciones de la orden</h3>
+                <p class="calendar-dialog__stations-hint">Secuencia según receta/ruta; una estación equivale a una máquina.</p>
+                <ul class="calendar-dialog__station-list">${stationRows}</ul>
+              </div>`
+            : ''
+        }
+        ${
+          canEditStations
+            ? `<div class="calendar-dialog__stations-actions">
+                <button type="button" class="btn btn--tiny" data-role="edit-stations">${icon('supervision')} Editar estaciones y trabajadores</button>
+              </div>`
+            : ''
+        }
+        ${
           role === 'supervisor'
             ? `<p class="calendar-dialog__privacy" data-role="sc08-note">Nombres reales con fines de ${SC08_NOTE}.</p>`
             : ''
@@ -90,6 +124,14 @@ export function CalendarEventDialog({ event, role = 'planner', store, onBack } =
   root.querySelector('[data-role="event-back"]').addEventListener('click', () => {
     if (typeof onBack === 'function') onBack();
   });
+
+  if (canEditStations) {
+    root.querySelector('[data-role="edit-stations"]').addEventListener('click', () => {
+      store.setSupervisionFocusOrder(event.sourceId);
+      const location = root.ownerDocument?.defaultView?.location || globalThis.location;
+      if (location) location.hash = '#/supervision';
+    });
+  }
 
   if (editable) {
     root.querySelector('[data-dialog-save]').addEventListener('click', () => {
