@@ -543,3 +543,187 @@ Tras la Fase 2, un equipo puede dividir: persona A en US-06/US-07, persona B en 
 - El panel de planta agrega siempre por centro de trabajo y operación, sin rankings individuales.
 - AC-46 comparte FR-06 y US-11: la utilización diaria se calcula una sola vez y se consume tanto en el Panel de Producción como en “Carga por centro”.
 - T115–T118 y T124–T126 son IDs retirados durante la consolidación de Fases 18/19; no representan trabajo pendiente.
+
+---
+
+## Fase 25: Historia de Usuario US-12 - Sistema Multi-Rol (Prioridad: P1)
+
+**Objetivo**: incorporar el quinto rol `maintenance`, cinco tablas de usuarios persistidas en `erp.manufacturing.v2`, `RoleAdminPanel.js`, un selector superior filtrado y privacidad por rol, sin duplicar selectores ni cambiar rutas existentes.
+
+**Prueba Independiente**: iniciar sesión con `jefa/jefa`, `supervisor/supervisor`, `planificador/planificador`, `operador/operador` y `mantenimiento/mantenimiento`; `test/test` ve cinco roles, `doble/doble` solo `operator`/`maintenance`, `usuario` falla; dar de alta un usuario en `#/admin-roles` y verificar que tras logout/login aparece en el selector superior y en `#/roles`.
+
+### Pruebas para US-12
+
+- [X] T160 [P] [US12] Crear `tests/unit/role-access.test.js` con casos fallidos para `CANONICAL_ROLES`, `rolesForUsername`, `modulesForRoles`, `isModuleAllowedForRoles`, `visibleEmployeeNamesFor`, `visibleTechnicianNamesFor` y `roleLabel`, incluyendo `test` en cinco roles, `doble` en dos y cuenta con un solo rol sin selector.
+- [X] T161 [P] [US12] Ampliar `tests/unit/access-control.test.js` con casos fallidos para `maintenance`, supervisor sin `orders`, operator exactamente `['operator', 'scheduling', 'roles']`, maintenance exactamente `['maintenance', 'scheduling']` e IDs de ruta inalterados.
+- [X] T162 [P] [US12] Ampliar `tests/integration/login-shell.test.js` con login de las cinco cuentas canónicas, `test` y `doble`, rechazo de `usuario`, persistencia tras logout/recarga y existencia de un único `<select data-role="role-select">` en `src/manufacturing-main.js`.
+- [X] T163 [P] [US12] Crear `tests/integration/role-admin-panel.test.js` con alta de usuario y asignación de roles en `#/admin-roles`, acceso exclusivo de `plant_manager`, persistencia en `src/data/fixtures/demo-accounts.js` y aparición de nuevos roles en el menú superior y `#/roles` tras logout/login.
+
+### Implementación para US-12
+
+- [X] T164 [US12] Crear `src/domain/role-access.js` con `CANONICAL_ROLES`, `rolesForUsername(roleUsers, username)`, `modulesForRoles(roles)`, `isModuleAllowedForRoles(roles, moduleId)`, `visibleEmployeeNamesFor(role)`, `visibleTechnicianNamesFor(role)` y `roleLabel(role)` (depende de T160).
+- [X] T165 [US12] Extender `src/domain/access-control.js` con `maintenance` en `USER_ROLES`, `ROLE_ORDER`, `ROLE_LABELS`, `ROLE_DESCRIPTIONS`, `ROLE_HOME_MODULE`, `MODULE_GROUPS` y `MODULE_ACCESS`, quitando `orders` a supervisor y aplicando los listados exactos de operator y maintenance (depende de T161).
+- [X] T166 [US12] Extender `src/data/fixtures/demo-accounts.js` con `role_users_plant_manager`, `role_users_supervisor`, `role_users_planner`, `role_users_operator` y `role_users_maintenance`, credenciales `jefa/jefa`, `supervisor/supervisor`, `planificador/planificador`, `operador/operador`, `mantenimiento/mantenimiento`, `test/test` en las cinco tablas y `doble/doble` en operator y maintenance (depende de T162).
+- [X] T167 [US12] Extender `src/data/persistence.js` para validar, hidratar con arreglos vacíos y serializar en `erp.manufacturing.v2` las cinco colecciones de `src/data/fixtures/demo-accounts.js`, sin invalidar snapshots existentes (depende de T166).
+- [X] T168 [US12] Extender `src/data/ManufacturingStore.js` con `roleUsersFor`, `rolesForUsername`, `addRoleUser`, `assignRoleToUser` y restauración de las cinco tablas en `resetDemoData()`, emitiendo `change` y persistiendo cada mutación (depende de T167).
+- [X] T169 [US12] Crear `src/components/RoleAdminPanel.js` para reemplazar `adminRolesView()` en `#/admin-roles`, mostrando las cinco tablas, altas y asignaciones de roles con `showToast` de `src/components/Toast.js` y confirmación de `src/components/ConfirmDialog.js` cuando corresponda (depende de T163 y T168).
+- [X] T170 [US12] Integrar en `src/manufacturing-main.js` la resolución de roles desde `src/domain/role-access.js`, el selector superior único con `rolesForUsername(username).length > 1`, la navegación filtrada por `MODULE_ACCESS`, el rechazo de URLs no permitidas y el retorno al login al cerrar sesión o recargar (depende de T164, T165, T168 y T169).
+- [X] T171 [US12] Añadir en `src/styles/manufacturing.css` los estilos del selector superior, las cinco tablas de `src/components/RoleAdminPanel.js`, las insignias de rol y el estado oculto del selector con un solo rol, sin librerías externas (depende de T169 y T170).
+- [X] T172 [US12] Ejecutar `npm test -- --run tests/unit/role-access.test.js tests/unit/access-control.test.js tests/integration/login-shell.test.js tests/integration/role-admin-panel.test.js` y `npm run lint` sobre `src/`; verificar en `src/manufacturing-main.js` que no exista otro selector de rol y que los IDs de ruta de FR-18 permanezcan intactos.
+
+**Punto de control**: US-12 es comprobable de forma aislada; los cinco roles, sus cuentas y `MODULE_ACCESS` sobreviven a logout/login y `#/admin-roles` solo es accesible para jefa.
+
+---
+
+## Fase 26: Historia de Usuario US-13 - Calendario Mensual por Rol (Prioridad: P2)
+
+**Objetivo**: reestructurar `#/scheduling` como Calendario Mensual con Modo Selección de Horario de 08:00 a 16:00, bandeja de urgencia crítica, menú diario por tarea y vistas específicas por rol, sin librerías externas.
+
+**Prueba Independiente**: como `planificador`, abrir `#/scheduling` en el mes actual, arrastrar desde un día hasta otro, soltar y guardar el rango con horas `08:00`/`16:00` editables; cancelar con clic derecho sin popup; como `supervisor`, abrir el menú de un día, elegir una tarea, volver a la lista y confirmar que no hay inputs ni botones de guardar.
+
+### Pruebas para US-13
+
+- [ ] T173 [P] [US13] Crear `tests/unit/calendar-scheduling.test.js` con casos fallidos para `buildCalendarRange`, `calendarEventsForMonth`, `filterCalendarEvents`, `sortPendingOrders`, `canEditOrderSchedule` y `canViewOrderDetails`, incluyendo filtro `"Ambos"` por defecto y orden por `is_critical_urgent`/prioridad.
+- [ ] T174 [P] [US13] Ampliar `tests/unit/order-scheduling.test.js` con validación fallida de `scheduled_start_time`/`scheduled_end_time` en formato `HH:mm`, error `hora_invalida`, error `rango_horario_invertido` y conservación de errores `fecha_invalida`/`rango_invertido`.
+- [ ] T175 [P] [US13] Ampliar `tests/integration/plant-scheduling-panels.test.js` con casos fallidos de mes actual, memoria del mes entre pestañas, filtros, bandeja solo para planner/jefa, foco, arrastre con `.calendar-day--drag-range`, `contextmenu` cancelado y menú diario por tarea.
+- [ ] T176 [P] [US13] Crear `tests/integration/calendar-event-dialog.test.js` con casos fallidos para “Volver a la lista del día”, detalle de orden/mantención, ausencia de inputs para supervisor y solo lectura para operator.
+
+### Implementación para US-13
+
+- [ ] T177 [US13] Crear `src/domain/calendar-scheduling.js` con las funciones de `tests/unit/calendar-scheduling.test.js`, unificando órdenes y mantenimientos programados sin duplicar preventivas con `source_ticket_id` (depende de T173).
+- [ ] T178 [US13] Extender `src/domain/order-scheduling.js` para que `validatePlannedDates` acepte y valide `scheduled_start_time`/`scheduled_end_time` con valores por defecto `08:00`/`16:00` y `end > start` (depende de T174).
+- [ ] T179 [US13] Extender `src/data/ManufacturingStore.js` con `pendingSchedulingOrders()`, `calendarEventsForMonth(month)`, `scheduleOrderRange(orderId, payload)`, `setOrderPriority(orderId, priority)` y `setCriticalUrgent(orderId, flag)`, restringiendo las dos últimas a `plant_manager` y emitiendo `change` (depende de T177 y T178).
+- [ ] T180 [US13] Extender `src/data/persistence.js` con valores por defecto `is_critical_urgent: false`, `scheduled_start_time: '08:00'`, `scheduled_end_time: '16:00'` y fechas programadas de tickets/preventivas al hidratar `erp.manufacturing.v2` (depende de T179).
+- [ ] T181 [US13] Extender `src/components/ProductionSchedulingPanel.js` con grid CSS mensual de `.calendar-day`, filtro superior `"Ambos" | "Solo Órdenes de Trabajo" | "Solo Mantenciones"`, bandeja “Pendiente de horario” con `% de avance` y controles de prioridad/urgencia crítica solo para `plant_manager` (depende de T175 y T179).
+- [ ] T182 [US13] Extender `src/components/ProductionSchedulingPanel.js` con el Modo Selección de Horario: clic izquierdo simple en la bandeja aplica `.scheduling-focus-backdrop` y `.scheduling-floating-card` siguiendo el cursor, aviso de clic derecho bajo la cuadrícula, arrastre con `mousedown`/`mouseenter`/`mouseover`, `mouseup` con popup `08:00`/`16:00` editables y `contextmenu` con `preventDefault()` sin popup (depende de T181).
+- [ ] T183 [US13] Crear `src/components/calendar/CalendarEventDialog.js` con detalle de orden o mantención, botón “Volver a la lista del día”, acciones por rol y uso de `src/components/format.js`, `src/components/icons.js` y `src/components/Toast.js` (depende de T176).
+- [ ] T184 [US13] Integrar `src/components/calendar/CalendarEventDialog.js` en `src/components/ProductionSchedulingPanel.js` para el menú de planner/jefa/supervisor, resumen ejecutivo de jefa, etiqueta SC-08 y alerta de órdenes sin operador para supervisor, y vista de solo lectura para operator sin pestaña “Listado” (depende de T181, T182 y T183).
+- [ ] T185 [US13] Añadir en `src/styles/manufacturing.css` los estilos del grid mensual, celdas, indicadores por día, bandeja, tarjeta flotante, backdrop, rango de arrastre y diálogo, conservando `data-role="rows"`, `[data-summary]` y `[data-error]` (depende de T184).
+- [ ] T186 [US13] Ejecutar `npm test -- --run tests/unit/calendar-scheduling.test.js tests/unit/order-scheduling.test.js tests/integration/plant-scheduling-panels.test.js tests/integration/calendar-event-dialog.test.js` y `npm run lint` sobre `src/`; verificar que `vitest.config.mjs` no cambió y que el mes vuelve al actual al cambiar de identidad, logout o recarga.
+
+**Punto de control**: US-13 es comprobable de forma aislada; el calendario respeta roles, el arrastre guarda horas válidas y el menú diario permite volver sin mutar datos.
+
+---
+
+## Fase 27: Historia de Usuario US-14 - Estaciones Derivadas del BOM (Prioridad: P2)
+
+**Objetivo**: derivar estaciones/máquinas desde la receta del BOM con `deriveBomStations`, mostrar “Secuencia <N>” en el detalle diario, concentrar la edición en `SupervisorLinePanel.js` y dejar `ProductionOrders.js` sin controles de dotación.
+
+**Prueba Independiente**: liberar una orden, verificar que `order_stations` se genera de forma idempotente desde la ruta, abrir su detalle diario y confirmar una sola numeración “Secuencia <N>” con cantidad de trabajadores; presionar “Editar estaciones y trabajadores” para abrir `#/supervision` con esa orden y persistir altas/bajas; confirmar que `#/orders` conserva buscador y filtro de prioridad sin esos controles.
+
+### Pruebas para US-14
+
+- [ ] T187 [P] [US14] Ampliar `tests/unit/operation-planning.test.js` con casos fallidos para `deriveBomStations(order, { routingOperations, workCenters })`, orden ascendente por secuencia, reutilización de `plannedTimeMinutes` y estación igual a `work_center`.
+- [ ] T188 [P] [US14] Ampliar `tests/unit/manufacturing-store.test.js` con casos fallidos de `ensureBomStationsForOrder`, `orderStationsFor` y `setOrderStationStaffing`, incluyendo idempotencia por `(production_order_id, work_center_id, sequence)` y persistencia en `src/data/fixtures/production-orders.js`.
+- [ ] T189 [P] [US14] Ampliar `tests/integration/operations-panels.test.js` con el botón “Editar estaciones y trabajadores” en `src/components/calendar/CalendarEventDialog.js`, la apertura de esa orden en `src/components/SupervisorLinePanel.js` y la ausencia de controles de estaciones/operadores en `src/components/ProductionOrders.js`.
+
+### Implementación para US-14
+
+- [ ] T190 [US14] Agregar `deriveBomStations(order, { routingOperations = [], workCenters = [] } = {})` en `src/domain/operation-planning.js`, devolviendo `{ work_center_id, name, sequence, planned_time_minutes }` ordenado por secuencia y sin modificar `src/domain/capacity.js` (depende de T187).
+- [ ] T191 [US14] Extender `src/data/persistence.js` y `src/data/ManufacturingStore.js` con la colección `order_stations`, `ensureBomStationsForOrder` invocado desde `releaseProductionOrder`, `orderStationsFor` y `setOrderStationStaffing` con `source` `bom_derived`/`manual` (depende de T188).
+- [ ] T192 [US14] Extender `src/components/calendar/CalendarEventDialog.js` para mostrar cada estación como `Secuencia <N>` con `title` explicativo, nombre resuelto desde `src/components/labels.js` y cantidad de trabajadores, sin doble numeración visual en la misma fila (depende de T183 y T189).
+- [ ] T193 [US14] Extender `src/components/SupervisorLinePanel.js` con el editor de estaciones/trabajadores de la orden, botón “Editar estaciones y trabajadores”, redirección a `#/supervision`, altas/bajas persistentes vía `setOrderStationStaffing` y confirmación con `src/components/Toast.js` (depende de T191 y T189).
+- [ ] T194 [US14] Verificar y ajustar `src/components/ProductionOrders.js` para conservar únicamente creación/gestión de órdenes, buscador y filtro de prioridad, eliminando cualquier control de estaciones u operadores introducido por fases anteriores (depende de T189).
+- [ ] T195 [US14] Añadir en `src/styles/manufacturing.css` los estilos de la etiqueta `Secuencia <N>`, el `title` explicativo, la lista de trabajadores y el editor de `src/components/SupervisorLinePanel.js`, sin duplicar contadores visuales (depende de T192 y T193).
+- [ ] T196 [US14] Ejecutar `npm test -- --run tests/unit/operation-planning.test.js tests/unit/manufacturing-store.test.js tests/integration/operations-panels.test.js` y `npm run lint` sobre `src/`; verificar que `production_order_operations`, `shift_assignments` y `src/domain/capacity.js` no cambiaron.
+
+**Punto de control**: US-14 es comprobable de forma aislada; las estaciones salen del BOM, la edición vive solo en supervisión y `#/orders` permanece limpio.
+
+---
+
+## Fase 28: Historia de Usuario US-15 - Panel de Mantenimiento en 3 Subpestañas (Prioridad: P2)
+
+**Objetivo**: reorganizar `MaintenancePanel.js` en “Máquinas”, “Tickets” y “Mantenimientos”, programar desde tickets, sincronizar tres bloques buscables con el calendario y resolver con fecha/hora actual en el popup, respetando inmutabilidad y permisos.
+
+**Prueba Independiente**: programar una mantención desde un ticket y verla en “Activos” y en el calendario; dejar vencer una preventiva sin que se cierre sola; abrir una activa como `maintenance`, presionar “Resolver” y confirmar el mensaje exacto con hora actual editable; intentar resolver de nuevo y confirmar solo lectura; eliminar una histórica con `ConfirmDialog.js` y verificar que desaparece de `v2` y del calendario.
+
+### Pruebas para US-15
+
+- [ ] T197 [P] [US15] Crear `tests/unit/scheduled-maintenance.test.js` con casos fallidos para `computeCorrectiveDowntime`, `effectiveMaintenanceEnd`, `canResolveScheduledMaintenance`, `canRescheduleMaintenance`, `canEditMaintenanceFrequency` y `buildScheduledMaintenanceFromTicket`.
+- [ ] T198 [P] [US15] Ampliar `tests/unit/maintenance.test.js` con casos fallidos de parada automática sin ingreso manual, preventiva vencida que no se cierra sola, fecha visible extendida hasta hoy y acortada a la resolución real.
+- [ ] T199 [P] [US15] Ampliar `tests/integration/maintenance-panel.test.js` con las tres subpestañas exactas, búsqueda por máquina/código en cada bloque, “Revisar históricas” prellenado, programación desde ticket y borrado confirmado.
+- [ ] T200 [P] [US15] Ampliar `tests/integration/calendar-event-dialog.test.js` con resolución exclusiva de `maintenance`, mensaje exacto “¿Está seguro que quiere resolver esta mantención?”, `datetime-local` prellenado con la hora actual al hacer clic y evento resuelto sin botón.
+
+### Implementación para US-15
+
+- [ ] T201 [US15] Extender `src/domain/maintenance.js` con `computeCorrectiveDowntime`, `effectiveMaintenanceEnd`, `canResolveScheduledMaintenance`, `canRescheduleMaintenance`, `canEditMaintenanceFrequency` y `buildScheduledMaintenanceFromTicket`, sin cambiar `resolveMaintenanceTicket` de US-09 (depende de T197 y T198).
+- [ ] T202 [US15] Extender `src/data/ManufacturingStore.js` con `maintenanceFeed()`, `scheduleMaintenanceFromTicket`, `schedulePreventiveMaintenance`, `setRecommendedMaintenanceFrequency`, `resolveScheduledMaintenance` y `deleteResolvedMaintenance`, pasando ticket a `in_progress` y máquina a `fault` y bloqueando reedición de resueltas (depende de T201).
+- [ ] T203 [US15] Extender `src/data/persistence.js` con `scheduled_start_date`, `scheduled_end_date` y `recommended_maintenance_frequency_days` al hidratar `erp.manufacturing.v2`, derivando fechas de `planned_date` cuando falten (depende de T202).
+- [ ] T204 [US15] Reestructurar `src/components/MaintenancePanel.js` en tres subpestañas exactas —“Máquinas”, “Tickets” y “Mantenimientos”— conservando el comportamiento vigente de US-09 hasta que cada subpestaña esté migrada (depende de T199).
+- [ ] T205 [US15] Implementar en `src/components/MaintenancePanel.js` la subpestaña “Máquinas”: buscador, filtro por sección, alerta de frecuencia vencida o ausente, campo “Cada cuánto se recomienda mantención” solo para `maintenance`/`plant_manager`, badges, historial de fallas, paradas acumuladas, `deriveWearIndicator`, “Programar preventiva” y “Revisar históricas” (depende de T204).
+- [ ] T206 [US15] Implementar en `src/components/MaintenancePanel.js` la subpestaña “Tickets”: solo tabla sin banner duplicado, panel lateral ni preventivas; “Programar mantención” con técnico/fechas y detalle expandible con historial de fallas, historial completo y nivel Bajo/Medio/Alto con conteo y minutos (depende de T204 y T202).
+- [ ] T207 [US15] Implementar en `src/components/MaintenancePanel.js` la subpestaña “Mantenimientos” con los bloques exactos “Activos”, “No resueltos por vencimiento” e “Históricos”, buscador propio por máquina/código en cada uno, sincronización con `maintenanceFeed()` y borrado histórico con `src/components/ConfirmDialog.js` (depende de T204 y T202).
+- [ ] T208 [US15] Extender `src/components/calendar/CalendarEventDialog.js` con “Resolver” solo para `maintenance`, popup con mensaje exacto y `datetime-local` editable prellenado con la hora actual del clic —no la de la celda—, tiempo parado/técnico/prioridad para activas y solo lectura sin botón para resueltas (depende de T200 y T202).
+- [ ] T209 [US15] Añadir en `src/styles/manufacturing.css` los estilos de las tres subpestañas, alerta de máquinas, badges, filas expandibles, tres bloques, popup de resolución y eventos resueltos de solo lectura, reutilizando `src/components/Toast.js`, `src/components/format.js`, `src/components/labels.js` y `src/components/icons.js` (depende de T205, T206, T207 y T208).
+- [ ] T210 [US15] Ejecutar `npm test -- --run tests/unit/scheduled-maintenance.test.js tests/unit/maintenance.test.js tests/integration/maintenance-panel.test.js tests/integration/calendar-event-dialog.test.js` y `npm run lint` sobre `src/`; verificar FR-18 en `package.json`, `index.html`, `vitest.config.mjs`, IDs de ruta y mejoras de Fase 24.
+
+**Punto de control**: US-15 es comprobable de forma aislada; el panel y el calendario comparten estado, las fechas son dinámicas, la resolución usa hora real y las mantenciones resueltas son inmutables.
+
+---
+
+## Dependencias y Orden de Ejecución — Fases 25 a 28
+
+- **Fase 25 (US-12)**: sin dependencias nuevas; usa el snapshot `v2` de Fases 8 a 24 y habilita los cinco roles antes de las demás historias.
+- **Fase 26 (US-13)**: depende de Fase 25 para el rol `maintenance` y las vistas por rol; consume `production_orders` y `maintenanceFeed()` sin cambiar IDs de ruta.
+- **Fase 27 (US-14)**: depende de Fase 26 porque la etiqueta “Secuencia <N>” se muestra en `src/components/calendar/CalendarEventDialog.js`.
+- **Fase 28 (US-15)**: depende de Fase 26 para la sincronización con el Calendario Mensual y de Fase 25 para el permiso exclusivo de `maintenance`.
+- **Acumulativas**: cada fase se cierra con su propia prueba independiente y no reabre ni modifica Fases 1 a 24, T001–T159 ni `vitest.config.mjs`.
+
+### Oportunidades de paralelización — Fases 25 a 28
+
+- US-12: T160, T161, T162 y T163 en paralelo; T164/T165/T166 después de sus pruebas; T167→T168→T169→T170→T171 en secuencia; T172 cierra el gate.
+- US-13: T173, T174, T175 y T176 en paralelo; T177 y T178 en paralelo; T179→T180→T181→T182→T183→T184→T185 en secuencia por compartir archivos; T186 cierra el gate.
+- US-14: T187, T188 y T189 en paralelo; T190 y T191 en paralelo; T192→T193→T194→T195 en secuencia; T196 cierra el gate.
+- US-15: T197, T198, T199 y T200 en paralelo; T201→T202→T203→T204 en secuencia; T205, T206, T207 y T208 pueden avanzar en paralelo solo tras T204 si se usan worktrees, de lo contrario en secuencia por compartir `MaintenancePanel.js`/`CalendarEventDialog.js`; T209 y T210 cierran estilos y gate.
+
+---
+
+## Ejemplo de Ejecución Paralela — Fases 25 a 28
+
+```text
+# US-12: pruebas primero
+T160 tests/unit/role-access.test.js
+T161 tests/unit/access-control.test.js
+T162 tests/integration/login-shell.test.js
+T163 tests/integration/role-admin-panel.test.js
+
+# US-13: pruebas primero
+T173 tests/unit/calendar-scheduling.test.js
+T174 tests/unit/order-scheduling.test.js
+T175 tests/integration/plant-scheduling-panels.test.js
+T176 tests/integration/calendar-event-dialog.test.js
+
+# US-14: pruebas primero
+T187 tests/unit/operation-planning.test.js
+T188 tests/unit/manufacturing-store.test.js
+T189 tests/integration/operations-panels.test.js
+
+# US-15: pruebas primero
+T197 tests/unit/scheduled-maintenance.test.js
+T198 tests/unit/maintenance.test.js
+T199 tests/integration/maintenance-panel.test.js
+T200 tests/integration/calendar-event-dialog.test.js
+```
+
+---
+
+## Estrategia de Implementación — Fases 25 a 28
+
+### MVP de la extensión
+
+1. Completar Fase 25 (US-12) y validar login, cinco tablas, selector único y `#/admin-roles`.
+2. Detener y verificar que supervisor, operator y maintenance ven exactamente los módulos permitidos.
+3. Continuar con Fase 26 solo después de que el rol `maintenance` exista en `MODULE_ACCESS`.
+
+### Entrega acumulativa
+
+1. Fase 25 →identidad y permisos.
+2. Fase 26 →calendario y programación horaria.
+3. Fase 27 →estaciones derivadas y edición en supervisión.
+4. Fase 28 →mantenimiento sincronizado e inmutable.
+5. Cada fase conserva Fases 1 a 24 y añade valor sin romper la demo.
+
+### Notas de formato
+
+- T160–T210 son IDs nuevos y consecutivos; no se reutilizan T115–T118 ni T124–T126.
+- Todas las tareas nuevas usan `- [ ]`, ID secuencial, marcador `[P]` cuando corresponde, etiqueta `[US12]`–`[US15]` y ruta de archivo explícita.

@@ -70,7 +70,7 @@ describe('Panel inicial con datos de demostración', () => {
       'Operador de Máquina',
     );
     expect(document.querySelector('[data-attention="supervision"]')).toBeNull();
-    expect(document.querySelector('[data-attention="scheduling"]')).toBeNull();
+    expect(document.querySelector('[data-attention="scheduling"]')).toBeTruthy();
     expect(document.body.textContent).not.toContain('Operario');
   });
 });

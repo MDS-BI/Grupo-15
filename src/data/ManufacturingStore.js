@@ -83,6 +83,19 @@ import {
   detectBottlenecks,
 } from '../domain/line-balance.js';
 import { makeId } from '../domain/types.js';
+import {
+  CANONICAL_ROLES,
+  rolesForUsername as resolveRolesForUsername,
+} from '../domain/role-access.js';
+import { ROLE_USERS, ROLE_USER_COLLECTION_KEYS } from './fixtures/demo-accounts.js';
+
+const ROLE_USER_PROPERTIES = Object.freeze({
+  plant_manager: 'roleUsersPlantManager',
+  supervisor: 'roleUsersSupervisor',
+  planner: 'roleUsersPlanner',
+  operator: 'roleUsersOperator',
+  maintenance: 'roleUsersMaintenance',
+});
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -125,6 +138,10 @@ export class ManufacturingStore extends EventTarget {
     this.hrEmployees = clone(hrFx.hrEmployees);
     this.thresholdSettings = clone(plantFx.thresholdSettings);
     this.rolePermissions = clone(plantFx.rolePermissions);
+
+    for (const role of CANONICAL_ROLES) {
+      this[ROLE_USER_PROPERTIES[role]] = clone(ROLE_USERS[role]);
+    }
 
     if (hydrate && this.storage) this.#hydrate();
     this.#resetInventory();
@@ -173,8 +190,14 @@ export class ManufacturingStore extends EventTarget {
       hrEmployees: 'hrEmployees',
       thresholdSettings: 'thresholdSettings',
       rolePermissions: 'rolePermissions',
+      ...Object.fromEntries(
+        CANONICAL_ROLES.map((role) => [
+          ROLE_USER_COLLECTION_KEYS[role],
+          ROLE_USER_PROPERTIES[role],
+        ]),
+      ),
     };
-    for (const [key, dataKey] of Object.entries(assignments)) {
+    for (const [dataKey, key] of Object.entries(assignments)) {
       if (Array.isArray(snapshot.data[dataKey])) this[key] = clone(snapshot.data[dataKey]);
     }
 
@@ -232,6 +255,12 @@ export class ManufacturingStore extends EventTarget {
       hrEmployees: this.hrEmployees,
       thresholdSettings: this.thresholdSettings,
       rolePermissions: this.rolePermissions,
+      ...Object.fromEntries(
+        CANONICAL_ROLES.map((role) => [
+          ROLE_USER_COLLECTION_KEYS[role],
+          this[ROLE_USER_PROPERTIES[role]],
+        ]),
+      ),
     };
   }
 
@@ -1775,6 +1804,64 @@ export class ManufacturingStore extends EventTarget {
 
   rolePermissionsFor(role) {
     return this.rolePermissions.filter((row) => row.role === role).map((row) => ({ ...row }));
+  }
+
+  roleUsersFor(role) {
+    return clone(this[ROLE_USER_PROPERTIES[role]] ?? []);
+  }
+
+  rolesForUsername(username) {
+    return resolveRolesForUsername(
+      Object.fromEntries(CANONICAL_ROLES.map((role) => [role, this.roleUsersFor(role)])),
+      username,
+    );
+  }
+
+  addRoleUser(role, { username } = {}) {
+    const property = ROLE_USER_PROPERTIES[role];
+    const normalized = String(username ?? '')
+      .trim()
+      .toLowerCase();
+    if (!property || !normalized) return null;
+
+    const rows = this[property];
+    const existing = rows.find((row) => row.username === normalized);
+    if (existing) return clone(existing);
+
+    const row = {
+      id: makeId('ru'),
+      company_id: 'cmp_1',
+      username: normalized,
+      password: normalized,
+      created_at: new Date().toISOString(),
+    };
+    rows.push(row);
+    this.#persist();
+    this.#emit();
+    return clone(row);
+  }
+
+  assignRoleToUser(username, role) {
+    const property = ROLE_USER_PROPERTIES[role];
+    const normalized = String(username ?? '')
+      .trim()
+      .toLowerCase();
+    if (!property || !normalized) return false;
+    if (!this.rolesForUsername(normalized).length) return false;
+
+    const rows = this[property];
+    if (rows.some((row) => row.username === normalized)) return true;
+
+    rows.push({
+      id: makeId('ru'),
+      company_id: 'cmp_1',
+      username: normalized,
+      password: normalized,
+      created_at: new Date().toISOString(),
+    });
+    this.#persist();
+    this.#emit();
+    return true;
   }
 
   canPerformActionFor(role, action) {

@@ -247,3 +247,64 @@ El módulo es frontend-only: no requiere backend ni variables de entorno. Los da
 7. **Panel de planta** (40 s): revise carga/OEE/paradas, cambie el rol simulado, ajuste un umbral y cancele una orden con motivo.
 8. **Balance de líneas** (45 s): identifique el cuello crítico (≥ 95 %), confirme la reasignación simulada Soldadura 1 → Soldadura 2 y abra el detalle por orden.
 9. **Recarga** (20 s): recargue la página, confirme que turno, atrasos, asignaciones, umbrales y fechas persisten en `erp.manufacturing.v2`, y que el balance se recalcula sin dejar solicitudes registradas.
+
+---
+
+## 17. Cuentas y roles (US-12)
+
+1. Limpie `localStorage` o use **Reiniciar datos de demo** como `jefa`.
+2. Ingrese con `jefa/jefa`, `supervisor/supervisor`, `planificador/planificador`, `operador/operador` y `mantenimiento/mantenimiento`; `usuario` debe fallar. `test/test` y `doble/doble` también funcionan.
+3. Con `test` (cinco tablas) el selector de la cabecera ofrece los cinco roles; con `doble` ofrece solo `operator` y `maintenance`; con una cuenta de un solo rol no aparece selector. No hay selectores duplicados en `#/roles`.
+4. Verifique `MODULE_ACCESS`: supervisor no ve `orders`; operator ve exactamente `operator`, `scheduling`, `roles` (sin pestaña “Listado”); maintenance ve exactamente `maintenance`, `scheduling`. Los IDs de ruta no cambian.
+5. Abra `#/admin-roles` solo como `jefa`: `RoleAdminPanel` muestra las cinco tablas, agregar usuario/rol persiste con toast y aparece tras logout/login en el menú y en `#/roles`.
+6. Revise privacidad: `operator`/`planner` no ven nombres de `hr_employees` ni de técnicos; `supervisor` ve nombres de operarios; `maintenance` ve nombres de técnicos.
+
+## 18. Calendario de producción (US-13)
+
+1. Abra **Planificación** → **Calendario**: debe abrir en el mes actual, recordar el mes entre pestañas y volver al actual al cambiar de usuario/rol, cerrar sesión o recargar.
+2. El filtro inicia en **Ambos**; pruebe **Solo Órdenes de Trabajo** y **Solo Mantenciones** (tickets programados + preventivas).
+3. La bandeja **Pendiente de horario** aparece solo para planner y jefa, ordenada por urgencia crítica/prioridad con `% de avance`; solo jefa cambia prioridad y marca **Urgencia crítica**.
+4. Como planner, un clic izquierdo simple en una orden pendiente activa `.scheduling-focus-backdrop`, `.scheduling-floating-card` siguiendo el cursor y el aviso de que clic derecho sale del modo.
+5. Con `mousedown` + `mouseenter`/`mouseover` arrastre de lunes a miércoles: las celdas se colorean en vivo con `.calendar-day--drag-range`; `mouseup` abre popup con `08:00`–`16:00` editables; `contextmenu` cancela sin popup.
+6. Cambie horas a `09:30`–`17:30` y guarde; recargue y verifique persistencia en `erp.manufacturing.v2`.
+7. Como planner/jefa/supervisor, haga clic en un día: el menú lista órdenes y mantenciones; elegir una oculta las demás y abre `src/components/calendar/CalendarEventDialog.js` con **Volver a la lista del día**. Supervisor no ve inputs de fecha/hora ni botones de guardar y sus eventos tienen `draggable="false"`.
+8. Supervisor además ve nombres reales con etiqueta SC-08 “solo contexto operativo — no evaluación de desempeño”, alerta de órdenes sin operador y mantenciones como resumen de solo lectura. Jefa ve indicadores de color por día y resumen ejecutivo (productos, meta, máquinas activas/inactivas, operadores). Operator ve solo sus órdenes y mantenciones en solo lectura.
+
+## 19. Estaciones desde BOM (US-14)
+
+1. Libere una orden con receta/ruta BOM y compruebe que `order_stations` se precarga con una fila por operación, `Secuencia <N>`, nombre del `work_center` y cantidad de trabajadores, sin doble numeración `1., 2., 3.`.
+2. Abra el detalle diario de la orden: debe incluir título explicativo y las estaciones en solo lectura.
+3. El botón **Editar estaciones y trabajadores** aparece solo para supervisor/jefa, redirige a `#/supervision` y abre esa orden en `SupervisorLinePanel.js`.
+4. Añada una estación, quite otra y asigne dos operadores; confirme persistencia tras recarga.
+5. `#/orders` conserva buscador y filtro de prioridad, sin controles de estaciones/operadores; liberar de nuevo no duplica filas.
+
+## 20. Mantenimiento (US-15)
+
+1. Abra **Mantenimiento** y confirme las subpestañas exactas “Máquinas”, “Tickets” y “Mantenimientos”.
+2. En **Máquinas**: busque por nombre, filtre por sección, revise alerta de frecuencia superada, badges, historial de fallas, paradas acumuladas y `deriveWearIndicator`; el campo “Cada cuánto se recomienda mantención” solo es editable por `maintenance` y jefa. “Revisar históricas” enfoca “Históricos” y prellena el buscador con la máquina elegida.
+3. En **Tickets** solo hay tabla; **Programar mantención** abre modal de técnico/inicio/plazo, pasa ticket a `in_progress`, máquina a `fault` y sincroniza calendario y bloque **Activos**.
+4. Clic en un ticket despliega debajo detalle, historial de fallas, historial completo de mantenciones y nivel `Bajo`/`Medio`/`Alto` con conteo y minutos.
+5. En **Mantenimientos**, los bloques son **Activos**, **No resueltos por vencimiento** e **Históricos**, cada uno con buscador por máquina o código y 100 % de correspondencia con el calendario.
+6. Un activo vencido sigue visible con fecha hasta hoy; si se resolvió antes del plazo, la fecha final se acorta a la resolución real; la fecha original no se altera.
+7. Solo `maintenance` ve **Resolver** en el calendario (sin bandeja manual): al seleccionar una activa ve tiempo parado, técnico y prioridad; el popup dice **“¿Está seguro que quiere resolver esta mantención?”** y trae fecha/hora editable prellenada con la hora actual del sistema al hacer clic. La inactividad se calcula sola.
+8. Una preventiva vencida nunca se resuelve sola; solo con **Resolver**. Una resuelta se abre en solo lectura sin botón; no se edita ni se resuelve de nuevo.
+9. Para corregir, elimine desde **Históricos** con `ConfirmDialog.js` como `maintenance`: el registro desaparece de `erp.manufacturing.v2` y del calendario; luego créelo de nuevo.
+10. Privacidad: técnica/o nombre de técnico solo para `maintenance` y jefa; otros roles ven máquina y duración.
+
+## 21. Mapa de criterios US-12 a US-15
+
+| AC | Verificación |
+|---|---|
+| AC-47 a AC-52 | §17: cinco roles, credenciales, tablas, selector único, `MODULE_ACCESS` y privacidad. |
+| AC-53 a AC-62 | §18: mes, filtros, bandeja, foco, arrastre, menú diario, roles y resúmenes. |
+| AC-63 a AC-66 | §19: BOM/stations, `Secuencia <N>`, editor desde supervisión y `#/orders` intacto. |
+| AC-67 a AC-75 | §20: tres pestañas, Máquinas, Tickets, tres bloques, fechas, resolución e inmutabilidad. |
+| AC-76 | §22: mejoras de `main`, rutas, paquete y `vitest.config.mjs` intactos. |
+
+## 22. Solución de problemas y regresión
+
+- Si el grid del calendario no aparece, confirme que se usa CSS Grid y que no se agregó una dependencia externa.
+- Si una mantención vencida desaparece, revise `effectiveMaintenanceEnd(event, today)`; no debe mutar `scheduled_end_date`.
+- Si las estaciones se duplican al liberar, revise la unicidad de `(production_order_id, work_center_id, sequence)` en `order_stations`.
+- Si un rol ve nombres que no debe, revise `visibleEmployeeNamesFor` / `visibleTechnicianNamesFor` en `src/domain/role-access.js`.
+- Ejecute `npm test` al terminar: las suites de Fases 1 a 24 deben pasar sin cambios en `vitest.config.mjs`, `package.json` ni `index.html`.

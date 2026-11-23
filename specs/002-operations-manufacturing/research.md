@@ -314,3 +314,80 @@ No quedan incógnitas bloqueantes para la Fase 1 de US-10 ni US-11.
 | ¿Qué pasa con un valor > 100 %? | Texto real, relleno al 100 %, color rojo por umbral (D-32). |
 
 No quedan incógnitas bloqueantes para la Fase 1.
+
+---
+
+## 9. Investigación US-12 a US-15 (Fase 0 incremental, 2026-11-23)
+
+### D-33 — Cinco tablas de identidades, un solo `username` lógico
+
+- **Decisión**: `role_users_plant_manager`, `role_users_supervisor`, `role_users_planner`, `role_users_operator` y `role_users_maintenance` en `erp.manufacturing.v2`. `rolesForUsername` une las tablas; credenciales `jefa`, `supervisor`, `planificador`, `operador`, `mantenimiento`, `test` en las cinco y `doble` en operator/maintenance. La cuenta `usuario` desaparece.
+- **Razón**: permite duplicar roles para pruebas y refleja que una persona puede tener varios roles sin una tabla global de usuarios nueva.
+- **Alternativas descartadas**: una tabla `users` con arreglo de roles (rompe el requisito de cinco tablas); reutilizar `hr_employees` (mezcla identidad de RR.HH. con acceso demo).
+
+### D-34 — Panel de roles dedicado y selector restringido
+
+- **Decisión**: `RoleAdminPanel.js` en `#/admin-roles` (solo `plant_manager`) usa `assignRoleToUser` y `Toast.js`; el `<select>` de la cabecera es el único selector, ofrece solo roles asignados y se oculta con uno solo. `MODULE_ACCESS` quita `orders` a supervisor, deja operator en `['operator','scheduling','roles']` y maintenance en `['maintenance','scheduling']` (AC-51).
+- **Razón**: el cambio de rol debe ser inmediato y visible sin recargar, pero no puede inventar roles.
+- **Alternativas descartadas**: mantener `adminRolesView()` (no escala a cinco roles); permitir escribir un rol libre (rompe AC-49).
+
+### D-35 — Calendario mensual con estado en memoria
+
+- **Decisión**: mes, filtro (`"Ambos"` por defecto), `focusOrderId` y arrastre viven en estado transitorio; el mes se recuerda entre pestañas y vuelve al actual al cambiar de identidad, cerrar sesión o recargar; solo fechas, horas y banderas críticas se persisten.
+- **Razón**: los gestos de selección no deben ensuciar el snapshot y la navegación debe ser predecible entre pestañas (AC-53/AC-54).
+- **Alternativas descartadas**: persistir `calendarState` (difícil de sincronizar y ensucia `v2`); usar librería de calendario (dependencia externa prohibida).
+
+### D-36 — CSS Grid + clases de foco/arrastre
+
+- **Decisión**: grid mensual con `.calendar-day`, rango con `.calendar-day--drag-range`, foco con `.scheduling-focus-backdrop` y `.scheduling-floating-card` siguiendo el cursor; `mousedown` + `mouseenter`/`mouseover` pintan en vivo y `mouseup` abre el popup `08:00`–`16:00`; `contextmenu` hace `preventDefault()` y cancela (AC-56/AC-57).
+- **Razón**: reutiliza el stack Vanilla existente y mantiene consistencia con Fases 1 a 24.
+- **Alternativas descartadas**: modal molesto para cada celda; librerías de drag-and-drop.
+
+### D-37 — Un `CalendarEventDialog` por detalle
+
+- **Decisión**: nuevo `src/components/calendar/CalendarEventDialog.js` con botón “Volver a la lista del día”, acciones por rol y formato de `format.js` / `icons.js` / `Toast.js`.
+- **Razón**: evita duplicar lógica en órdenes y mantenimientos; permite que el menú por día muestre solo la tarea elegida (AC-58).
+- **Alternativas descartadas**: reutilizar `DelayCorrectionDialog` (semántica distinta); abrir la ruta destino y perder el mes.
+
+### D-38 — Estación = `work_center`, `deriveBomStations` puro + `order_stations`
+
+- **Decisión**: derivar secuencia desde `routing_operations` y persistir dotación en nueva colección `order_stations`; `deriveBomStations` reutiliza `plannedTimeMinutes` y no toca `capacity.js`.
+- **Razón**: precarga requerida al liberar la orden sin alterar operaciones congeladas ni turnos.
+- **Alternativas descartadas**: subdividir máquinas en estaciones (prohibido); mutar `production_order_operations` (rompe trazabilidad US-01…US-07).
+
+### D-39 — Tres pestañas alimentadas por un solo feed
+
+- **Decisión**: `maintenanceFeed()` unifica tickets y preventivas con fechas programadas; el calendario consume el mismo feed.
+- **Razón**: garantiza sincronización 100 % y evita estados divergentes entre panel y calendario.
+- **Alternativas descartadas**: dos consultas independientes (deriva); copiar eventos en caché persistida (duplicidad).
+
+### D-40 — Fechas visibles derivadas, no sobreescritas
+
+- **Decisión**: `effectiveMaintenanceEnd` eleva a hoy los activos vencidos y usa fecha de resolución para históricos; la fecha programada original permanece intacta.
+- **Razón**: cumple AC-73 sin perder la trazabilidad de la programación original.
+- **Alternativas descartadas**: actualizar `scheduled_end_date` al vencer (destruye dato original); ocultar vencidos (rompe AC-71).
+
+### D-41 — Resolución con cálculo automático de inactividad
+
+- **Decisión**: `resolveScheduledMaintenance(id, { resolvedAt })` calcula inactividad entre inicio de intervención y resolución; mantiene `resolveMaintenanceTicket` original para regresión US-09. Solo `maintenance` lo ejecuta y las preventivas nunca se cierran por fecha.
+- **Razón**: el popup pide solo confirmación y marca de resolución editable con hora actual; el sistema calcula el resto (AC-72/AC-75).
+- **Alternativas descartadas**: exigir marcas manuales de parada (rompe AC-72); cerrar automáticamente por vencimiento (rompe AC-71).
+
+### D-42 — Inmutabilidad con borrado histórico controlado
+
+- **Decisión**: resuelto/completado/cancelado no se reprograma ni se resuelve de nuevo; el borrado solo existe en “Históricos”, con `ConfirmDialog.js` y rol `maintenance`, y elimina el registro de `v2` y del calendario.
+- **Razón**: equilibra la regla append-only de US-09 con el requisito explícito de eliminar desde histórico en US-15 (AC-71).
+- **Alternativas descartadas**: borrado libre (riesgo de perder trazabilidad); ningún borrado (incumple AC-71).
+
+### Incógnitas resueltas (US-12 a US-15)
+
+| Incógnita | Resolución |
+|---|---|
+| ¿Cómo se representan cinco roles? | Cinco tablas `role_users_*` más `maintenance` en `MODULE_ACCESS` (D-33/D-34). |
+| ¿Dónde vive el estado del calendario? | En memoria de sesión; solo fechas/horas/criticidad en `v2` (D-35). |
+| ¿Qué es una estación? | Un `work_center` existente, con secuencia derivada (D-38). |
+| ¿Cómo se sincronizan panel y calendario? | Un único `maintenanceFeed()` y evento `change` (D-39). |
+| ¿Qué pasa con un mantenimiento vencido? | Fecha visible = hoy, sin mutar la fecha original (D-40). |
+| ¿Quién puede borrar histórico? | Solo `maintenance`, con `ConfirmDialog.js` (D-42). |
+
+No quedan incógnitas bloqueantes para las fases 25 a 28.

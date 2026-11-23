@@ -223,7 +223,7 @@ describe('Supervisión de línea (US-07)', () => {
     change('[data-role="assign-form"] [name="shift_band"]', 'morning');
     submit('[data-role="assign-form"]');
     expect(store.activeAssignmentForWorkCenter('wc_pintura').ext_hr_employee_id).toBe('emp_op_05');
-    expect(document.body.textContent).toContain('Operario asignado');
+    expect(document.body.textContent).toContain('Operador asignado');
 
     click('[data-escalate="wc_pintura"]');
     fill('[data-role="escalate-form"] [name="description"]', 'Fuga de pintura');

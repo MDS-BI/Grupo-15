@@ -2436,6 +2436,68 @@ button {
   gap: 1rem;
 }
 
+.role-admin__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.role-admin__table {
+  padding: 1rem;
+  background: var(--erp-surface);
+  border: 1px solid var(--erp-border);
+  border-radius: 8px;
+  box-shadow: var(--erp-shadow);
+}
+
+.role-admin__table h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+}
+
+.role-admin__users {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.role-admin__users li {
+  padding: 0.3rem 0.6rem;
+  background: var(--erp-bg);
+  border: 1px solid var(--erp-border);
+  border-radius: 999px;
+  font-size: 0.85rem;
+}
+
+.role-admin__empty {
+  color: var(--erp-text-muted);
+  font-style: italic;
+}
+
+.role-admin__forms {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.role-admin__forms .stack-form {
+  padding: 1.25rem;
+  background: var(--erp-surface);
+  border: 1px solid var(--erp-border);
+  border-radius: 8px;
+  box-shadow: var(--erp-shadow);
+}
+
+.role-admin__forms .stack-form h2 {
+  margin-top: 0;
+  font-size: 1.05rem;
+}
+
 .role-card {
   display: flex;
   flex-direction: column;

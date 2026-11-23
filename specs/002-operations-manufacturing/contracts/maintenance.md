@@ -147,3 +147,123 @@ si no hay operación activa              → work_center.operational_status = di
 11. **Migración**: un snapshot `v1` válido se migra a `v2` conservando el estado de US-01…US-07 e inicializando umbrales, permisos y colecciones de mantenimiento vacías; un `v2` existente de US-08 se completa sin perder su estado.
 12. **Snapshot corrupto**: un JSON inválido o `version` desconocida se descarta y se cargan fixtures sin romper el arranque.
 13. **Regresión**: las suites de US-01…US-08 siguen pasando sin cambios de comportamiento.
+
+---
+
+# Extensión US-15 — Tres pestañas, programación y sincronización con calendario
+
+Las secciones 1 a 7 permanecen vigentes para US-09. Todo lo siguiente es aditivo y cubre FR-12, FR-15, FR-18 y AC-67 a AC-76.
+
+## 8. Vista de tres pestañas
+
+`MaintenancePanel(store)` conserva su exportación única y muestra exactamente las subpestañas **Máquinas**, **Tickets** y **Mantenimientos** (AC-67).
+
+### 8.1 Máquinas (AC-68)
+
+- Buscador por nombre y filtro por sección (`work_centers.station_type`).
+- Alerta superior de máquinas sin preventiva o cuya frecuencia recomendada fue superada.
+- Campo “Cada cuánto se recomienda mantención” editable solo por `maintenance` y `plant_manager`.
+- Badge por máquina: `Frenada por mantención` / `Disponible` / `En operación`.
+- Historial de fallas, paradas acumuladas e indicador `deriveWearIndicator`.
+- Acciones `Programar preventiva` y `Revisar históricas`; la segunda enfoca la subpestaña “Mantenimientos”, el bloque “Históricos” y prellena su buscador con la máquina elegida.
+
+### 8.2 Tickets (AC-69/AC-70)
+
+- Solo la tabla de tickets: sin banner duplicado, sin panel lateral y sin tabla de preventivas.
+- Al hacer clic en un ticket se despliega debajo un recuadro con detalle del ticket, historial de fallas, historial completo de mantenciones e indicador `deriveWearIndicator` con nivel `Bajo` / `Medio` / `Alto`, conteo de fallas y minutos acumulados.
+- `Programar mantención` abre un modal con técnico, inicio (`scheduled_start_date`) y plazo (`scheduled_end_date`). Guardar pasa el ticket a `in_progress`, la máquina a `fault` y el registro aparece de inmediato en el calendario y en el bloque “Activos”.
+- Fecha de inicio por defecto = `relativeDay(0)` y plazo = `daysFromNow(1)`; técnico = `technicianLabel(id)` cuando ya existe.
+
+### 8.3 Mantenimientos (AC-71)
+
+- Refleja el 100 % de las mantenciones del calendario en tres bloques con buscador propio por máquina o código:
+  - **Activos**: acciones `Resolver`.
+  - **No resueltos por vencimiento**: acciones `Resolver`.
+  - **Históricos**: acción `Eliminar`, confirmada con `ConfirmDialog.js`, que borra el registro de `erp.manufacturing.v2` y del calendario.
+
+El estado de la pestaña activa y los buscadores son transitorios: se conservan mientras el panel esté montado y se descartan al cambiar de rol o recargar.
+
+## 9. Modelo unificado y campos
+
+| Colección | Campos nuevos | Uso |
+|---|---|---|
+| `maintenance_tickets` | `scheduled_start_date`, `scheduled_end_date` | Programación correctiva desde ticket; ambos requeridos para calendario. |
+| `preventive_maintenance_orders` | `scheduled_start_date`, `scheduled_end_date` | Derivados de `planned_date` si faltan en snapshots `v2` antiguos. |
+| `work_centers` | `recommended_maintenance_frequency_days` | Días entre mantenciones preventivas recomendadas; editable por `maintenance` y `plant_manager`. |
+
+**Evento unificado** devuelto por `maintenanceFeed()` y por `calendarEventsForMonth()`:
+
+```js
+{
+  id: string,
+  kind: 'corrective' | 'preventive',
+  sourceId: string,
+  title: string,
+  work_center_id: string,
+  technician_ext_hr_employee_id: string | null,
+  scheduled_start_date: 'YYYY-MM-DD',
+  scheduled_end_date: 'YYYY-MM-DD',
+  status: 'open' | 'in_progress' | 'resolved' | 'planned' | 'completed' | 'cancelled',
+  is_overdue: boolean,
+  visible_end_date: 'YYYY-MM-DD',
+  resolved_at: string | null
+}
+```
+
+- Un ticket con `source_ticket_id` en una preventiva aparece dos veces solo si ambos registros tienen fechas programadas propias; la preventiva no se fusiona con el ticket.
+- `visible_end_date` se calcula con `effectiveMaintenanceEnd(event, today)`:
+  - activo vencido → `today` (AC-73);
+  - resuelto antes del plazo → fecha real de resolución;
+  - en otro caso → `scheduled_end_date`.
+- La fecha original nunca se sobreescribe; el vencimiento es una proyección derivada.
+
+## 10. Funciones puras adicionales
+
+| Función | Contrato |
+|---|---|
+| `buildScheduledMaintenanceFromTicket(ticket, { scheduled_start_date, scheduled_end_date, technician_ext_hr_employee_id })` | Valida fechas ISO, `end ≥ start` y técnico no vacío; devuelve un evento `corrective` sin mutar el ticket. |
+| `computeCorrectiveDowntime(startedAt, resolvedAt)` | Devuelve minutos `≥ 0` redondeados a 2 decimales entre inicio de intervención y resolución, sin ingreso manual (AC-72). |
+| `effectiveMaintenanceEnd(event, today)` | Aplica la regla de fecha visible del §9 (AC-73). |
+| `isResolvedMaintenance(event)` | `corrective ⇒ ticket_status = resolved`; `preventive ⇒ status = completed \| cancelled`. |
+| `canResolveScheduledMaintenance(event)` | `false` si ya está resuelta/completada/cancelada; `true` para `open`, `in_progress` y `planned`. |
+| `canRescheduleMaintenance(role)` | `true` solo para `maintenance`; los demás roles son solo lectura. |
+| `canEditMaintenanceFrequency(role)` | `true` para `maintenance` y `plant_manager` (AC-68). |
+
+## 11. Acciones del store
+
+| Acción | Contrato |
+|---|---|
+| `maintenanceFeed()` | Devuelve tickets y preventivas unificados y ordenados por `scheduled_start_date`, prioridad y código. |
+| `scheduleMaintenanceFromTicket(ticketId, { technician_ext_hr_employee_id, scheduled_start_date, scheduled_end_date })` | Persiste fechas y técnico; pasa ticket a `in_progress` y máquina a `fault`; emite `change`. |
+| `schedulePreventiveMaintenance(orderId, { scheduled_start_date, scheduled_end_date })` | Persiste el rango; mantiene `planned_date` como legado; emite `change`. |
+| `setRecommendedMaintenanceFrequency(workCenterId, days)` | Persiste días ≥ 1; solo `maintenance` / `plant_manager`; emite `change`. |
+| `resolveScheduledMaintenance(id, { resolvedAt })` | Solo `maintenance`. Correctivo: calcula inactividad desde `intervention_started_at` y cierra con `resolveMaintenanceTicket`. Preventiva: transiciona a `completed` con `completed_at = resolvedAt` y calcula inactividad. Rechaza eventos ya cerrados; nunca cierra por fecha. |
+| `deleteResolvedMaintenance(id)` | Solo desde “Históricos” y solo con rol `maintenance`; exige `ConfirmDialog.js`, muestra `showToast`, emite `change` y elimina el registro de `v2` y del calendario. Única excepción demo a append-only de US-09; nunca reactiva ni reabre. |
+
+`resolveMaintenanceTicket` original sigue disponible para US-09 y sus pruebas; la nueva acción no cambia su firma.
+
+## 12. Contrato de UI y sincronización con calendario
+
+- La pestaña “Mantenimientos” y el calendario leen el mismo `maintenanceFeed()`: programar, reprogramar o eliminar en un lado actualiza el otro tras `change`.
+- Cada bloque filtra solo por máquina o código; “Revisar históricas” prellena el buscador histórico con la máquina elegida desde Máquinas.
+- Desde un ticket, `Programar mantención` usa el modal descrito en §8.2 y respeta la transición a `in_progress`/`fault`.
+- La creación de preventivas usa `buildPreventiveOrderFromHistory` existente y luego `schedulePreventiveMaintenance`; **ninguna preventiva se resuelve sola** al vencer el plazo.
+- En el calendario, solo `maintenance` ve “Resolver” y no existe bandeja manual de resolución. Al seleccionar una activa ve tiempo parado, técnico y prioridad; al seleccionar una resuelta la abre en solo lectura sin el botón.
+- Popup “Resolver”: mensaje exacto **“¿Está seguro que quiere resolver esta mantención?”**, campo `datetime-local` editable prellenado con la **hora ACTUAL del sistema al hacer clic** (no con la hora de la celda). Al aceptar se llama `resolveScheduledMaintenance` con esa marca; la inactividad se calcula sola.
+- Una mantención resuelta no se puede resolver ni editar en ninguna vista; la corrección exige eliminarla en “Históricos” y crearla de nuevo (AC-74).
+- `ConfirmDialog.js` se usa para el borrado histórico; `Toast.js` confirma cada mutación; `format.js`, `labels.js`, `icons.js` y `demo-dates.js` son la única fuente de formato, nombres, iconos y fechas dinámicas.
+- Nombres de técnicos se muestran solo para `maintenance` y `plant_manager`; otros roles ven `Máquina <code> · <duración>`.
+
+## 13. Escenarios de verificación US-15 y FR-18
+
+1. **Pestañas (AC-67)**: el panel muestra exactamente “Máquinas”, “Tickets” y “Mantenimientos”.
+2. **Máquinas (AC-68)**: alerta de frecuencia vencida, campo editable solo por roles permitidos, badges, historial, `deriveWearIndicator`, “Programar preventiva” y “Revisar históricas” con búsqueda prellenada.
+3. **Tickets (AC-69)**: solo tabla; `Programar mantención` pasa ticket a `in_progress`, máquina a `fault` y sincroniza calendario/“Activos”.
+4. **Detalle (AC-70)**: clic en ticket despliega detalle, historial de fallas, historial de mantenciones y nivel Bajo/Medio/Alto con conteo y minutos.
+5. **Bloques (AC-71)**: los tres bloques reflejan el 100 % del calendario; borrado histórico con `ConfirmDialog.js` elimina de `v2` y del calendario.
+6. **Resolución correctiva (AC-72)**: resolver calcula parada real sin ingreso manual; una preventiva vencida no se cierra sola.
+7. **Fechas (AC-73)**: activo vencido muestra fecha hasta hoy; resuelto antes de plazo muestra fecha real de resolución.
+8. **Inmutabilidad (AC-74)**: resuelto no se edita ni se resuelve de nuevo; corregir implica borrar en históricos y crear de nuevo.
+9. **Calendario (AC-75)**: solo maintenance ve “Resolver”; popup con mensaje exacto y hora actual editable; resuelto queda solo lectura.
+10. **FR-18 (AC-76)**: mejoras de `main`, IDs de ruta, nombre del paquete, `vitest.config.mjs` y `index.html` permanecen intactos.
+11. **Regresión**: suites de US-09, US-10 y Fases 1 a 24 siguen pasando sin cambios en `vitest.config.mjs`.

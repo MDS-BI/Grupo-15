@@ -16,19 +16,18 @@ import { PlantPerformancePanel } from './components/PlantPerformancePanel.js';
 import { ProductionSchedulingPanel } from './components/ProductionSchedulingPanel.js';
 import { LineBalancePanel } from './components/LineBalancePanel.js';
 import { RoleAccessPanel } from './components/RoleAccessPanel.js';
-import { el, escapeHtml } from './components/format.js';
+import { RoleAdminPanel } from './components/RoleAdminPanel.js';
+import { escapeHtml } from './components/format.js';
 import { confirmDialog } from './components/ConfirmDialog.js';
 import { icon } from './components/icons.js';
 import { mountToastRegion, showToast } from './components/Toast.js';
-import { authenticate } from './data/fixtures/demo-accounts.js';
+import { authenticate, DEMO_ACCOUNTS } from './data/fixtures/demo-accounts.js';
+import { CANONICAL_ROLES } from './domain/role-access.js';
 import {
   DEFAULT_ROLE,
   MODULE_GROUPS,
-  ROLE_DESCRIPTIONS,
   ROLE_LABELS,
-  ROLE_ORDER,
   homeModuleForRole,
-  isAdmin,
   isModuleAllowed,
   normalizeRole,
 } from './domain/access-control.js';
@@ -67,7 +66,7 @@ const MODULES = [
     id: 'scheduling',
     label: 'Planificación',
     icon: 'scheduling',
-    render: () => ProductionSchedulingPanel(store),
+    render: (context) => ProductionSchedulingPanel(store, { role: context.role }),
   },
   {
     id: 'line-balance',
@@ -88,21 +87,21 @@ const MODULES = [
     render: (context) =>
       RoleAccessPanel({
         currentRole: context.role,
-        realRole: context.realRole,
         modules: MODULES.filter((module) => module.id !== 'admin-roles'),
-        onSelect: (role) => selectEffectiveRole(role, { goHome: true }),
       }),
   },
   {
     id: 'admin-roles',
     label: 'Datos de roles',
     icon: 'admin-roles',
-    render: () => adminRolesView(),
+    render: () => RoleAdminPanel({ store }),
   },
 ];
 
 const state = {
   active: 'dashboard',
+  username: null,
+  assignedRoles: [],
   realRole: null,
   role: DEFAULT_ROLE,
   screen: 'login',
@@ -116,10 +115,27 @@ function loadRole() {
   try {
     const raw = globalThis.localStorage?.getItem(ROLE_STORAGE_KEY);
     if (!raw) return null;
-    const [real, effective] = raw.split('|');
+    const [first, second] = raw.split('|');
+    const storedRoles = store.rolesForUsername(first);
+    if (storedRoles.length) {
+      const primary = storedRoles[0];
+      return {
+        username: first.trim().toLowerCase(),
+        assignedRoles: storedRoles,
+        realRole: primary,
+        role: storedRoles.includes(second) ? second : primary,
+      };
+    }
+    const legacyRole = normalizeRole(second || first);
+    const account = DEMO_ACCOUNTS.find(
+      (entry) => entry.roles.includes(legacyRole) && entry.roles.length === 1,
+    );
+    const assignedRoles = account?.roles ?? [legacyRole];
     return {
-      realRole: normalizeRole(real),
-      role: normalizeRole(effective || real),
+      username: account?.username ?? null,
+      assignedRoles,
+      realRole: legacyRole,
+      role: legacyRole,
     };
   } catch {
     return null;
@@ -128,7 +144,10 @@ function loadRole() {
 
 function persistRole() {
   try {
-    globalThis.localStorage?.setItem(ROLE_STORAGE_KEY, `${state.realRole}|${state.role}`);
+    globalThis.localStorage?.setItem(
+      ROLE_STORAGE_KEY,
+      `${state.username ?? state.realRole}|${state.role}`,
+    );
   } catch {
     /* almacenamiento no disponible: los roles duran la sesión */
   }
@@ -140,6 +159,8 @@ function forgetRole() {
   } catch {
     /* almacenamiento no disponible */
   }
+  state.username = null;
+  state.assignedRoles = [];
   state.realRole = null;
   state.role = DEFAULT_ROLE;
   state.active = 'dashboard';
@@ -191,8 +212,8 @@ function handleLocationChange() {
 }
 
 function selectEffectiveRole(role, { goHome = false } = {}) {
-  if (!isAdmin(state.realRole)) return;
-  state.role = normalizeRole(role);
+  if (!state.assignedRoles.includes(role)) return;
+  state.role = role;
   persistRole();
 
   if (goHome) state.active = homeModuleForRole(state.role);
@@ -204,8 +225,12 @@ function selectEffectiveRole(role, { goHome = false } = {}) {
   renderApp();
 }
 
-function login(role) {
-  state.realRole = normalizeRole(role);
+function login(roles, username) {
+  state.username = String(username ?? '')
+    .trim()
+    .toLowerCase();
+  state.assignedRoles = roles;
+  state.realRole = roles[0] ?? DEFAULT_ROLE;
   state.role = state.realRole;
   state.active = homeModuleForRole(state.role);
   state.screen = 'app';
@@ -250,18 +275,6 @@ function visibleModules() {
 
 function monogram(name) {
   return name.slice(0, 2).toUpperCase();
-}
-
-function roleCard(role) {
-  return `
-    <button type="button" class="role-select-card" data-pick-role="${role}">
-      <span class="role-select-card__monogram" aria-hidden="true">${monogram(ROLE_LABELS[role])}</span>
-      <span class="role-select-card__body">
-        <span class="role-select-card__title">${escapeHtml(ROLE_LABELS[role])}</span>
-        <span class="role-select-card__desc">${escapeHtml(ROLE_DESCRIPTIONS[role])}</span>
-        <span class="role-select-card__hint">Entrar como ${escapeHtml(ROLE_LABELS[role])} →</span>
-      </span>
-    </button>`;
 }
 
 function renderLogin() {
@@ -312,9 +325,13 @@ function renderLogin() {
   form.addEventListener('submit', (event) => {
     event.preventDefault();
     if (state.loadingLogin) return;
-    const role = authenticate(form.elements.username.value, form.elements.password.value);
+    const username = form.elements.username.value;
+    const roleUsers = Object.fromEntries(
+      CANONICAL_ROLES.map((role) => [role, store.roleUsersFor(role)]),
+    );
+    const roles = authenticate(username, form.elements.password.value, roleUsers);
     const error = form.querySelector('[data-role="login-error"]');
-    if (!role) {
+    if (!roles) {
       error.textContent = 'Usuario o contraseña incorrectos';
       error.hidden = false;
       return;
@@ -325,27 +342,8 @@ function renderLogin() {
     const submit = form.querySelector('[data-role="login-submit"]');
     submit.disabled = true;
     submit.textContent = 'Ingresando…';
-    state.loginTimer = globalThis.setTimeout(() => login(role), 400);
+    state.loginTimer = globalThis.setTimeout(() => login(roles, username), 400);
   });
-}
-
-function adminRolesView() {
-  const root = el(`
-    <section class="view">
-      <header class="view__header">
-        <div>
-          <h1>Datos de roles</h1>
-          <p class="view__subtitle">Información de los roles simulados. Solo disponible para ${escapeHtml(ROLE_LABELS[DEFAULT_ROLE])}.</p>
-        </div>
-      </header>
-      <div class="role-select-grid">${ROLE_ORDER.map(roleCard).join('')}</div>
-    </section>`);
-  root.querySelectorAll('[data-pick-role]').forEach((button) => {
-    button.addEventListener('click', () =>
-      selectEffectiveRole(button.getAttribute('data-pick-role'), { goHome: true }),
-    );
-  });
-  return root;
 }
 
 function sidebarButtons() {
@@ -371,16 +369,19 @@ function sidebarButtons() {
 }
 
 function roleOptions() {
-  return ROLE_ORDER.map(
-    (role) =>
-      `<option value="${role}" ${role === state.role ? 'selected' : ''}>${escapeHtml(ROLE_LABELS[role])}</option>`,
-  ).join('');
+  return state.assignedRoles
+    .map(
+      (role) =>
+        `<option value="${role}" ${role === state.role ? 'selected' : ''}>${escapeHtml(ROLE_LABELS[role])}</option>`,
+    )
+    .join('');
 }
 
 function userMenu() {
   const canResetDemo = state.realRole === 'plant_manager' && state.role === state.realRole;
-  const switcher = isAdmin(state.realRole)
-    ? `<div class="user-menu__group">
+  const switcher =
+    state.assignedRoles.length > 1
+      ? `<div class="user-menu__group">
         <p class="user-menu__label" id="view-as-label">Ver como</p>
         <label class="user-menu__select" aria-labelledby="view-as-label">
           <span class="sr-only">Seleccionar rol de usuario</span>
@@ -389,7 +390,7 @@ function userMenu() {
           </select>
         </label>
       </div>`
-    : '';
+      : '';
   return `
     <div class="user-menu" data-role="user-menu">
       <button type="button" class="user-menu__trigger" data-role="user-menu-toggle"
@@ -546,6 +547,8 @@ mountToastRegion();
 
 const saved = loadRole();
 if (saved) {
+  state.username = saved.username;
+  state.assignedRoles = saved.assignedRoles;
   state.realRole = saved.realRole;
   state.role = saved.role;
   state.active = homeModuleForRole(state.role);

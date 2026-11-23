@@ -345,9 +345,9 @@ export function LineBalancePanel(store) {
         </header>
         <div class="panel__body">
           <div class="table-wrap">
-            <table class="data-table">
+            <table class="data-table balance-table">
               <thead>
-                <tr><th>Centro</th><th>Carga (min)</th><th>Capacidad (min)</th><th>Utilización</th><th>Setup estándar</th><th>Run estándar /u</th></tr>
+                <tr><th>Centro</th><th>Carga (min)</th><th>Capacidad (min)</th><th>Capacidad efectiva/día</th><th>Holgura (min)</th><th>Utilización</th><th>Utilización del día</th><th>Setup estándar</th><th>Run estándar /u</th></tr>
               </thead>
               <tbody>${rows}</tbody>
             </table>

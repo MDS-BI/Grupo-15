@@ -1,13 +1,13 @@
 # Especificación: Módulo de Operaciones / Manufactura (ERP)
 
-**Rama**: `002-operations-manufacturing` | **Fecha**: 2026-10-31 | **Actualizado**: 2026-11-18
+**Rama**: `002-operations-manufacturing` | **Fecha**: 2026-10-31 | **Actualizado**: 2026-11-23
 **Datos maestros**: [data-model.md](data-model.md) | **Plan**: [plan.md](plan.md) | **Tareas**: [tasks.md](tasks.md)
 
 ---
 
 ## 1. Objetivo
 
-Implementar un prototipo funcional de frontend para el módulo de Operaciones / Manufactura que centraliza el ciclo **planificado → programado → ejecutado → registrado → supervisado → mantenido**: gestión de BOM y rutas, despacho de órdenes, seguimiento de operaciones en piso, registro de turno del operador, supervisión de línea en tiempo real (semáforo, asignación de personal, validación de cierre y escalamiento a mantenimiento), panel de desempeño de planta (carga, OEE, paradas, alarmas, reportes y permisos) y gestión de mantenimiento correctivo/preventivo con registro de tiempos de parada y restablecimiento de la disponibilidad de las máquinas.
+Implementar un prototipo funcional de frontend para el módulo de Operaciones / Manufactura que centraliza el ciclo **planificado → programado → ejecutado → registrado → supervisado → mantenido**: gestión de BOM y rutas, despacho de órdenes, seguimiento de operaciones en piso, registro de turno del operador, supervisión de línea en tiempo real (semáforo, asignación de personal, validación de cierre y escalamiento a mantenimiento), panel de desempeño de planta (carga, OEE, paradas, alarmas, reportes y permisos) y gestión de mantenimiento correctivo/preventivo con registro de tiempos de parada y restablecimiento de la disponibilidad de las máquinas. Se amplía con un sistema multi-rol de cinco roles con tablas de usuario separadas y privacidad de personas, un calendario mensual interactivo con programación por arrastre y vistas estrictas por rol, estaciones derivadas de la receta del BOM gestionadas desde supervisión, y un panel de mantenimiento en tres subpestañas sincronizado con el calendario, con programación desde tickets, fechas dinámicas e inmutabilidad de lo resuelto.
 
 ## Clarifications
 
@@ -31,6 +31,15 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 
 </details>
 
+<details>
+<summary><strong>Session 2026-11-23 (US-12 a US-15)</strong></summary>
+
+- **Q**: ¿Qué identidad se obtiene si un mismo usuario aparece en varias tablas de rol? → **A**: la unión de todos los roles en los que aparece; el selector superior muestra únicamente esa unión, sin opciones extra.
+- **Q**: ¿Qué alcance tiene la memoria del mes visitado en el calendario? → **A**: solo recuerda el último mes entre cambios de pestaña dentro del panel; cambiar de usuario/rol, cerrar sesión o recargar vuelve al mes actual.
+- **Q**: ¿Cómo se corrige una mantención resuelta por error? → **A**: no se edita ni se vuelve a resolver; se elimina desde "Mantenimientos históricos" con confirmación y se crea un registro nuevo.
+
+</details>
+
 ## 2. Alcance
 
 - Gestión de BOM multi-nivel (`bill_of_materials`, `bom_components`) con detección de ciclos.
@@ -44,7 +53,11 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 - La captura de datos numéricos admite escritura directa con punto o coma decimal y un máximo de dos decimales, sin flechas de precisión que bloqueen el formulario.
 - **Panel de desempeño de planta (US-08 / Jefa de Planta)**: carga por centro, OEE y paradas acumuladas por período, umbrales críticos con alarmas, reprogramación y cancelación de órdenes, exportación del reporte consolidado a PDF y Excel, y permisos por rol simulados.
 - **Gestión de mantenimiento y disponibilidad de máquinas (US-09 / HU-06)**: bandeja de tickets escalados, toma de intervención con técnico asignado, historial y desgaste por máquina, órdenes de mantenimiento preventivo, registro de tiempos reales de parada y restablecimiento del semáforo del centro de trabajo.
-- **Acceso por rol y navegación**: ingreso genérico con credenciales simuladas, filtrado de la navegación según permisos, navegación por hash (deep links y botón atrás), panel de acceso por rol, datos de roles restringidos a la Jefa de Planta y datos simulados para probar estados y formularios sin backend.
+- **Acceso por rol y navegación**: ingreso con credenciales simuladas por usuario, resolución de todos los roles asignados desde cinco tablas de usuario, filtrado de la navegación según permisos, navegación por hash (deep links y botón atrás), panel de administración de roles restringido a la Jefa de Planta y datos simulados para probar estados y formularios sin backend.
+- **Sistema multi-rol y privacidad (US-12)**: quinto rol canónico de Encargado de Mantenimiento, cinco tablas de usuarios persistentes, selector único de roles asignados, matriz de módulos por rol y reglas de anonimización de nombres de RR.HH. y de técnicos de mantención.
+- **Calendario mensual interactivo (US-13)**: calendario mensual con filtro de eventos, bandeja de pendientes de horario, modo de selección por arrastre para el planificador, menú diario por tarea, ventanas de detalle por rol y resúmenes contextuales según el rol activo.
+- **Estaciones derivadas del BOM (US-14)**: estación equivalente a máquina (`work_center`), secuencia derivada de la receta/ruta de cada orden y edición de dotación exclusivamente desde supervisión para supervisor y Jefa de Planta.
+- **Mantenimiento en tres subpestañas (US-15)**: máquinas con alertas e indicador de desgaste, tickets con programación de mantenciones, y mantenciones activas/vencidas/históricas sincronizadas con el calendario, con cálculo automático de parada, fechas dinámicas e inmutabilidad de registros resueltos.
 
 **Límites**: sin backend, sin MRP automático, sin MES en tiempo real. Las entidades de frontera (`products`, `warehouses`, `units_of_measure`, `companies`, `sales_orders`, `quality_inspections`, `hr_employees`) se consumen como datos simulados de solo lectura.
 
@@ -61,7 +74,7 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 | **Encargado de Mantenimiento (`@SebastianRivasprg`)** | Atiende incidentes críticos escalados desde piso (`fault`), analiza historial operativo y evalúa desgaste en maquinaria para programar mantenimientos preventivos, registra tiempos de parada por mantención y restablece la disponibilidad operativa de las máquinas. |
 | **Planificador (`@maiteval`)** |  Organiza y calendariza las órdenes de producción, asignando fechas planificadas de inicio y término a las tareas. Coordina la secuencia de fabricación según las prioridades y plazos de entrega, consulta el estado de las órdenes y ajusta la programación cuando existen atrasos o cambios en la producción, buscando optimizar los tiempos y cumplir con las fechas de entrega establecidas. |
 
-> **Convención de roles simulados**: la interfaz usa cuatro etiquetas de rol —Jefa de Planta, Supervisor de Operaciones/Línea, Planificador y **Operador**—. "Operador" es la forma canónica en textos de asignación de RR.HH. y descripciones de persona, con "Operador de Máquina" como variante descriptiva; la etiqueta visible canónica en toda la interfaz es **Operador**. Las responsabilidades de Ingeniería de Producción y Mantenimiento se ejercen, en la demo, desde los roles Planificador y Supervisor/Jefa de Planta respectivamente, sin crear credenciales adicionales.
+> **Convención de roles simulados**: la interfaz usa cinco etiquetas de rol canónicas —Jefa de Planta (`plant_manager`), Supervisor de Operaciones/Línea (`supervisor`), Planificador (`planner`), **Operador** (`operator`) y Encargado de Mantenimiento (`maintenance`)—. "Operador" es la forma canónica en textos de asignación de RR.HH. y descripciones de persona, con "Operador de Máquina" como variante descriptiva; la etiqueta visible canónica en toda la interfaz es **Operador**. Cada rol cuenta con credenciales demo propias y el usuario autenticado puede tener varios roles a la vez; las responsabilidades de Ingeniería de Producción se ejercen desde Planificador, sin crear un sexto rol.
 
 ## 4. Requisitos Funcionales
 
@@ -222,6 +235,76 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 </details>
 
 
+<details open>
+<summary><strong>FR-14: Sistema multi-rol, cinco tablas de usuarios y privacidad (US-12)</strong></summary>
+
+**US-12**: Como Jefa de Planta, quiero administrar cinco roles canónicos con cuentas separadas y ver solo la información de personas autorizada, para que cada integrante acceda únicamente a las funciones y datos que le corresponden.
+
+- **Roles canónicos**: incorporar el quinto rol Encargado de Mantenimiento (`maintenance`) junto a `plant_manager`, `supervisor`, `planner` y `operator`. La cuenta genérica "usuario" se elimina.
+- **Cuentas demo**: `jefa/jefa`, `supervisor/supervisor`, `planificador/planificador`, `operador/operador` y `mantenimiento/mantenimiento`; además `test/test` inscrito en las cinco tablas y `doble/doble` inscrito en `operator` y `maintenance`. En todas ellas la contraseña es igual al nombre de usuario.
+- **Cinco tablas de usuario**: `role_users_plant_manager`, `role_users_supervisor`, `role_users_planner`, `role_users_operator` y `role_users_maintenance`, persistidas en `erp.manufacturing.v2`; sobreviven al cierre de sesión y se restauran con `resetDemoData` (botón "Reiniciar datos de demo" de la Jefa de Planta).
+- **Resolución de roles**: al iniciar sesión recorrer las cinco tablas y recolectar TODOS los roles donde aparece el usuario. El selector de rol del menú superior (`src/manufacturing-main.js`) muestra únicamente esos roles; con un solo rol asignado no se puede cambiar a otros. No existe ningún selector de rol duplicado dentro de otros paneles.
+- **Administración de roles**: reemplazar la vista `#/admin-roles` (exclusiva de `plant_manager`) por `RoleAdminPanel.js`, con las cinco tablas visibles, alta de nuevos usuarios en un rol y asignación de roles adicionales a usuarios existentes, con persistencia inmediata en `erp.manufacturing.v2` y confirmación mediante `showToast`. Tras cerrar sesión y volver a ingresar, los roles nuevos aparecen en el menú superior y en `#/roles`.
+- **Matriz de acceso (`MODULE_ACCESS`)**: quitar `orders` a `supervisor`; dejar a `operator` exactamente con `['operator', 'scheduling', 'roles']` y, dentro de `scheduling`, únicamente el Calendario Mensual sin la pestaña "Listado"; dejar a `maintenance` exactamente con `['maintenance', 'scheduling']`. Los identificadores de ruta existentes no cambian.
+- **Privacidad**: los nombres reales de `hr_employees` solo son visibles para `supervisor` y `plant_manager`; los demás roles ven datos anonimizados o un conteo. En el calendario, el nombre del técnico a cargo de una mantención solo es visible para `plant_manager` y `maintenance`; los otros roles ven solo máquina y duración.
+
+</details>
+
+
+<details open>
+<summary><strong>FR-15: Calendario Mensual Interactivo y Modo Selección de Horario (US-13)</strong></summary>
+
+**US-13**: Como Planificador de Producción, quiero programar órdenes y revisar mantenciones en un calendario mensual con selección visual de horarios y vistas adaptadas a mi rol, para coordinar la producción sin ambigüedades.
+
+- **Calendario mensual**: reestructurar `ProductionSchedulingPanel.js` con un Calendario Mensual en Vanilla JS + CSS Grid, sin librerías externas. Abre en el mes actual, recuerda en memoria de sesión el último mes visitado al cambiar de pestaña y vuelve al mes actual al cambiar de usuario/rol, cerrar sesión o recargar.
+- **Filtro de eventos**: "Ambos" (predeterminado), "Solo Órdenes de Trabajo" y "Solo Mantenciones" (incluye tickets programados y órdenes preventivas).
+- **Bandeja "Pendiente de horario"**: visible exclusivamente para `planner` y `plant_manager`, ordenada por prioridad/urgencia crítica y con porcentaje de avance. Solo `plant_manager` puede cambiar la prioridad y marcar órdenes pendientes como "Urgencia crítica" (`is_critical_urgent` / `priority urgent`).
+- **Modo Selección de Horario para `planner`**: un clic izquierdo simple en una orden pendiente activa el modo foco, con un backdrop oscuro `.scheduling-focus-backdrop` que deja iluminado solo el calendario, una tarjeta flotante `.scheduling-floating-card` que sigue al cursor y un aviso debajo de la cuadrícula indicando que clic derecho sale del modo. Con `mousedown` en el día de inicio y arrastre (`mouseenter`/`mouseover`) se colorean las celdas en vivo con `.calendar-day--drag-range`; al soltar (`mouseup`) se cierra el modo y se abre el popup con horas predeterminadas "08:00" a "16:00", editables. `contextmenu` ejecuta `preventDefault()` y cancela sin abrir el popup.
+- **Menú diario por tarea**: para `planner`, `plant_manager` y `supervisor`, hacer clic en un día abre primero un menú con las órdenes de trabajo y mantenciones de ese día; al elegir una tarea se ocultan las demás y se muestra solo su detalle en `src/components/calendar/CalendarEventDialog.js`, con el botón "Volver a la lista del día".
+- **Vistas y popups por rol**: solo `planner` y `plant_manager` pueden modificar fechas u horarios de órdenes. Para `supervisor` el bloqueo es total: sin inputs de fecha/hora, sin botones de guardar y eventos del calendario con `draggable="false"`. `plant_manager` ve indicadores compactos de color por día y un resumen ejecutivo con productos, meta de producción, máquinas activas/inactivas y cantidad de operadores. `supervisor` ve nombres reales con la etiqueta SC-08 "solo contexto operativo — no evaluación de desempeño" y una alerta de órdenes sin operador asignado; para mantenciones ve solo un resumen de lectura. `operator` ve únicamente sus órdenes asignadas y mantenciones en solo lectura.
+
+</details>
+
+
+<details open>
+<summary><strong>FR-16: Estaciones Derivadas del BOM y Dotación en Supervisión (US-14)</strong></summary>
+
+**US-14**: Como Supervisor de Operaciones/Línea, quiero ver y ajustar las máquinas y los trabajadores de cada orden a partir de la receta del producto, para asegurar que la ejecución siga la secuencia prevista sin duplicar esfuerzos.
+
+- **Estación = máquina**: una estación equivale a un centro de trabajo (`work_center`), sin subdivisión por máquina individual. `deriveBomStations` en `src/domain/operation-planning.js` precarga automáticamente las estaciones/máquinas y su secuencia desde la receta/ruta del BOM de cada orden, conservando intacta la integración con `src/domain/capacity.js`.
+- **Detalle diario de orden**: `CalendarEventDialog.js` muestra las estaciones/máquinas a usar con la etiqueta explícita "Secuencia <N>", con un `title` explicativo y sin duplicar la numeración visual "1., 2., 3." en la misma fila, junto a la cantidad de trabajadores asignados.
+- **Edición de dotación**: el botón "Editar estaciones y trabajadores" aparece exclusivamente para `supervisor` y `plant_manager`. Al presionarlo se redirige a `#/supervision` y se abre automáticamente la edición de esa orden en `SupervisorLinePanel.js`, permitiendo añadir o quitar operadores y estaciones de trabajo con persistencia en `erp.manufacturing.v2`.
+- **Límite de órdenes**: `ProductionOrders.js` (`#/orders`) sigue dedicado exclusivamente a crear y gestionar órdenes, conservando su buscador y filtro de prioridad actuales, sin controles de edición de estaciones/operadores.
+
+</details>
+
+
+<details open>
+<summary><strong>FR-17: Panel de Mantenimiento en 3 Subpestañas e Inmutabilidad (US-15)</strong></summary>
+
+**US-15**: Como Encargado de Mantenimiento, quiero gestionar máquinas, tickets y mantenciones en un solo panel sincronizado con el calendario, para programar intervenciones, registrar paradas reales y dejar constancia confiable de lo resuelto.
+
+- **Estructura**: `MaintenancePanel.js` se organiza en tres subpestañas: "Máquinas", "Tickets" y "Mantenimientos".
+- **Subpestaña Máquinas**: buscador por nombre, filtro por sección, recuadro superior de alerta para máquinas sin mantención preventiva o con la frecuencia recomendada superada, y campo editable por máquina "Cada cuánto se recomienda mantención" en días (solo `maintenance` y `plant_manager`). El panel de detalle muestra el badge de estado operativo actual ("Frenada por mantención" si está en `fault` o con mantención activa, o "Disponible"/"En operación"), historial de fallas, paradas acumuladas y `deriveWearIndicator`. Incluye "Programar preventiva" (motivo y plazo inicial) y, a su lado, "Revisar históricas", que cambia a "Mantenimientos", enfoca la tabla histórica y prellena su buscador con el nombre de la máquina seleccionada.
+- **Subpestaña Tickets**: muestra únicamente la tabla de tickets existentes, sin banner superior duplicado, panel lateral separado ni tabla de preventivas. El botón de acción de tickets abiertos se reemplaza por "Programar mantención": abre un modal para elegir técnico, fecha de inicio y plazo estimado (`scheduled_start_date`, `scheduled_end_date`), pasa el ticket a `in_progress` y la máquina a `fault`, y lo muestra de inmediato en el Calendario Mensual y en "Mantenimientos activos". Al hacer clic en una fila se despliega debajo un recuadro consolidado con detalle del ticket, historial de fallas, historial completo de mantenciones (preventivas y correctivas) e indicador `deriveWearIndicator` con nivel Bajo/Medio/Alto, conteo de fallas y minutos acumulados.
+- **Subpestaña Mantenimientos**: sincronizada al 100 % con todas las mantenciones del calendario (tickets programados y preventivas), dividida en tres bloques, cada uno con su propio buscador por nombre de máquina o código: "Mantenimientos activos" (botón "Resolver"), "Mantenciones aún no resueltas" por plazo vencido (botón "Resolver") y "Mantenimientos históricos" de resueltas/completadas, con botón "Eliminar" confirmado mediante `ConfirmDialog.js` que borra el registro de `erp.manufacturing.v2` y del calendario.
+- **Cálculo automático de parada técnica**: al resolver un ticket correctivo se calcula automáticamente el tiempo real entre el inicio de la intervención y la fecha/hora de resolución, sin exigir ingreso manual. Las mantenciones preventivas nunca se resuelven automáticamente al vencer el plazo; solo al presionar "Resolver".
+- **Fechas dinámicas**: si una mantención activa supera su plazo sin resolverse, su fecha final visible se extiende automáticamente hasta la fecha actual; si se resuelve antes del plazo, se acorta automáticamente a la fecha real de resolución.
+- **Inmutabilidad y resolución en calendario**: una mantención resuelta no puede volverse a resolver ni editarse en ninguna vista; para corregir errores se elimina en Históricos y se vuelve a crear. En el calendario, `maintenance` es el único rol con acción "Resolver" y no tiene bandeja de programación manual: al seleccionar una mantención activa ve tiempo parado, técnico y prioridad; al presionar "Resolver" se abre el popup "¿Está seguro que quiere resolver esta mantención?" con un campo editable de fecha/hora prellenado con la fecha y hora ACTUAL del sistema al momento del clic (NO la fecha de la celda seleccionada). Si la mantención ya está resuelta, se abre en solo lectura sin botón "Resolver".
+
+</details>
+
+
+<details open>
+<summary><strong>FR-18: Restricciones de conservación del estado actual de main</strong></summary>
+
+- Conservar sin cambios las mejoras ya presentes: tipografía `@fontsource-variable/inter`, `icons.js`, `ConfirmDialog.js`, `Toast.js`, `labels.js`, `demo-dates.js`, `capacity.js`, el balance de líneas de US-11, el menú drawer, el botón "Reiniciar datos de demo" de Jefa de Planta y la configuración de `vitest.config.mjs`.
+- Respetar los identificadores de ruta existentes: `orders`, `supervision`, `scheduling`, `maintenance`, `operator`, `plant`, `line-balance`, `bom`, `dashboard`, `roles`, `admin-roles`.
+- No cambiar el nombre del paquete en `package.json`, no agregar dependencias externas y no incorporar elementos de `001-erp-base-module` en `index.html`.
+
+</details>
+
+
 ## 5. Criterios de Aceptación
 
 | ID | Historia | Criterio | Estado |
@@ -272,7 +355,40 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 | AC-45 | US-11 | Al activar una fila de “Carga por centro” se abre un popover compacto centrado sobre esa sección, sin salirse del viewport, con las órdenes de la estación, la carga en el centro y la participación por orden; se cierra con botón, Escape, clic fuera o nueva activación, y no existe la sección “Órdenes por centro” | Verificado |
 | AC-46 | FR-06 / US-11 | En “Utilización por Centro de Trabajo” del Panel de Producción, activar un centro abre una ventana con sus operaciones pendientes, orden, secuencia, estado y minutos; en “Carga por centro” los días hábiles van entre paréntesis en el título del período y la columna “Utilización del día” repite el valor diario del panel, sin columna de días | Verificado |
 
+| AC-47 | US-12 | Cinco roles canónicos (`plant_manager`, `supervisor`, `planner`, `operator`, `maintenance`) sin cuenta genérica "usuario"; credenciales demo jefa/jefa, supervisor/supervisor, planificador/planificador, operador/operador y mantenimiento/mantenimiento, más test/test en las cinco tablas y doble/doble en operator y maintenance, con contraseña igual al usuario | Pendiente |
+| AC-48 | US-12 | Las tablas `role_users_plant_manager`, `role_users_supervisor`, `role_users_planner`, `role_users_operator` y `role_users_maintenance` persisten en `erp.manufacturing.v2`, sobreviven al logout y se restauran con `resetDemoData` | Pendiente |
+| AC-49 | US-12 | El ingreso recorre las cinco tablas y recolecta todos los roles del usuario; el selector del menú superior ofrece solo esos roles, sin cambio posible con un único rol y sin selectores duplicados en otros paneles | Pendiente |
+| AC-50 | US-12 | `#/admin-roles`, exclusivo de `plant_manager`, muestra `RoleAdminPanel.js` con las cinco tablas; agregar usuarios o roles adicionales persiste de inmediato, notifica con `showToast` y, tras logout/login, aparece en el menú superior y en `#/roles` | Pendiente |
+| AC-51 | US-12 | `MODULE_ACCESS` quita `orders` a supervisor; operator queda exactamente con `['operator', 'scheduling', 'roles']` y en scheduling solo ve el Calendario Mensual sin pestaña "Listado"; maintenance queda exactamente con `['maintenance', 'scheduling']`; los IDs de ruta no cambian | Pendiente |
+| AC-52 | US-12 | Nombres reales de `hr_employees` solo para supervisor y plant_manager (anonimizados o conteo para el resto); el técnico de una mantención en el calendario solo se nombra para plant_manager y maintenance, otros roles ven máquina y duración | Pendiente |
+| AC-53 | US-13 | Calendario Mensual en Vanilla JS + CSS Grid sin librerías externas; abre en el mes actual, recuerda el último mes entre cambios de pestaña y vuelve al mes actual al cambiar de usuario/rol, cerrar sesión o recargar | Pendiente |
+| AC-54 | US-13 | Filtro "Ambos" por defecto, "Solo Órdenes de Trabajo" y "Solo Mantenciones", incluyendo tickets programados y órdenes preventivas | Pendiente |
+| AC-55 | US-13 | Bandeja "Pendiente de horario" solo para planner y plant_manager, ordenada por prioridad/urgencia crítica con % de avance; solo plant_manager cambia prioridad y marca "Urgencia crítica" (`is_critical_urgent` / `priority urgent`) | Pendiente |
+| AC-56 | US-13 | En planner, un clic izquierdo simple en una orden pendiente activa el modo foco con `.scheduling-focus-backdrop`, `.scheduling-floating-card` siguiendo al cursor y aviso bajo la cuadrícula de que clic derecho sale del modo | Pendiente |
+| AC-57 | US-13 | `mousedown` en un día y arrastre con `mouseenter`/`mouseover` colorea en vivo las celdas `.calendar-day--drag-range`; `mouseup` cierra el modo y abre el popup con "08:00" a "16:00" editables; `contextmenu` llama `preventDefault()` y cancela sin popup | Pendiente |
+| AC-58 | US-13 | Para planner, plant_manager y supervisor, clic en un día abre un menú de órdenes y mantenciones; elegir una tarea oculta las demás y muestra solo su detalle en `CalendarEventDialog.js` con "Volver a la lista del día" | Pendiente |
+| AC-59 | US-13 | Solo planner y plant_manager modifican fechas/horarios de órdenes; supervisor no tiene inputs de fecha/hora ni botones de guardar y sus eventos tienen `draggable="false"` | Pendiente |
+| AC-60 | US-13 | Plant_manager ve indicadores compactos de color por día y resumen ejecutivo de productos, meta de producción, máquinas activas/inactivas y cantidad de operadores | Pendiente |
+| AC-61 | US-13 | Supervisor ve nombres reales con la etiqueta SC-08 "solo contexto operativo — no evaluación de desempeño", alerta de órdenes sin operador asignado y mantenciones como resumen de solo lectura | Pendiente |
+| AC-62 | US-13 | Operator ve únicamente sus órdenes asignadas y las mantenciones en solo lectura | Pendiente |
+| AC-63 | US-14 | Estación = máquina (`work_center`) sin subdivisión; `deriveBomStations` precarga estaciones y secuencia desde la receta/ruta del BOM de cada orden, conservando la integración con `capacity.js` | Pendiente |
+| AC-64 | US-14 | El detalle diario de orden muestra estaciones con etiqueta "Secuencia <N>", título explicativo, sin doble numeración "1., 2., 3." en la misma fila, junto a la cantidad de trabajadores asignados | Pendiente |
+| AC-65 | US-14 | "Editar estaciones y trabajadores" solo para supervisor y plant_manager; redirige a `#/supervision`, abre la edición de esa orden en `SupervisorLinePanel.js` y persiste altas/bajas de operadores y estaciones en `erp.manufacturing.v2` | Pendiente |
+| AC-66 | US-14 | `#/orders` sigue dedicado a crear y gestionar órdenes, conserva buscador y filtro de prioridad y no contiene controles de estaciones/operadores | Pendiente |
+| AC-67 | US-15 | `MaintenancePanel.js` muestra exactamente las subpestañas "Máquinas", "Tickets" y "Mantenimientos" | Pendiente |
+| AC-68 | US-15 | En Máquinas: buscador por nombre, filtro por sección, alerta superior de máquinas sin preventiva o con frecuencia superada, campo "Cada cuánto se recomienda mantención" editable solo por maintenance y plant_manager, badge "Frenada por mantención"/"Disponible"/"En operación", historial de fallas, paradas acumuladas, `deriveWearIndicator`, "Programar preventiva" y "Revisar históricas" que enfoca el histórico y prellena su buscador con la máquina elegida | Pendiente |
+| AC-69 | US-15 | En Tickets solo aparece la tabla de tickets, sin banner duplicado, panel lateral ni tabla de preventivas; "Programar mantención" abre un modal de técnico, inicio y plazo (`scheduled_start_date`/`scheduled_end_date`), pasa ticket a `in_progress` y máquina a `fault`, y aparece de inmediato en el calendario y en "Mantenimientos activos" | Pendiente |
+| AC-70 | US-15 | Al hacer clic en un ticket se despliega debajo un recuadro con detalle del ticket, historial de fallas, historial completo de mantenciones e indicador `deriveWearIndicator` con nivel Bajo/Medio/Alto, conteo de fallas y minutos acumulados | Pendiente |
+| AC-71 | US-15 | Mantenimientos refleja el 100 % de las mantenciones del calendario en tres bloques con buscador propio por máquina o código: activos (Resolver), no resueltos por vencimiento (Resolver) e históricos (Eliminar confirmado con `ConfirmDialog.js`, borrando registro de `erp.manufacturing.v2` y del calendario) | Pendiente |
+| AC-72 | US-15 | Resolver una correctiva calcula automáticamente la parada real entre inicio de intervención y resolución sin ingreso manual; una preventiva nunca se resuelve sola al vencer el plazo, solo con "Resolver" | Pendiente |
+| AC-73 | US-15 | Una mantención activa vencida extiende su fecha final visible hasta hoy; si se resuelve antes del plazo, la fecha final se acorta a la resolución real | Pendiente |
+| AC-74 | US-15 | Una mantención resuelta no se puede resolver ni editar en ninguna vista; la corrección exige eliminarla en Históricos y crearla de nuevo | Pendiente |
+| AC-75 | US-15 | En el calendario solo maintenance tiene "Resolver" (sin bandeja manual); al seleccionar una activa ve tiempo parado, técnico y prioridad; el popup "¿Está seguro que quiere resolver esta mantención?" trae fecha/hora editable prellenada con la hora ACTUAL del sistema al hacer clic, no la de la celda; una resuelta se abre en solo lectura sin el botón | Pendiente |
+| AC-76 | FR-18 | Permanecen intactas las mejoras de main (tipografía `@fontsource-variable/inter`, `icons.js`, `ConfirmDialog.js`, `Toast.js`, `labels.js`, `demo-dates.js`, `capacity.js`, US-11, menú drawer, "Reiniciar datos de demo" y `vitest.config.mjs`), los IDs de ruta existentes, el nombre del paquete, la ausencia de dependencias externas nuevas y la ausencia de elementos de `001-erp-base-module` en `index.html` | Pendiente |
+
 > **Nota de numeración**: los IDs AC son anclas históricas estables; no se renombran al añadir historias. La columna "Historia" disambigúa los rangos: AC-04..AC-07 y AC-20 pertenecen a US-08, AC-08..AC-14 a la base US-01..US-05/FR-06, y AC-37, AC-39, AC-40 y AC-45 a US-11; AC-46 cubre la utilización diaria compartida entre FR-06 y US-11. AC-38 fue retirado y su cobertura de carga/utilización se integró en AC-39. No existen IDs duplicados ni un mismo criterio asignado a dos historias.
+>
+> **Rangos añadidos**: AC-47..AC-52 corresponden a US-12, AC-53..AC-62 a US-13, AC-63..AC-66 a US-14, AC-67..AC-75 a US-15 y AC-76 a FR-18. AC-01..AC-46 se mantienen textualmente intactos.
 
 ## 6. Entidades Clave
 
@@ -284,6 +400,10 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 - **MaintenanceTicket**: ticket correctivo escalado desde piso, con prioridad, estado, centro, evento de parada, técnico y tiempos de intervención.
 - **PreventiveMaintenanceOrder**: orden de mantenimiento preventivo programada a partir del historial y del desgaste de la máquina.
 - **Umbral de indicador (ThresholdSetting)**: valor crítico configurable por indicador de planta, persistido en el snapshot.
+- **RoleUser (cinco tablas por rol)**: pertenencia de usuarios a `plant_manager`, `supervisor`, `planner`, `operator` y `maintenance`; un usuario puede pertenecer a varias tablas y cada alta se persiste de inmediato.
+- **CalendarEvent / CalendarSelectionState**: órdenes y mantenciones visibles por mes con filtro de tipo, mes visitado en memoria de sesión y rango de días seleccionado por arrastre con horario de inicio/fin editable.
+- **BomStation**: estación derivada de la máquina (`work_center`) y su número de secuencia, obtenida de la receta/ruta del BOM; no subdivide una máquina y se complementa con la dotación de operadores de la orden.
+- **MaintenanceSchedule**: fechas de inicio y plazo estimado de tickets programados y preventivas, con fecha final visible dinámica (extendida a hoy si vence o acortada a la resolución real) y marca de inmutabilidad una vez resuelta.
 
 ## 7. Métricas de Éxito
 
@@ -295,17 +415,25 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 - **SC-06**: Tras recargar la página se conserva el 100% de tickets, intervenciones, umbrales y órdenes preventivas.
 - **SC-07**: Las interacciones de los paneles responden en menos de 100 ms con 500 órdenes y BOM de 4 niveles.
 - **SC-08**: El 0% de las vistas expone rankings individuales; todo detalle por persona se etiqueta como contexto operativo.
+- **SC-09**: El 100% de los roles asignados a un usuario aparece en el menú superior y en `#/roles` tras cerrar sesión y volver a ingresar, sin opciones de rol no asignadas.
+- **SC-10**: El planificador selecciona un rango y guarda el horario de una orden en menos de 1 minuto, con horas predeterminadas editables y cancelación inmediata con clic derecho.
+- **SC-11**: El 100% de las mantenciones visible en el calendario coincide con los tres bloques del panel de mantenimiento, y el 100% de las resoluciones registra parada real sin ingreso manual.
+- **SC-12**: El 0% de las vistas de roles no autorizados revela nombres reales de RR.HH. o de técnicos de mantención; los datos sensibles aparecen anonimizados o como conteo.
 
 ## 8. Supuestos y Dependencias
 
 - El snapshot local se mantiene versionado con `erp.manufacturing.v2` como versión vigente desde US-08; `erp.manufacturing.v1` se migra automáticamente. Cualquier cambio de forma incrementa la versión y se valida al hidratar.
 - `maintenance_tickets`, las órdenes preventivas, `threshold_settings` y `role_permissions` se modelan como entidades locales del módulo y ya están descritas en `data-model.md` §3.19–3.22.
-- Los roles simulados con selector son Jefa de Planta, Supervisor de Operaciones/Línea, Planificador y Operador; no existe autenticación real. La etiqueta visible canónica es "Operador" en toda la interfaz.
+- Los roles simulados con selector son Jefa de Planta, Supervisor de Operaciones/Línea, Planificador, Operador y Encargado de Mantenimiento; no existe autenticación real. Un usuario puede tener varios roles y la etiqueta visible canónica es "Operador" en toda la interfaz.
 - La exportación a PDF y Excel se genera localmente con los datos mock, sin backend ni servicios externos.
 - Los catálogos de RR.HH., calidad y ventas son datos simulados de solo lectura.
 - Los tiempos de turno y de parada se derivan de marcas de tiempo persistidas, no de temporizadores en memoria.
 - El OEE, la carga, la utilización, el cuello de botella y el indicador de desgaste son valores derivados y no se persisten.
 - `efficiency_factor` se aplica a la capacidad efectiva: `domain/capacity.js` deriva la tasa diaria (`capacity_per_day_minutes × efficiency_factor`) y la escala a días hábiles para el panel de planta (US-08) y el balance de líneas (US-11); el Panel de Producción (US-06) muestra esa tasa de un solo día. Cada panel conserva su propia definición de carga (pendiente, observada o proyectada) y `null` significa "sin capacidad válida".
+- Las cinco tablas de usuario forman parte del mismo snapshot `erp.manufacturing.v2`; el botón "Reiniciar datos de demo" de Jefa de Planta restaura tanto las cuentas como sus asignaciones de roles.
+- El calendario y el panel de mantenimiento comparten una única fuente de mantenciones; programar, resolver o eliminar en una vista se refleja en la otra sin duplicar registros.
+- El mes visitado solo se conserva entre pestañas del panel de programación; cualquier cambio de identidad, cierre de sesión o recarga vuelve al mes actual.
+- Las estaciones se derivan de la receta/ruta vigente de cada orden; los cambios de dotación se guardan en la orden y no alteran la receta base ni el cálculo de capacidad existente.
 
 ## 9. Artefactos Spec-Kit
 
@@ -332,3 +460,6 @@ Implementar un prototipo funcional de frontend para el módulo de Operaciones / 
 - **Puentes Inter-Modulares (US-07 / HU-04)**: `ext_hr_employee_id` consume catálogo simulado de operadores de RR.HH. (`src/data/fixtures/hr-employees.js`) y el escalamiento genera registros en `maintenance_tickets` consumibles por la vista de Mantenimiento (HU-06).
 - **Ética**: agregación por centro/operación, sin rankings individuales; tiempos y asignaciones como dato de coordinación operativa.
 - **Navegación**: `src/domain/access-control.js` es la fuente única de roles, etiquetas y matriz de módulos; `src/manufacturing-main.js` sincroniza rol y hash; `src/data/fixtures/dashboard-demo.js` contiene sólo datos de demostración para el inicio.
+- **Puntos de extensión de US-12 a US-15**: `RoleAdminPanel.js` para administrar las cinco tablas de rol; `ProductionSchedulingPanel.js` y `src/components/calendar/CalendarEventDialog.js` para calendario y detalle por tarea; `src/domain/operation-planning.js` (`deriveBomStations`) junto a `SupervisorLinePanel.js` para estaciones y dotación; `MaintenancePanel.js` para máquinas, tickets y mantenciones.
+- **Conservación obligatoria**: no modificar la tipografía `@fontsource-variable/inter`, `icons.js`, `ConfirmDialog.js`, `Toast.js`, `labels.js`, `demo-dates.js`, `capacity.js`, el balance de líneas de US-11, el menú drawer, el botón "Reiniciar datos de demo" ni la configuración de `vitest.config.mjs`.
+- **Límites de cambio**: no renombrar el paquete en `package.json`, no añadir dependencias externas, no incorporar elementos de `001-erp-base-module` en `index.html` y mantener los IDs de ruta `orders`, `supervision`, `scheduling`, `maintenance`, `operator`, `plant`, `line-balance`, `bom`, `dashboard`, `roles` y `admin-roles`.

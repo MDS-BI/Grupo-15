@@ -929,3 +929,163 @@ No hay violaciones que requieran justificación adicional.
 | Indicadores derivados (OEE, carga, utilización) | Evita datos obsoletos y mantiene una única fuente de cálculo. | Persistir métricas añade mantenimiento y riesgo de deriva. |
 | Exportación local | Cumple el alcance frontend-only sin backend ni servicios externos. | Depender de un servicio de reportes rompe el prototipo. |
 | Confirmación simulada de balance | Cumple AC-40 sin store, migración ni mutación de datos maestros. | Registrar o persistir solicitudes daría una trazabilidad que la historia no quiere. |
+
+---
+
+# 11. Plan Técnico Incremental — US-12 a US-15 (snapshot `erp.manufacturing.v2`)
+
+**Alcance**: FR-14 a FR-18, historias US-12 a US-15 y criterios AC-47 a AC-76 de `spec.md`. Esta sección es aditiva: no reemplaza el plan Fase 1 a Fase 24 ni las secciones 1 a 10.
+
+## 11.1 Aislamiento y compatibilidad con `main`
+
+- Las Fases 1 a 24 de `tasks.md` permanecen sin cambios. Las tareas de US-12 a US-15 se generarán como Fases 25 a 28 cuando se ejecute `/speckit.tasks`; este documento solo prepara la entrada técnica.
+- No se modifica `package.json` (nombre de paquete), no se agregan dependencias externas y no se edita `vitest.config.mjs`.
+- No se agregan elementos de `001-erp-base-module` a `index.html`; se conservan los IDs de ruta existentes: `dashboard`, `bom`, `orders`, `operator`, `supervision`, `plant`, `scheduling`, `line-balance`, `maintenance`, `roles`, `admin-roles`.
+- Se conservan las mejoras ya presentes en `main`: tipografía `@fontsource-variable/inter`, menú drawer, `icons.js`, `ConfirmDialog.js`, `Toast.js`, `labels.js`, `demo-dates.js`, `capacity.js`, balance de líneas US-11 y botón “Reiniciar datos de demo” de Jefa de Planta.
+- Reutilización obligatoria de utilidades existentes:
+
+| Utilidad existente | Uso en US-12 a US-15 |
+| --- | --- |
+| `src/components/format.js` | `formatLocalDate`, `formatLocalDateTime`, `fmtNumber`, `fmtPercent`, `escapeHtml`, `el` y mapas de estado en calendario, tablas y popups. |
+| `src/components/labels.js` | `technicianLabel`, `operationLabel`, `salesOrderLabel` para nombres visibles según rol y trazabilidad. |
+| `src/components/icons.js` | `icon(name)` para pestañas, botones de calendario, filtros, mantenimiento y administración de roles. |
+| `src/components/Toast.js` | `showToast` para confirmaciones de programación, reasignación, resolución y eliminación histórica. |
+| `src/components/ConfirmDialog.js` | `confirmDialog` para borrado de mantenimiento histórico, cancelación de programación y confirmación de resolución; `notifyDialog` para validaciones. |
+| `src/data/fixtures/demo-dates.js` | `relativeDay`, `relativeTimestamp`, `daysAgo`, `daysFromNow` para fechas dinámicas y valores por defecto del popup de resolución. |
+| `src/domain/capacity.js` | `effectiveDailyCapacity`, `capacityFor`, `loadRatio` siguen siendo la única fuente de capacidad; `deriveBomStations` reutiliza `plannedTimeMinutes` sin duplicar fórmulas. |
+
+## 11.2 Contexto técnico actualizado
+
+| Área | Decisión |
+| --- | --- |
+| Lenguaje/UI | JavaScript y CSS Vanilla, sin frameworks nuevos; grid del calendario con CSS Grid. |
+| Persistencia | `localStorage['erp.manufacturing.v2']` con `SNAPSHOT_VERSION = 2`; se agregan colecciones y campos opcionales, sin migración a `v3`. |
+| Roles | Cinco roles canónicos en `USER_ROLES` / `CANONICAL_ROLES`: `plant_manager`, `supervisor`, `planner`, `operator`, `maintenance`. |
+| Cuentas demo | Cinco tablas `role_users_*`: `jefa`, `supervisor`, `planificador`, `operador`, `mantenimiento`, más `test` en las cinco y `doble` en `operator`/`maintenance`; contraseña = `username`; se elimina `usuario`. |
+| Calendario | Estado de mes, filtros, arrastre y foco en memoria de sesión; solo las fechas/horas y banderas críticas se persisten en `production_orders`, `maintenance_tickets` y `preventive_maintenance_orders`. |
+| Estaciones | Una estación equivale a un `work_center` existente; la secuencia se deriva de `routingOperations` y se persiste en `order_stations` como dotación por orden. |
+| Mantenimiento | Una sola fuente de datos para los tres bloques y el calendario; `maintenance_tickets` y `preventive_maintenance_orders` comparten `scheduled_start_date` y `scheduled_end_date`. |
+| Navegación | `#/${moduleId}` sin cambios; el editor de estaciones desde el calendario se abre con estado transitorio (`focusOrderId`) y no modifica rutas. |
+| Pruebas | Vitest existente con proyectos `unit`/`integration`; nuevos tests unitarios puros y tests jsdom de paneles; sin cambios de configuración. |
+
+## 11.3 Flujo de datos
+
+```text
+Cuentas demo (5 tablas) ──> rolesForUsername ──> selector de roles ──> MODULE_ACCESS real
+                                                        │
+                                                        └──> vistas restringidas (nombres/responsables)
+
+Producción (Órdenes) ──> validatePlannedDates ──> calendario mensual ──> drag/selección
+        │                       │                       │
+        │                       ├──> bandeja "Pendiente de horario" (supervisor/planner/jefa)
+        │                       └──> CalendarEventDialog ──> programación por rangos + hora
+        │
+        └──> deriveBomStations(order, routingOperations, workCenters) ──> order_stations
+                                                                        └──> SupervisorLinePanel
+
+Mantenimiento (tickets + preventivas) ──> calendario unificado ──> 3 bloques del panel
+                                                                  ├──> programación desde ticket
+                                                                  ├──> fechas visibles dinámicas
+                                                                  └──> resolución inmutable + borrado histórico
+```
+
+## 11.4 Modelo de datos y reglas derivadas
+
+- Ver `data-model.md` secciones 3.11, 3.19, 3.20, 3.22 y nuevas 3.23 a 3.28 para los campos y colecciones exactos.
+- `role_permissions` usa el nuevo rol `maintenance` con permisos `view_plant_panel`, `view_technician_names`; `plant_manager` conserva todos los permisos.
+- `production_orders`: `priority` se amplía a `low | normal | high | urgent`; se agregan `is_critical_urgent` (por defecto `false`) y `scheduled_start_time` / `scheduled_end_time` (por defecto `08:00` / `16:00`).
+- `maintenance_tickets` y `preventive_maintenance_orders`: `scheduled_start_date` y `scheduled_end_date` son opcionales en `v2` y obligatorios para aparecer en el calendario.
+- `order_stations`: fila por `(production_order_id, work_center_id, sequence)` con `operator_ext_hr_employee_ids` y `source = bom_derived | manual`.
+- `calendarState` recuerda el último mes entre pestañas y vuelve al mes actual al cambiar de usuario/rol, cerrar sesión o recargar; `focusOrderId` y el arrastre son transitorios (AC-53).
+- La fecha visible de una mantención activa vencida se calcula como `max(scheduled_end_date, fecha_actual)`; si está resuelta antes del plazo, se muestra la fecha de resolución. Ninguna de estas fechas se persiste.
+
+## 11.5 Contratos a implementar
+
+### 11.5.1 Dominio
+
+- `src/domain/role-access.js` (nuevo): `CANONICAL_ROLES`, `rolesForUsername(roleUsers, username)`, `modulesForRoles(roles)`, `isModuleAllowedForRoles(roles, moduleId)`, `visibleEmployeeNamesFor(role)`, `visibleTechnicianNamesFor(role)`, `roleLabel(role)`.
+- `src/domain/access-control.js`: extender `USER_ROLES`, `ROLE_ORDER`, `ROLE_LABELS`, `ROLE_DESCRIPTIONS`, `ROLE_HOME_MODULE`, `MODULE_GROUPS` y `MODULE_ACCESS` con `maintenance`. Según AC-51: supervisor pierde `orders`; operator queda exactamente con `['operator', 'scheduling', 'roles']`; maintenance queda exactamente con `['maintenance', 'scheduling']`; los IDs de ruta no cambian.
+- `src/domain/operation-planning.js`: agregar `deriveBomStations(order, { routingOperations = [], workCenters = [] } = {})`, que devuelve `{ work_center_id, name, sequence, planned_time_minutes }` ordenado por secuencia y reutiliza `plannedTimeMinutes`.
+- `src/domain/calendar-scheduling.js` (nuevo): `buildCalendarRange(startDay, endDay, startTime, endTime)`, `calendarEventsForMonth(month, sources)`, `filterCalendarEvents(events, filter)`, `sortPendingOrders(orders)`, `canEditOrderSchedule(role)`, `canViewOrderDetails(role)`. El filtro por defecto es `"Ambos"`, con opciones `"Solo Órdenes de Trabajo"` y `"Solo Mantenciones"` (tickets programados + preventivas). `sortPendingOrders` ordena por criticidad/prioridad y expone `% de avance`; solo `plant_manager` cambia prioridad o marca `is_critical_urgent`.
+- `src/domain/maintenance.js`: agregar `computeCorrectiveDowntime(startedAt, resolvedAt)`, `canResolveScheduledMaintenance(event)`, `canRescheduleMaintenance(role)`, `canEditMaintenanceFrequency(role)`, `effectiveMaintenanceEnd(event, today)` y `buildScheduledMaintenanceFromTicket(ticket, { scheduled_start_date, scheduled_end_date, technician_ext_hr_employee_id })`.
+- `src/domain/order-scheduling.js`: conservar `isValidIsoDate`, `validatePlannedDates`, `canRescheduleOrder` y `sortOrdersForScheduling`; `validatePlannedDates` también valida `scheduled_start_time` / `scheduled_end_time` con formato `HH:mm` y rango válido.
+
+### 11.5.2 Store (`ManufacturingStore`)
+
+- Roles: `roleUsersFor(role)`, `rolesForUsername(username)`, `addRoleUser(role, { username })`, `assignRoleToUser(username, role)`. Todas emiten `change` y persisten en `v2`.
+- Calendario: `pendingSchedulingOrders()`, `calendarEventsForMonth(month)`, `scheduleOrderRange(orderId, { startDate, endDate, startTime, endTime })`, `setOrderPriority(orderId, priority)`, `setCriticalUrgent(orderId, flag)`.
+- Estaciones: `ensureBomStationsForOrder(orderId)`, `orderStationsFor(orderId)`, `setOrderStationStaffing(orderId, stations)`; `releaseProductionOrder` invoca `ensureBomStationsForOrder` de forma idempotente, sin alterar `production_order_operations`.
+- Mantenimiento: `maintenanceFeed()`, `scheduleMaintenanceFromTicket(ticketId, payload)` (pasa ticket a `in_progress` y máquina a `fault`), `schedulePreventiveMaintenance(orderId, payload)`, `setRecommendedMaintenanceFrequency(workCenterId, days)` (solo `maintenance`/`plant_manager`), `resolveScheduledMaintenance(id, { resolvedAt })`, `deleteResolvedMaintenance(id)`. Solo `maintenance` resuelve/reprograma/elimina; la resolución calcula inactividad automáticamente y bloquea cualquier edición posterior.
+- `resetDemoData()` restaura las cinco tablas de roles, `order_stations` y los campos de programación de las fixtures; `technicians` y `maintenanceCauses` se mantienen en memoria como hoy.
+
+### 11.5.3 UI
+
+- `src/components/RoleAdminPanel.js` (nuevo): reemplaza `adminRolesView()` en `#/admin-roles` (exclusivo de `plant_manager`), muestra las cinco tablas y persiste altas de usuario/rol con `showToast`; tras logout/login aparecen en el menú superior y en `#/roles`.
+- `src/manufacturing-main.js`: `loadRole()` / `persistRole()` usan solo roles asignados; el `<select data-role="role-select">` de la cabecera es el único selector (sin duplicados en otros paneles) y se oculta con un solo rol.
+- `src/components/ProductionSchedulingPanel.js`: vista “Calendario” con grid CSS mensual, filtro `"Ambos" | "Solo Órdenes de Trabajo" | "Solo Mantenciones"`, bandeja “Pendiente de horario” solo para planner/jefa, foco `.scheduling-focus-backdrop` + `.scheduling-floating-card` siguiendo el cursor, arrastre `.calendar-day--drag-range` y menú por día para planner/jefa/supervisor. El mes se recuerda entre pestañas y vuelve al actual al cambiar de identidad o recargar. La vista “Listado” se oculta para operator.
+- `src/components/calendar/CalendarEventDialog.js` (nuevo): detalle de orden o mantención con botón “Volver a la lista del día”; según rol ofrece reprogramación, “Editar estaciones y trabajadores”, “Resolver” o borrado histórico.
+- `src/components/SupervisorLinePanel.js`: botón “Editar estaciones y trabajadores” redirige a `#/supervision`, abre el editor de esa orden con “Secuencia <N>”, título explicativo, cantidad de trabajadores y altas/bajas persistentes; `#/orders` conserva buscador/filtro de prioridad sin controles de dotación.
+- `src/components/MaintenancePanel.js`: tres subpestañas exactas —“Máquinas”, “Tickets”, “Mantenimientos”—; “Mantenimientos” usa los bloques “Activos”, “No resueltos por vencimiento” e “Históricos”, los tres con buscador por máquina/código y sincronizados con el calendario.
+- Solo `maintenance` resuelve/reprograma/elimina mantenciones; `plant_manager` también edita “Cada cuánto se recomienda mantención” en Máquinas. Toda acción usa `format.js`, `labels.js`, `icons.js`, `Toast.js` y `ConfirmDialog.js` existentes.
+
+## 11.6 Persistencia y migración
+
+- `createFixtureSnapshot()` y `loadSnapshot()` incorporan las colecciones `role_users_plant_manager`, `role_users_supervisor`, `role_users_planner`, `role_users_operator`, `role_users_maintenance` y `order_stations`.
+- `loadSnapshot()` rellena colecciones nuevas ausentes con arreglos vacíos y campos nuevos ausentes con los valores por defecto de la sección 11.4; no invalida snapshots `v2` existentes.
+- `saveSnapshot()` continúa escribiendo `{ version: 2, savedAt, data }`; el botón de reset usa `resetDemoSnapshot` y vuelve a cargar las cinco tablas demo.
+- `technicians` y `maintenanceCauses` siguen sin persistirse; los responsables de mantenimiento se resuelven desde `hr_employees` y el nuevo rol `maintenance`.
+
+## 11.7 Estrategia de pruebas
+
+- Unitarias: `role-access`, `access-control` extendido, `deriveBomStations`, `calendar-scheduling`, `maintenance` (cálculo de inactividad, vencimientos, inmutabilidad) y validación de `HH:mm`.
+- Integración jsdom: login con las cinco cuentas, selector restringido, panel de roles, arrastre y menú diario del calendario, editor de estaciones desde orden y flujo completo de las tres pestañas de mantenimiento.
+- Regresión: todas las pruebas actuales de Fases 1 a 24 deben seguir pasando sin cambios en `vitest.config.mjs`; se ejecuta `npm test` al final de cada fase nueva.
+
+## 11.8 Constitution Check — reevaluación post-diseño
+
+| Principio | Evaluación |
+| --- | --- |
+| Code Quality / Single source of truth | Todas las reglas de roles, fechas, capacidad y estaciones viven en `src/domain`; los paneles solo consumen APIs puras y del store. |
+| Test-First | Cada fase 25 a 28 comienza con tests unitarios y de integración; la cobertura incluye AC-47 a AC-76. |
+| UX Consistency | Se reutilizan `format.js`, `labels.js`, `icons.js`, `Toast.js` y `ConfirmDialog.js`; estados vacíos, error y carga siguen los patrones existentes. |
+| Performance / Reliability | El calendario calcula eventos una sola vez por mes y filtro; el drag no escribe en `localStorage` hasta soltar; la persistencia sigue siendo síncrona y acotada a `v2`. |
+| Simplicity | No hay frameworks, dependencias ni `v3`; se usa CSS Grid y estado transitorio en memoria. |
+| Observability | Cada mutación relevante emite `change` y muestra `showToast`; los errores de validación usan `notifyDialog` o mensajes inline. |
+
+## 11.9 Riesgos y mitigaciones
+
+| Riesgo | Mitigación |
+| --- | --- |
+| Duplicar privilegios al asignar varios roles | La unión solo define roles disponibles en el selector; el módulo activo se resuelve con `MODULE_ACCESS[activeRole]`. |
+| Romper snapshots `v2` con campos nuevos | Todos los campos son opcionales al hidratar y se normalizan con valores por defecto. |
+| Confundir estación con operario | `deriveBomStations` devuelve `work_center_id`; los operarios viven en `operator_ext_hr_employee_ids` y en `shift_assignments` sin sobreescribirlos. |
+| Fechas vencidas que desaparecen del calendario | `effectiveMaintenanceEnd` eleva la fecha visible a “hoy” para activos vencidos; la fecha original no se altera. |
+| Resolución tardía sin inactividad correcta | `computeCorrectiveDowntime` usa `intervention_started_at` o `scheduled_start_date` y el `resolvedAt` editable del popup. |
+| Regresión visual de Fases 1 a 24 | Cambios aditivos, sin editar `tasks.md` ni estilos base; se revisa diff contra `main`. |
+
+## 11.10 Fases 25 a 28 propuestas (entrada futura para `/speckit.tasks`)
+
+| Fase | Objetivo | Entregable principal |
+| --- | --- | --- |
+| 25 | US-12: cinco roles, tablas de usuarios, panel de administración y selector restringido | `role-access.js`, `RoleAdminPanel.js`, extensiones de `access-control.js` y `manufacturing-main.js`, tests AC-47 a AC-52. |
+| 26 | US-13: calendario, bandeja de pendientes, selección por rangos, foco y menú diario | Extensión de `ProductionSchedulingPanel.js`, `CalendarEventDialog.js`, `calendar-scheduling.js`, tests AC-53 a AC-62. |
+| 27 | US-14: derivación BOM, estaciones por orden y edición desde supervisión | `deriveBomStations`, `order_stations`, editor en `SupervisorLinePanel.js`, tests AC-63 a AC-66. |
+| 28 | US-15 y FR-18: tres pestañas, programación desde ticket, sincronización, resolución, inmutabilidad y regresión de `main` | Refactor aditivo de `MaintenancePanel.js`, reglas de mantenimiento programado, tests AC-67 a AC-76. |
+
+## 11.11 Trazabilidad de criterios
+
+| Criterios | Historia | Artefacto responsable |
+| --- | --- | --- |
+| AC-47 a AC-52 | US-12 | `data-model.md` 3.22 a 3.27, `contracts/order-scheduling.md` 9, `plan.md` 11.5.1/11.10 Fase 25. |
+| AC-53 a AC-62 | US-13 | `data-model.md` 3.11, `contracts/order-scheduling.md` 10 a 13, `plan.md` 11.5.3/11.10 Fase 26. |
+| AC-63 a AC-66 | US-14 | `data-model.md` 3.28, `contracts/order-scheduling.md` 12, `plan.md` 11.5.1/11.10 Fase 27. |
+| AC-67 a AC-75 | US-15 | `data-model.md` 3.19/3.20, `contracts/maintenance.md` 8 a 13, `plan.md` 11.5.2/11.10 Fase 28. |
+| AC-76 | FR-18 | `plan.md` 11.1 y 11.8; regresión de mejoras de `main`, rutas y configuración. |
+
+## 11.12 Complexity Tracking
+
+| Violación | Justificación | Mitigación |
+| --- | --- | --- |
+| Cinco tablas de usuarios en lugar de una sola tabla global | Requerimiento explícito de tablas separadas por rol (FR-14/AC-48). | Consulta `rolesForUsername` unifica lecturas; el panel de roles es el único punto de escritura. |
+| Estado de calendario en memoria | Evita persistir arrastres y filtros temporales que ensuciarían `erp.manufacturing.v2`. | Se documenta en contratos; recuerda el mes entre pestañas y vuelve al actual al cambiar de identidad o recargar (AC-53). |
+| Fechas visibles derivadas | Los vencimientos deben aparecer sin alterar la fecha programada original (AC-73). | `effectiveMaintenanceEnd` es puro y se prueba por separado. |

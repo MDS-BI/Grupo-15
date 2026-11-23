@@ -16,6 +16,7 @@ import {
 import { maintenanceTickets } from './fixtures/maintenance-tickets.js';
 import { hrEmployees } from './fixtures/hr-employees.js';
 import { thresholdSettings, rolePermissions } from './fixtures/plant-performance.js';
+import { ROLE_USERS, ROLE_USER_COLLECTION_KEYS } from './fixtures/demo-accounts.js';
 import { preventiveMaintenanceOrders } from './fixtures/preventive-maintenance-orders.js';
 import {
   materialConsumption,
@@ -57,6 +58,7 @@ const COLLECTION_KEYS = [
   'preventiveMaintenanceOrders',
   'thresholdSettings',
   'rolePermissions',
+  ...Object.values(ROLE_USER_COLLECTION_KEYS),
 ];
 
 const REQUIRED_ARRAYS = ['productionOrders', 'workCenters', 'productionOrderOperations'];
@@ -119,6 +121,9 @@ export function migrateV1ToV2(legacy) {
       preventiveMaintenanceOrders: legacy.data.preventiveMaintenanceOrders || [],
       thresholdSettings: legacy.data.thresholdSettings || [],
       rolePermissions: legacy.data.rolePermissions || [],
+      ...Object.fromEntries(
+        Object.values(ROLE_USER_COLLECTION_KEYS).map((key) => [key, legacy.data[key] || []]),
+      ),
     },
   });
 }
@@ -228,6 +233,12 @@ export function createFixtureSnapshot() {
     hrEmployees: cloneFixture(hrEmployees),
     thresholdSettings: cloneFixture(thresholdSettings),
     rolePermissions: cloneFixture(rolePermissions),
+    ...Object.fromEntries(
+      Object.entries(ROLE_USER_COLLECTION_KEYS).map(([role, key]) => [
+        key,
+        cloneFixture(ROLE_USERS[role]),
+      ]),
+    ),
   };
 }
 

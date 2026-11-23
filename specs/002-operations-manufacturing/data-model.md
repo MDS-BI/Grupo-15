@@ -157,6 +157,7 @@ Rol funcional: recurso de capacidad donde se ejecutan las operaciones. Es el eje
 | efficiency_factor | numeric(5,4) | — | No | `default 1.0`; rango `(0, 1]` |
 | cost_per_hour | numeric(14,4) | — | Sí | ≥ 0 |
 | status | enum | — | No | `active` \| `inactive` |
+| recommended_maintenance_frequency_days | integer | — | Sí | US-15/AC-68: “Cada cuánto se recomienda mantención”; entero ≥ 1; editable solo por `maintenance` y `plant_manager` |
 
 ### 3.9 `routings` — Manufactura (planificado, secuencia)
 
@@ -205,7 +206,10 @@ Rol funcional: **orden de fabricación** de un lote. Es el núcleo operativo y e
 | planned_end_date | date | — | Sí | ≥ `planned_start_date` |
 | actual_start_date | date | — | Sí | se fija al pasar a `in_progress` |
 | actual_end_date | date | — | Sí | se fija al pasar a `completed` |
-| priority | enum | — | No | `low` \| `normal` \| `high`; `default normal` |
+| priority | enum | — | No | `low` \| `normal` \| `high` \| `urgent`; `default normal` |
+| is_critical_urgent | boolean | — | No | `default false`; US-13; marca critividad independiente de `priority` |
+| scheduled_start_time | string(HH:mm) | — | No | `default '08:00'`; hora por defecto del popup de programación (US-13) |
+| scheduled_end_time | string(HH:mm) | — | No | `default '16:00'`; > `scheduled_start_time` |
 | notes | string | — | Sí | — |
 
 ### 3.12 `production_order_operations` — Manufactura (ejecución)
@@ -369,6 +373,8 @@ Rol funcional: **ticket correctivo** originado por un incidente escalado desde p
 | reported_by | uuid | FK → (usuarios/operadores) | Sí | **sensible**: quién reportó; ver §7 |
 | description | string | — | No | no vacío; síntoma reportado |
 | priority | enum | — | No | `urgent` \| `high` \| `normal`; el escalamiento de US-07 crea `urgent` |
+| scheduled_start_date | date | — | Sí | US-15; requerido para aparecer en el calendario y en “Activos” |
+| scheduled_end_date | date | — | Sí | US-15; ≥ `scheduled_start_date`; si vence sin resolución, la vista eleva la fecha visible a hoy sin persistirla |
 | ticket_status | enum | — | No | `open` \| `in_progress` \| `resolved` |
 | escalated_to_maint | boolean | — | No | `default true`; indica que proviene del escalamiento de US-07 |
 | technician_ext_hr_employee_id | string | — | Sí | puente de solo lectura a Recursos Humanos; obligatorio en `in_progress` y `resolved` |
@@ -386,7 +392,9 @@ Rol funcional: **ticket correctivo** originado por un incidente escalado desde p
 - `ticket_status = in_progress` ⇒ técnico e `intervention_started_at` no nulos; `resolved_at` nulo. Como máximo un ticket `in_progress` por `work_center_id`.
 - `ticket_status = resolved` ⇒ `resolved_at`, `downtime_started_at`, `downtime_ended_at` y `downtime_minutes` no nulos; `downtime_ended_at ≥ downtime_started_at`.
 - Un ticket resuelto **no se reabre**: una nueva incidencia crea un ticket nuevo vinculado al mismo evento o a uno nuevo.
-- Los tickets son append-only; una corrección se registra como nuevo ticket o nota de auditoría, nunca borrando el original.
+- Los tickets son append-only salvo la excepción controlada de US-15: un ticket resuelto puede eliminarse desde “Históricos” con `ConfirmDialog.js` y rol `maintenance`; nunca se reabre ni se edita.
+- `scheduled_start_date` y `scheduled_end_date` se asignan desde “Programar mantención”: el ticket pasa a `in_progress` y el `work_center` a `fault`; aparece de inmediato en calendario y en “Activos” (AC-69).
+- Solo `maintenance` programa, reprograma, resuelve y elimina mantenciones; `plant_manager` además edita “Cada cuánto se recomienda mantención” en la pestaña Máquinas (AC-68).
 
 ### 3.20 `preventive_maintenance_orders` — Manufactura (mantenimiento preventivo, US-09)
 
@@ -400,7 +408,9 @@ Rol funcional: **orden de mantenimiento preventivo** programada a partir del his
 | work_center_id | uuid | FK → work_centers.id | No | máquina objetivo |
 | source_ticket_id | uuid | FK → maintenance_tickets.id | Sí | ticket de desgaste que sustenta la orden |
 | title | string | — | No | no vacío; descripción breve de la preventiva |
-| planned_date | date | — | No | fecha objetivo de ejecución |
+| planned_date | date | — | No | fecha objetivo de ejecución (legado US-09) |
+| scheduled_start_date | date | — | Sí | US-15; requerido para el calendario; si falta, se deriva de `planned_date` al hidratar |
+| scheduled_end_date | date | — | Sí | US-15; ≥ `scheduled_start_date`; si falta, se deriva de `planned_date` al hidratar |
 | status | enum | — | No | `planned` \| `in_progress` \| `completed` \| `cancelled` |
 | technician_ext_hr_employee_id | string | — | Sí | puente de solo lectura a Recursos Humanos |
 | completed_at | timestamp | — | Sí | obligatorio en `completed` |
@@ -441,15 +451,112 @@ Rol funcional: **matriz rol×acción** simulada para el selector de rol del pane
 |---|---|---|---|---|
 | id | uuid | PK | No | — |
 | company_id | uuid | FK → companies.id | No | — |
-| role | enum | — | No | `plant_manager` \| `supervisor` \| `planner` \| `operator`; único por empresa |
-| action | enum | — | No | `view_plant_panel` \| `set_threshold` \| `change_priority` \| `cancel_order` \| `export_report`; único por rol |
+| role | enum | — | No | `plant_manager` \| `supervisor` \| `planner` \| `operator` \| `maintenance`; único por empresa (US-12 agrega `maintenance`) |
+| action | enum | — | No | `view_plant_panel` \| `set_threshold` \| `change_priority` \| `cancel_order` \| `export_report` \| `view_technician_names`; único por rol |
 | allowed | boolean | — | No | `default false`; define si la acción está habilitada |
 | updated_at | timestamp | — | No | marca de la última configuración |
 
 **Reglas**
 - `(company_id, role, action)` es único.
-- `plant_manager` tiene permitidas todas las acciones; `supervisor` puede `view_plant_panel`, `change_priority` y `export_report`; `planner` puede `view_plant_panel`, `change_priority` y `export_report`; `operator` solo `view_plant_panel`. `supervisor` y `planner` no pueden `set_threshold` ni `cancel_order`.
+- `plant_manager` tiene permitidas todas las acciones; `supervisor` puede `view_plant_panel`, `change_priority` y `export_report`; `planner` puede `view_plant_panel`, `change_priority` y `export_report`; `operator` solo `view_plant_panel`; `maintenance` puede `view_plant_panel` y `view_technician_names`. `supervisor` y `planner` no pueden `set_threshold` ni `cancel_order`.
 - La matriz es una simulación de UX: no sustituye controles de seguridad ni autenticación.
+
+### 3.23 `role_users_plant_manager` — Identidades demo (US-12)
+
+Rol funcional: **cuenta demo del rol Jefa/Plant Manager**. Sustituye a la cuenta genérica `usuario` del snapshot anterior.
+
+| Columna | Tipo | PK/FK | Nullable | Restricciones |
+|---|---|---|---|---|
+| id | uuid | PK | No | — |
+| company_id | uuid | FK → companies.id | No | — |
+| username | string | — | No | minúsculas, único en esta tabla; `jefa`, `test` en la demo |
+| password | string | — | No | demo-only: igual a `username` (`jefa`, `test`) |
+| display_name | string | — | Sí | nombre visible solo para este rol |
+| created_at | timestamp | — | No | — |
+
+### 3.24 `role_users_supervisor` — Identidades demo (US-12)
+
+Rol funcional: **cuenta demo del rol Supervisor/a**. Misma estructura que §3.23; `username = supervisor`.
+
+| Columna | Tipo | PK/FK | Nullable | Restricciones |
+|---|---|---|---|---|
+| id | uuid | PK | No | — |
+| company_id | uuid | FK → companies.id | No | — |
+| username | string | — | No | minúsculas, único en esta tabla |
+| password | string | — | No | demo-only: igual a `username` |
+| display_name | string | — | Sí | nombre visible para plant_manager y supervisor |
+| created_at | timestamp | — | No | — |
+
+### 3.25 `role_users_planner` — Identidades demo (US-12)
+
+Rol funcional: **cuenta demo del rol Planificador/a**. Misma estructura que §3.23; `username = planificador`.
+
+| Columna | Tipo | PK/FK | Nullable | Restricciones |
+|---|---|---|---|---|
+| id | uuid | PK | No | — |
+| company_id | uuid | FK → companies.id | No | — |
+| username | string | — | No | minúsculas, único en esta tabla |
+| password | string | — | No | demo-only: igual a `username` |
+| display_name | string | — | Sí | — |
+| created_at | timestamp | — | No | — |
+
+### 3.26 `role_users_operator` — Identidades demo (US-12)
+
+Rol funcional: **cuenta demo del rol Operador/a**. Misma estructura que §3.23; `username = operador`.
+
+| Columna | Tipo | PK/FK | Nullable | Restricciones |
+|---|---|---|---|---|
+| id | uuid | PK | No | — |
+| company_id | uuid | FK → companies.id | No | — |
+| username | string | — | No | minúsculas, único en esta tabla |
+| password | string | — | No | demo-only: igual a `username` |
+| display_name | string | — | Sí | — |
+| created_at | timestamp | — | No | — |
+
+### 3.27 `role_users_maintenance` — Identidades demo (US-12)
+
+Rol funcional: **cuenta demo del rol Encargado/a de Mantenimiento**. Misma estructura que §3.23; la fixture usa `username = mantenimiento` y `password = mantenimiento`.
+
+| Columna | Tipo | PK/FK | Nullable | Restricciones |
+|---|---|---|---|---|
+| id | uuid | PK | No | — |
+| company_id | uuid | FK → companies.id | No | — |
+| username | string | — | No | minúsculas, único en esta tabla |
+| password | string | — | No | demo-only: igual a `username` |
+| display_name | string | — | Sí | visible solo para `maintenance` y `plant_manager` |
+| created_at | timestamp | — | No | — |
+
+**Reglas de las cinco tablas de roles (AC-47 a AC-52)**
+- Un mismo `username` puede existir en varias tablas; el conjunto de roles asignados es la unión de las tablas donde aparece.
+- Credenciales demo: `jefa/jefa`, `supervisor/supervisor`, `planificador/planificador`, `operador/operador`, `mantenimiento/mantenimiento`; más `test/test` en las cinco tablas y `doble/doble` solo en `role_users_operator` y `role_users_maintenance`. No existe `usuario`.
+- `authenticate` recorre las cinco tablas, acepta solo pares presentes y usa contraseña igual al `username`.
+- El `<select data-role="role-select">` de la cabecera es el único selector: muestra solo roles asignados, se oculta con un solo rol y no se duplica en `#/roles` ni en otros paneles; el módulo activo se resuelve con `MODULE_ACCESS[activeRole]`.
+- `MODULE_ACCESS` (AC-51): supervisor pierde `orders`; operator queda exactamente `['operator', 'scheduling', 'roles']` y en scheduling solo ve el Calendario Mensual sin pestaña “Listado”; maintenance queda exactamente `['maintenance', 'scheduling']`.
+- Los nombres de `hr_employees` son visibles solo para `supervisor` y `plant_manager`; los demás roles ven iniciales o “[Rol]”. Los nombres de técnicos son visibles solo para `maintenance` y `plant_manager`; los demás ven máquina + duración.
+- Las tablas se restauran con `resetDemoData()` y se persisten en `erp.manufacturing.v2`.
+
+### 3.28 `order_stations` — Dotación por orden (US-14)
+
+Rol funcional: **pre carga de estaciones/máquinas derivada de BOM/ruta** y dotación editable desde supervisión. Una estación equivale a un `work_center` existente, sin subdivisiones.
+
+| Columna | Tipo | PK/FK | Nullable | Restricciones |
+|---|---|---|---|---|
+| id | uuid | PK | No | — |
+| company_id | uuid | FK → companies.id | No | — |
+| production_order_id | uuid | FK → production_orders.id | No | borrado en cascada con la orden |
+| work_center_id | uuid | FK → work_centers.id | No | estación = máquina |
+| sequence | integer | — | No | ≥ 10; entregado por `deriveBomStations` |
+| operator_ext_hr_employee_ids | string[] | — | No | `default []`; operadores asignados a la estación en esta orden |
+| source | enum | — | No | `bom_derived` \| `manual`; la edición manual cambia el valor a `manual` |
+| created_at | timestamp | — | No | — |
+| updated_at | timestamp | — | No | — |
+
+**Reglas**
+- `(production_order_id, work_center_id, sequence)` es único; `ensureBomStationsForOrder` es idempotente y no duplica filas al liberar la orden.
+- `deriveBomStations` es puro: lee la receta/ruta del BOM (`routing_operations` + `work_centers`) y calcula `planned_time_minutes` con `plannedTimeMinutes` de `src/domain/operation-planning.js`, conservando la integración con `capacity.js`.
+- Añadir o quitar estaciones y operadores persiste en `erp.manufacturing.v2` y emite `change`; no altera `production_order_operations` ni `shift_assignments`.
+- El detalle diario muestra `Secuencia <N>` con título explicativo y cantidad de trabajadores, sin doble numeración `1., 2., 3.` en la misma fila (AC-64).
+- “Editar estaciones y trabajadores” (solo supervisor y plant_manager) redirige a `#/supervision` y abre esa orden en `SupervisorLinePanel.js`; `#/orders` conserva buscador y filtro de prioridad sin controles de dotación (AC-65/AC-66).
 
 ---
 
@@ -491,6 +598,11 @@ Rol funcional: **matriz rol×acción** simulada para el selector de rol del pane
 | maintenance_tickets → preventive_maintenance_orders (`source_ticket_id`) | 1:N (nullable) | tickets de desgaste que sustentan órdenes preventivas |
 | companies → threshold_settings | 1:N | configuración de umbrales por empresa (US-08) |
 | companies → role_permissions | 1:N | matriz rol×acción simulada por empresa (US-08) |
+| companies → role_users_* (cinco tablas) | 1:N por tabla | identidades demo separadas por rol (US-12) |
+| role_users_* ⟷ roles asignados | N:1 lógico | un `username` puede tener varios roles; la unión alimenta el selector |
+| production_orders → order_stations | 1:N | estaciones derivadas y dotación editable por orden (US-14) |
+| work_centers → order_stations | 1:N | una estación/máquina aparece en muchas órdenes |
+| hr_employees → order_stations (`operator_ext_hr_employee_ids`) | 1:N (puente de solo lectura) | operadores asignados por estación y orden |
 
 `companies`, `units_of_measure` y `warehouses` aparecen como destinos FK (`1:N` cada uno) desde las tablas operativas que los referencian.
 
@@ -608,6 +720,7 @@ erDiagram
         string station_type
         numeric capacity_per_day_minutes
         numeric efficiency_factor
+        integer recommended_maintenance_frequency_days
     }
     routings {
         uuid id PK
@@ -636,6 +749,9 @@ erDiagram
         numeric quantity_planned
         enum status
         enum priority
+        boolean is_critical_urgent
+        string scheduled_start_time
+        string scheduled_end_time
         date planned_start_date
         date planned_end_date
     }
@@ -714,6 +830,8 @@ erDiagram
         uuid po_operation_id FK
         uuid operation_delay_id FK
         enum priority
+        date scheduled_start_date
+        date scheduled_end_date
         enum ticket_status
         boolean escalated_to_maint
         string technician_ext_hr_employee_id
@@ -728,6 +846,8 @@ erDiagram
         uuid work_center_id FK
         uuid source_ticket_id FK
         date planned_date
+        date scheduled_start_date
+        date scheduled_end_date
         enum status
         timestamp completed_at
         numeric downtime_minutes
@@ -746,6 +866,57 @@ erDiagram
         enum role
         enum action
         boolean allowed
+        timestamp updated_at
+    }
+    role_users_plant_manager {
+        uuid id PK
+        uuid company_id FK
+        string username
+        string password
+        string display_name
+        timestamp created_at
+    }
+    role_users_supervisor {
+        uuid id PK
+        uuid company_id FK
+        string username
+        string password
+        string display_name
+        timestamp created_at
+    }
+    role_users_planner {
+        uuid id PK
+        uuid company_id FK
+        string username
+        string password
+        string display_name
+        timestamp created_at
+    }
+    role_users_operator {
+        uuid id PK
+        uuid company_id FK
+        string username
+        string password
+        string display_name
+        timestamp created_at
+    }
+    role_users_maintenance {
+        uuid id PK
+        uuid company_id FK
+        string username
+        string password
+        string display_name
+        timestamp created_at
+    }
+    order_stations {
+        uuid id PK
+        uuid company_id FK
+        uuid production_order_id FK
+        uuid work_center_id FK
+        integer sequence
+        string[] operator_ext_hr_employee_ids
+        enum source
+        timestamp created_at
         timestamp updated_at
     }
 ```
@@ -819,6 +990,22 @@ erDiagram
 - Los indicadores se calculan por centro de trabajo y período; nunca por operador.
 - `detectBottlenecks` devuelve una lista ordenada, no un ranking de personas.
 
+### 6.6 Roles, calendario, estaciones y mantenimiento programado (US-12 a US-15)
+
+| Variable derivada | Fuente | Significado en el negocio |
+|---|---|---|
+| `assigned_roles` | unión de las cinco tablas `role_users_*` | Roles disponibles para el selector; el módulo activo se resuelve con `MODULE_ACCESS`. |
+| `calendarState` | memoria de sesión | Mes, filtros, arrastre y foco; nunca se persisten en `erp.manufacturing.v2`. |
+| `pendingSchedulingOrders` | `production_orders.planned_start_date` / `planned_end_date` | Órdenes sin rango asignado o con rango inválido, visibles para supervisor/planner/jefa. |
+| `effectiveMaintenanceEnd` | `scheduled_end_date` + fecha actual + `resolved_at` | Fecha visible de vencimientos y resoluciones; no altera la fecha programada original. |
+| `order_stations` | `deriveBomStations` + edición de supervisión | Estación por `work_center`, secuencia y dotación por orden; precargada al liberar y editable solo en `#/supervision`. |
+| `critical_urgent` | `production_orders.is_critical_urgent` | Prioridad visual en el calendario, independiente de `priority`. |
+
+**Reglas**
+- `capacityFor` / `effectiveDailyCapacity` de `src/domain/capacity.js` siguen siendo la única fuente de capacidad; `deriveBomStations` solo calcula secuencias y tiempos estándar.
+- Las fechas de mantenimiento visibles se calculan por rol y por día; el calendario sincroniza exactamente los mismos registros que los tres bloques del panel.
+- La resolución de una mantención es terminal: bloquea reprogramación, reasignación y nueva resolución; el borrado solo existe desde “Histórico” y usa `ConfirmDialog.js`.
+
 ---
 
 ## 7. Ética de Datos, Privacidad y Gestión de Sesgos
@@ -860,6 +1047,14 @@ erDiagram
 - **Transparencia:** los umbrales y alarmas son configuración operativa visible, no evaluación de desempeño.
 - **Integridad:** la exportación del reporte conserva la agregación por centro y no permite desagregar por operador.
 
+### 7.5 Privacidad por rol en US-12 a US-15
+
+- Nombres reales de `hr_employees`: solo `supervisor` y `plant_manager`; `operator`, `planner` y `maintenance` ven iniciales o “[Rol]”.
+- Nombres de técnicos de mantenimiento: solo `maintenance` y `plant_manager`; los demás roles ven máquina, estado y duración, nunca el nombre.
+- `display_name` de las tablas `role_users_*` es información demo y nunca se usa para evaluación de desempeño.
+- El editor de estaciones muestra operarios como dotación operativa; no genera rankings ni expone tiempos individuales.
+- El popup de resolución usa `new Date()` como marca inicial editable; la marca final queda como trazabilidad de la intervención, no como métrica de persona.
+
 ---
 
 ## 8. Reglas de Validación Consolidadas
@@ -890,3 +1085,15 @@ erDiagram
 - `role_permissions`: `(company_id, role, action)` único; `plant_manager` ⇒ todas las acciones permitidas; `supervisor` y `planner` ⇒ `view_plant_panel`, `change_priority`, `export_report`; `operator` ⇒ solo `view_plant_panel`.
 - Los valores de OEE, carga, utilización y cuello de botella son derivados y no se persisten en ninguna colección.
 - `work_centers.station_type` es obligatorio y limita las reasignaciones de US-11 a pares del mismo tipo; las confirmaciones de la vista no generan registros.
+- `work_centers.recommended_maintenance_frequency_days`, si existe, es entero ≥ 1 y solo lo editan `maintenance` y `plant_manager` (AC-68).
+- `role_users_*`: `username` en minúsculas y único por tabla; credenciales `jefa`, `supervisor`, `planificador`, `operador`, `mantenimiento`, `test` (cinco tablas) y `doble` (operator/maintenance); la cuenta `usuario` no existe.
+- `role_permissions.role` incluye `maintenance`; `maintenance` ⇒ `view_plant_panel` y `view_technician_names`, sin `set_threshold`, `cancel_order` ni `change_priority`.
+- `MODULE_ACCESS` (AC-51): supervisor sin `orders`; operator exactamente `['operator', 'scheduling', 'roles']` sin pestaña “Listado”; maintenance exactamente `['maintenance', 'scheduling']`.
+- `production_orders.priority` incluye `urgent`; `is_critical_urgent` es booleano derivado de la marca explícita, no del valor de `priority`.
+- `scheduled_start_time` / `scheduled_end_time`: `HH:mm` válido, end > start; se aplican a cada día del rango seleccionado en el calendario.
+- `maintenance_tickets.scheduled_end_date ≥ scheduled_start_date`; un ticket sin ambas fechas no aparece en el calendario ni en “Activos”.
+- `preventive_maintenance_orders`: si `scheduled_start_date` o `scheduled_end_date` faltan al hidratar, se derivan de `planned_date` sin cambiar la versión `2`.
+- `order_stations`: `(production_order_id, work_center_id, sequence)` único; `sequence ≥ 10`; `source = bom_derived | manual`; editor solo desde `#/supervision`.
+- Una mantención resuelta/completada es inmutable: `resolveScheduledMaintenance` falla si el evento ya está cerrado y `deleteResolvedMaintenance` solo opera desde “Históricos” con rol `maintenance`.
+- Programar desde ticket pasa el ticket a `in_progress` y la máquina a `fault`; una preventiva nunca se resuelve por vencimiento del plazo (AC-69/AC-72).
+- `calendarState`, `focusOrderId` y las fechas visibles vencidas son derivados/transitorios: no se persisten en `erp.manufacturing.v2`.
