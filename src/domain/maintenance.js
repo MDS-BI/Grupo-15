@@ -238,3 +238,126 @@ export function hasTicketForOperationDelay(tickets = [], operationDelayId) {
   if (!operationDelayId) return false;
   return tickets.some((ticket) => ticket.operation_delay_id === operationDelayId);
 }
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function isoDate(value) {
+  if (typeof value !== 'string' || !ISO_DATE.test(value)) return null;
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+    ? value
+    : null;
+}
+
+function datePartOf(value) {
+  if (typeof value !== 'string') return null;
+  return isoDate(value) || (value.match(/^(\d{4}-\d{2}-\d{2})T/) ? value.slice(0, 10) : null);
+}
+
+/**
+ * @param {string} startedAt
+ * @param {string} resolvedAt
+ * @returns {number} Minutos de parada real redondeados a 2 decimales.
+ */
+export function computeCorrectiveDowntime(startedAt, resolvedAt) {
+  const start = toMillis(startedAt);
+  const end = toMillis(resolvedAt);
+  if (start === null || end === null) {
+    throw new Error('Las fechas de la intervención no son fechas válidas.');
+  }
+  return round2(Math.max(0, (end - start) / 60000));
+}
+
+export function isResolvedMaintenance(event) {
+  if (!event) return false;
+  if (event.maintenanceType === 'preventive' || event.kind === 'preventive') {
+    return [
+      PreventiveMaintenanceOrderStatus.COMPLETED,
+      PreventiveMaintenanceOrderStatus.CANCELLED,
+    ].includes(event.status);
+  }
+  return (
+    event.ticket_status === MaintenanceTicketStatus.RESOLVED ||
+    event.status === MaintenanceTicketStatus.RESOLVED ||
+    [
+      PreventiveMaintenanceOrderStatus.COMPLETED,
+      PreventiveMaintenanceOrderStatus.CANCELLED,
+    ].includes(event.status)
+  );
+}
+
+/**
+ * @param {Object} event
+ * @param {string} [today]
+ * @returns {string|null} Fecha visible derivada, sin persistir.
+ */
+export function effectiveMaintenanceEnd(event, today) {
+  const scheduledEnd = datePartOf(event?.scheduled_end_date || event?.end_date);
+  const current = datePartOf(today) || datePartOf(new Date().toISOString()) || null;
+  if (!scheduledEnd) return current;
+
+  const resolved = isResolvedMaintenance(event);
+  const actualEnd = datePartOf(event?.resolved_at || event?.completed_at);
+  if (resolved && actualEnd && actualEnd < scheduledEnd) return actualEnd;
+  if (!resolved && current && scheduledEnd < current) return current;
+  return scheduledEnd;
+}
+
+export function canResolveScheduledMaintenance(event) {
+  if (!event || isResolvedMaintenance(event)) return false;
+  return ['open', 'in_progress', 'planned'].includes(event.status);
+}
+
+export function canRescheduleMaintenance(role) {
+  return role === 'maintenance';
+}
+
+export function canEditMaintenanceFrequency(role) {
+  return role === 'maintenance' || role === 'plant_manager';
+}
+
+/**
+ * @param {import('./types.js').MaintenanceTicket} ticket
+ * @param {{scheduled_start_date:string, scheduled_end_date:string, technician_ext_hr_employee_id:string}} payload
+ */
+export function buildScheduledMaintenanceFromTicket(ticket, payload = {}) {
+  if (!ticket) throw new Error('Ticket no encontrado.');
+  if (ticket.ticket_status === MaintenanceTicketStatus.RESOLVED) {
+    throw new Error('Un ticket resuelto no se puede programar.');
+  }
+  const startDate = isoDate(payload.scheduled_start_date);
+  const endDate = isoDate(payload.scheduled_end_date);
+  if (!startDate || !endDate) throw new Error('Las fechas programadas no son válidas.');
+  if (endDate < startDate) {
+    throw new Error('La fecha de término no puede ser anterior a la de inicio.');
+  }
+  const technician = String(payload.technician_ext_hr_employee_id || '').trim();
+  if (!technician) throw new Error('Debe asignar un técnico para programar la mantención.');
+
+  return {
+    id: `maintenance:${ticket.id}`,
+    kind: 'maintenance',
+    sourceId: ticket.id,
+    source_ticket_id: ticket.id,
+    maintenanceType: 'ticket',
+    title: [ticket.ticket_code, ticket.description].filter(Boolean).join(' · ') || ticket.id,
+    work_center_id: ticket.work_center_id,
+    technician_ext_hr_employee_id: technician,
+    scheduled_start_date: startDate,
+    scheduled_end_date: endDate,
+    start_date: startDate,
+    end_date: endDate,
+    start_time: '08:00',
+    end_time: '16:00',
+    status: ticket.ticket_status || MaintenanceTicketStatus.OPEN,
+    ticket_status: ticket.ticket_status || MaintenanceTicketStatus.OPEN,
+    priority: ticket.priority,
+    is_overdue: false,
+    visible_end_date: endDate,
+    resolved_at: ticket.resolved_at || null,
+    downtime_minutes: ticket.downtime_minutes ?? null,
+  };
+}

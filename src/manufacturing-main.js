@@ -78,7 +78,7 @@ const MODULES = [
     id: 'maintenance',
     label: 'Mantenimiento',
     icon: 'maintenance',
-    render: () => MaintenancePanel(store),
+    render: (context) => MaintenancePanel(store, { role: context.role }),
   },
   {
     id: 'roles',

@@ -14,6 +14,27 @@ import {
   sortTicketsByPriorityAndAge,
 } from '../../src/domain/maintenance.js';
 import { maintenanceTickets } from '../../src/data/fixtures/maintenance-tickets.js';
+import { ManufacturingStore } from '../../src/data/ManufacturingStore.js';
+import { SNAPSHOT_KEY } from '../../src/data/persistence.js';
+import { relativeDay } from '../../src/data/fixtures/demo-dates.js';
+
+function memoryStorage(initial = {}) {
+  const map = new Map(Object.entries(initial));
+  return {
+    getItem(key) {
+      return map.has(key) ? map.get(key) : null;
+    },
+    setItem(key, value) {
+      map.set(key, String(value));
+    },
+    removeItem(key) {
+      map.delete(key);
+    },
+    clear() {
+      map.clear();
+    },
+  };
+}
 
 function ticket(overrides = {}) {
   return {
@@ -129,6 +150,130 @@ describe('domain/maintenance - órdenes preventivas', () => {
     expect(draft.source_ticket_id).toBe('mt_1004');
     expect(draft.planned_date).toBe('2026-11-15');
     expect(draft.title).toContain('Preventiva');
+  });
+});
+
+function localIsoDate(value) {
+  const date = new Date(value);
+  const pad = (part) => String(part).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+describe('US-15 - mantenimiento programado en el store', () => {
+  it('programa desde ticket, calcula la parada al resolver y persiste en v2', () => {
+    const storage = memoryStorage();
+    const store = new ManufacturingStore({ storage });
+    const created = store.scheduleMaintenanceFromTicket(
+      'mt_1001',
+      {
+        technician_ext_hr_employee_id: 'ext_hr_tec_01',
+        scheduled_start_date: '2026-11-10',
+        scheduled_end_date: '2026-11-12',
+      },
+      'maintenance',
+    );
+
+    const ticket = store.maintenanceTickets.find((row) => row.id === 'mt_1001');
+    expect(created.status).toBe('in_progress');
+    expect(ticket.ticket_status).toBe('in_progress');
+    expect(ticket.intervention_started_at).toBeTruthy();
+    expect(ticket.downtime_started_at).toBe(ticket.intervention_started_at);
+    expect(store.workCenterById(ticket.work_center_id).operational_status).toBe('fault');
+    expect(store.maintenanceFeed().some((event) => event.id === 'maintenance:mt_1001')).toBe(true);
+
+    const resolvedAt = new Date(
+      new Date(ticket.intervention_started_at).getTime() + 65 * 60000,
+    ).toISOString();
+    store.resolveScheduledMaintenance('maintenance:mt_1001', { resolvedAt }, 'maintenance');
+
+    expect(ticket.ticket_status).toBe('resolved');
+    expect(ticket.downtime_minutes).toBe(65);
+    expect(ticket.downtime_ended_at).toBe(resolvedAt);
+    expect(JSON.parse(storage.getItem(SNAPSHOT_KEY)).data.maintenanceTickets).toBeDefined();
+  });
+
+  it('no cierra una preventiva vencida y proyecta su fecha hasta hoy', () => {
+    const store = new ManufacturingStore({ storage: memoryStorage() });
+    const created = store.createPreventiveMaintenanceOrder({
+      workCenterId: 'wc_solda_2',
+      sourceTicketId: null,
+      plannedDate: '2026-01-01',
+      title: 'Preventiva vencida de prueba',
+    });
+    store.schedulePreventiveMaintenance(
+      created.id,
+      {
+        scheduled_start_date: '2026-01-01',
+        scheduled_end_date: '2026-01-02',
+      },
+      'maintenance',
+    );
+
+    const event = store.maintenanceFeed().find((row) => row.sourceId === created.id);
+    expect(event.status).toBe('planned');
+    expect(event.is_overdue).toBe(true);
+    expect(event.visible_end_date).toBe(relativeDay(0));
+    expect(store.preventiveMaintenanceOrders.find((row) => row.id === created.id).status).toBe(
+      'planned',
+    );
+
+    const resolvedAt = new Date().toISOString();
+    store.resolveScheduledMaintenance(`maintenance:${created.id}`, { resolvedAt }, 'maintenance');
+    expect(store.preventiveMaintenanceOrders.find((row) => row.id === created.id).status).toBe(
+      'completed',
+    );
+  });
+
+  it('acorta la fecha visible de una correctiva resuelta antes del plazo', () => {
+    const store = new ManufacturingStore({ storage: memoryStorage() });
+    store.scheduleMaintenanceFromTicket(
+      'mt_1003',
+      {
+        technician_ext_hr_employee_id: 'ext_hr_tec_03',
+        scheduled_start_date: relativeDay(0),
+        scheduled_end_date: relativeDay(10),
+      },
+      'maintenance',
+    );
+    const resolvedAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    store.resolveScheduledMaintenance('maintenance:mt_1003', { resolvedAt }, 'maintenance');
+
+    const event = store.maintenanceFeed().find((row) => row.sourceId === 'mt_1003');
+    expect(event.status).toBe('resolved');
+    expect(event.visible_end_date).toBe(localIsoDate(resolvedAt));
+  });
+
+  it('bloquea resolver, reprogramar o borrar registros resueltos sin permiso', () => {
+    const store = new ManufacturingStore({ storage: memoryStorage() });
+    store.scheduleMaintenanceFromTicket(
+      'mt_1005',
+      {
+        technician_ext_hr_employee_id: 'ext_hr_tec_02',
+        scheduled_start_date: relativeDay(0),
+        scheduled_end_date: relativeDay(2),
+      },
+      'maintenance',
+    );
+    const resolvedAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    store.resolveScheduledMaintenance('maintenance:mt_1005', { resolvedAt }, 'maintenance');
+
+    expect(() =>
+      store.resolveScheduledMaintenance('maintenance:mt_1005', { resolvedAt }, 'maintenance'),
+    ).toThrow(/resuelta|no se puede/i);
+    expect(() =>
+      store.scheduleMaintenanceFromTicket(
+        'mt_1005',
+        {
+          technician_ext_hr_employee_id: 'ext_hr_tec_02',
+          scheduled_start_date: relativeDay(1),
+          scheduled_end_date: relativeDay(3),
+        },
+        'maintenance',
+      ),
+    ).toThrow(/resuelto/i);
+    expect(() => store.deleteResolvedMaintenance('maintenance:mt_1005', 'operator')).toThrow(
+      /rol/i,
+    );
   });
 });
 

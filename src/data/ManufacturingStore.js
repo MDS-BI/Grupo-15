@@ -37,11 +37,18 @@ import {
 } from '../domain/validators.js';
 import { reconcileConsumption, requiresReview } from '../domain/reconciliation.js';
 import {
+  buildScheduledMaintenanceFromTicket,
+  canEditMaintenanceFrequency,
+  canResolveScheduledMaintenance,
+  canRescheduleMaintenance,
   canResolveTicket,
   canStartIntervention,
   canTransitionPreventiveOrder,
+  computeCorrectiveDowntime,
   computeDowntimeMinutes,
   deriveWearIndicator,
+  effectiveMaintenanceEnd,
+  isResolvedMaintenance,
   resolveAvailabilityStatus,
   sortTicketsByPriorityAndAge,
 } from '../domain/maintenance.js';
@@ -74,6 +81,7 @@ import {
 } from '../domain/plant-performance.js';
 import {
   canRescheduleOrder,
+  isValidIsoDate,
   sortOrdersForScheduling,
   validatePlannedDates,
 } from '../domain/order-scheduling.js';
@@ -117,6 +125,22 @@ function datePart(value) {
   const match = value.match(/^(\d{4}-\d{2}-\d{2})T/);
   return match ? match[1] : null;
 }
+
+function padNumber(value) {
+  return String(value).padStart(2, '0');
+}
+
+function todayIso() {
+  const now = new Date();
+  return `${now.getFullYear()}-${padNumber(now.getMonth() + 1)}-${padNumber(now.getDate())}`;
+}
+
+function maintenanceSourceId(id) {
+  const value = String(id || '');
+  return value.startsWith('maintenance:') ? value.slice('maintenance:'.length) : value;
+}
+
+const MAINTENANCE_PRIORITY_RANK = Object.freeze({ urgent: 0, high: 1, normal: 2, low: 3 });
 
 export class ManufacturingStore extends EventTarget {
   constructor({ storage, hydrate = true } = {}) {
@@ -1327,6 +1351,253 @@ export class ManufacturingStore extends EventTarget {
     return deriveWearIndicator(this.maintenanceTickets, workCenterId, period);
   }
 
+  #technicianName(technicianId) {
+    if (!technicianId) return null;
+    return (
+      [...mtFx.technicians, ...this.hrEmployees].find(
+        (row) => row.ext_hr_employee_id === technicianId,
+      )?.name || null
+    );
+  }
+
+  #maintenanceTicketEvent(ticket) {
+    const start =
+      ticket.scheduled_start_date || ticket.scheduled_end_date || datePart(ticket.created_at);
+    const end = ticket.scheduled_end_date || ticket.scheduled_start_date || start;
+    if (!start || !end) return null;
+    const event = {
+      ...ticket,
+      id: `maintenance:${ticket.id}`,
+      kind: 'maintenance',
+      sourceId: ticket.id,
+      source_ticket_id: ticket.id,
+      maintenanceType: 'ticket',
+      title: [ticket.ticket_code, ticket.description].filter(Boolean).join(' · ') || ticket.id,
+      start_date: start,
+      end_date: end,
+      scheduled_start_date: start,
+      scheduled_end_date: end,
+      work_center_name: this.workCenterById(ticket.work_center_id)?.name || null,
+      technician_name: this.#technicianName(ticket.technician_ext_hr_employee_id),
+      status: ticket.ticket_status,
+      priority: ticket.priority,
+      is_overdue: false,
+      resolved_at: ticket.resolved_at || null,
+      visible_end_date: end,
+    };
+    const today = todayIso();
+    event.is_overdue = !isResolvedMaintenance(event) && end < today;
+    event.visible_end_date = effectiveMaintenanceEnd(event, today);
+    return event;
+  }
+
+  #maintenancePreventiveEvent(order) {
+    const start =
+      order.scheduled_start_date || order.scheduled_end_date || datePart(order.planned_date);
+    const end = order.scheduled_end_date || order.scheduled_start_date || start;
+    if (!start || !end) return null;
+    const event = {
+      ...order,
+      id: `maintenance:${order.id}`,
+      kind: 'maintenance',
+      sourceId: order.id,
+      maintenanceType: 'preventive',
+      title: [order.order_code, order.title].filter(Boolean).join(' · ') || order.id,
+      start_date: start,
+      end_date: end,
+      scheduled_start_date: start,
+      scheduled_end_date: end,
+      work_center_name: this.workCenterById(order.work_center_id)?.name || null,
+      technician_name: this.#technicianName(order.technician_ext_hr_employee_id),
+      status: order.status,
+      priority: order.priority || 'normal',
+      is_overdue: false,
+      resolved_at: order.completed_at || null,
+      downtime_minutes: order.downtime_minutes ?? null,
+      visible_end_date: end,
+    };
+    const today = todayIso();
+    event.is_overdue = !isResolvedMaintenance(event) && end < today;
+    event.visible_end_date = effectiveMaintenanceEnd(event, today);
+    return event;
+  }
+
+  maintenanceFeed() {
+    const ticketEvents = this.maintenanceTickets
+      .map((ticket) => this.#maintenanceTicketEvent(ticket))
+      .filter(Boolean);
+    const scheduledTicketIds = new Set(
+      ticketEvents
+        .filter((event) => event.scheduled_start_date || event.scheduled_end_date)
+        .map((event) => event.source_ticket_id || event.sourceId),
+    );
+    const preventiveEvents = this.preventiveMaintenanceOrders
+      .filter((order) => !order.source_ticket_id || !scheduledTicketIds.has(order.source_ticket_id))
+      .map((order) => this.#maintenancePreventiveEvent(order))
+      .filter(Boolean);
+
+    return [...ticketEvents, ...preventiveEvents].sort((a, b) => {
+      const byDate = String(a.scheduled_start_date).localeCompare(String(b.scheduled_start_date));
+      if (byDate !== 0) return byDate;
+      const byPriority =
+        (MAINTENANCE_PRIORITY_RANK[a.priority] ?? 99) -
+        (MAINTENANCE_PRIORITY_RANK[b.priority] ?? 99);
+      if (byPriority !== 0) return byPriority;
+      return String(a.title || a.sourceId).localeCompare(String(b.title || b.sourceId));
+    });
+  }
+
+  scheduleMaintenanceFromTicket(ticketId, payload = {}, role = 'maintenance') {
+    if (!canRescheduleMaintenance(role)) {
+      throw new Error('Solo el rol de mantenimiento puede programar mantenciones.');
+    }
+    const ticket = this.maintenanceTickets.find((row) => row.id === ticketId);
+    if (!ticket) throw new Error(`Ticket no encontrado: ${ticketId}`);
+    const event = buildScheduledMaintenanceFromTicket(ticket, payload);
+    const active = this.activeInterventionForWorkCenter(ticket.work_center_id);
+    if (active && active.id !== ticket.id) {
+      throw new Error('El centro de trabajo ya tiene una intervención activa.');
+    }
+    const workCenter = this.workCenterById(ticket.work_center_id);
+    if (!workCenter) {
+      throw new Error(`Centro de trabajo no encontrado: ${ticket.work_center_id}`);
+    }
+
+    const now = new Date().toISOString();
+    ticket.scheduled_start_date = event.scheduled_start_date;
+    ticket.scheduled_end_date = event.scheduled_end_date;
+    ticket.technician_ext_hr_employee_id = event.technician_ext_hr_employee_id;
+    ticket.ticket_status = 'in_progress';
+    ticket.intervention_started_at = ticket.intervention_started_at || now;
+    ticket.downtime_started_at = ticket.downtime_started_at || ticket.intervention_started_at;
+    workCenter.operational_status = 'fault';
+
+    this.#persist();
+    this.#emit();
+    return this.maintenanceFeed().find((row) => row.id === event.id) || null;
+  }
+
+  schedulePreventiveMaintenance(orderId, payload = {}, role = 'maintenance') {
+    if (!canRescheduleMaintenance(role)) {
+      throw new Error('Solo el rol de mantenimiento puede programar mantenciones.');
+    }
+    const order = this.preventiveMaintenanceOrders.find((row) => row.id === orderId);
+    if (!order) throw new Error(`Orden preventiva no encontrada: ${orderId}`);
+    if (isResolvedMaintenance({ maintenanceType: 'preventive', status: order.status })) {
+      throw new Error('Una mantención resuelta no se puede reprogramar.');
+    }
+    const start = payload.scheduled_start_date;
+    const end = payload.scheduled_end_date;
+    if (!isValidIsoDate(start) || !isValidIsoDate(end)) {
+      throw new Error('Las fechas programadas no son válidas.');
+    }
+    if (end < start) {
+      throw new Error('La fecha de término no puede ser anterior a la de inicio.');
+    }
+
+    order.scheduled_start_date = start;
+    order.scheduled_end_date = end;
+    this.#persist();
+    this.#emit();
+    return this.maintenanceFeed().find((row) => row.id === `maintenance:${order.id}`) || null;
+  }
+
+  setRecommendedMaintenanceFrequency(workCenterId, days, role = 'maintenance') {
+    if (!canEditMaintenanceFrequency(role)) {
+      throw new Error('Su rol no puede editar la frecuencia recomendada de mantención.');
+    }
+    const parsed = Number(days);
+    if (!Number.isFinite(parsed) || parsed < 1) {
+      throw new Error('La frecuencia recomendada debe ser al menos 1 día.');
+    }
+    const workCenter = this.workCenterById(workCenterId);
+    if (!workCenter) {
+      throw new Error(`Centro de trabajo no encontrado: ${workCenterId}`);
+    }
+    workCenter.recommended_maintenance_frequency_days = Math.round(parsed);
+    this.#persist();
+    this.#emit();
+    return workCenter;
+  }
+
+  resolveScheduledMaintenance(id, { resolvedAt } = {}, role = 'maintenance') {
+    if (role !== 'maintenance') {
+      throw new Error('Solo el rol de mantenimiento puede resolver mantenciones.');
+    }
+    const sourceId = maintenanceSourceId(id);
+    const event =
+      this.maintenanceFeed().find((row) => row.id === id) ||
+      this.maintenanceFeed().find((row) => row.sourceId === sourceId);
+    if (!event) throw new Error(`Mantención no encontrada: ${id}`);
+    if (!canResolveScheduledMaintenance(event)) {
+      throw new Error('La mantención ya está resuelta y no se puede volver a resolver.');
+    }
+    if (!resolvedAt || !Number.isFinite(new Date(resolvedAt).getTime())) {
+      throw new Error('Debe indicar una fecha y hora de resolución válida.');
+    }
+
+    if (event.maintenanceType === 'ticket') {
+      const ticket = this.maintenanceTickets.find((row) => row.id === sourceId);
+      if (!ticket) throw new Error(`Ticket no encontrado: ${sourceId}`);
+      if (!ticket.intervention_started_at) {
+        throw new Error('El ticket no tiene una intervención iniciada.');
+      }
+      this.resolveMaintenanceTicket(sourceId, {
+        resolvedAt,
+        downtimeStartedAt: ticket.downtime_started_at || ticket.intervention_started_at,
+        downtimeEndedAt: resolvedAt,
+        causeReasonId: ticket.cause_reason_id || null,
+        notes: ticket.resolution_notes || '',
+      });
+      ticket.downtime_minutes = computeCorrectiveDowntime(
+        ticket.intervention_started_at,
+        resolvedAt,
+      );
+      this.#persist();
+      this.#emit();
+      return this.maintenanceFeed().find((row) => row.id === `maintenance:${sourceId}`) || null;
+    }
+
+    const order = this.preventiveMaintenanceOrders.find((row) => row.id === sourceId);
+    if (!order) throw new Error(`Orden preventiva no encontrada: ${sourceId}`);
+    order.status = 'completed';
+    order.completed_at = new Date(resolvedAt).toISOString();
+    if (order.downtime_minutes === null || order.downtime_minutes === undefined) {
+      order.downtime_minutes = computeCorrectiveDowntime(
+        `${order.scheduled_start_date || order.planned_date}T08:00:00`,
+        resolvedAt,
+      );
+    }
+    this.#persist();
+    this.#emit();
+    return this.maintenanceFeed().find((row) => row.id === `maintenance:${sourceId}`) || null;
+  }
+
+  deleteResolvedMaintenance(id, role = 'maintenance') {
+    if (role !== 'maintenance') {
+      throw new Error('Solo el rol de mantenimiento puede eliminar mantenciones históricas.');
+    }
+    const sourceId = maintenanceSourceId(id);
+    const event =
+      this.maintenanceFeed().find((row) => row.id === id) ||
+      this.maintenanceFeed().find((row) => row.sourceId === sourceId);
+    if (!event) throw new Error(`Mantención no encontrada: ${id}`);
+    if (!isResolvedMaintenance(event)) {
+      throw new Error('Solo se pueden eliminar mantenciones resueltas del histórico.');
+    }
+
+    if (event.maintenanceType === 'ticket') {
+      this.maintenanceTickets = this.maintenanceTickets.filter((row) => row.id !== sourceId);
+    } else {
+      this.preventiveMaintenanceOrders = this.preventiveMaintenanceOrders.filter(
+        (row) => row.id !== sourceId,
+      );
+    }
+    this.#persist();
+    this.#emit();
+    return true;
+  }
+
   startMaintenanceIntervention(ticketId, { technician_ext_hr_employee_id } = {}) {
     const ticket = this.maintenanceTickets.find((t) => t.id === ticketId);
     if (!ticket) throw new Error(`Ticket no encontrado: ${ticketId}`);
@@ -1450,6 +1721,8 @@ export class ManufacturingStore extends EventTarget {
       source_ticket_id: source ? source.id : null,
       title: cleanTitle,
       planned_date: plannedDate,
+      scheduled_start_date: plannedDate,
+      scheduled_end_date: plannedDate,
       status: 'planned',
       technician_ext_hr_employee_id: String(technician_ext_hr_employee_id || '').trim() || null,
       completed_at: null,
@@ -2284,11 +2557,16 @@ export class ManufacturingStore extends EventTarget {
           (row) => row.ext_hr_employee_id === order.technician_ext_hr_employee_id,
         )?.name || null,
     }));
-    return deriveCalendarEventsForMonth(month, {
+    const events = deriveCalendarEventsForMonth(month, {
       orders,
       maintenanceTickets,
       preventiveMaintenanceOrders,
       productionOrderOperations: this.productionOrderOperations,
+    });
+    return events.map((event) => {
+      if (event.kind !== 'maintenance') return event;
+      const visibleEnd = effectiveMaintenanceEnd(event, todayIso());
+      return { ...event, visible_end_date: visibleEnd, end_date: visibleEnd };
     });
   }
 

@@ -1,10 +1,17 @@
 /**
- * @file Panel de mantenimiento (US-09): bandeja priorizada, intervención,
+ * @file Panel de mantenimiento (US-09/US-15): bandeja priorizada, intervención,
  * cierre con marcas de parada, historial/desgaste y órdenes preventivas.
- * Ver contracts/maintenance.md §4.
+ * Ver contracts/maintenance.md §4 y §8.
  */
 
-import { computeDowntimeMinutes, buildPreventiveOrderFromHistory } from '../domain/maintenance.js';
+import {
+  buildPreventiveOrderFromHistory,
+  canEditMaintenanceFrequency,
+  canRescheduleMaintenance,
+  canResolveScheduledMaintenance,
+  computeDowntimeMinutes,
+  isResolvedMaintenance,
+} from '../domain/maintenance.js';
 import {
   escapeHtml,
   el,
@@ -13,8 +20,10 @@ import {
   formatLocalDate,
   formatLocalDateTime,
 } from './format.js';
-import { notifyDialog } from './ConfirmDialog.js';
+import { confirmDialog, notifyDialog } from './ConfirmDialog.js';
+import { daysFromNow, relativeDay } from '../data/fixtures/demo-dates.js';
 import { stopEventLabel, technicianLabel } from './labels.js';
+import { icon } from './icons.js';
 import { showToast } from './Toast.js';
 
 const TICKET_STATUS_LABEL = {
@@ -27,6 +36,7 @@ const PRIORITY_LABEL = {
   urgent: 'Urgente',
   high: 'Alta',
   normal: 'Normal',
+  low: 'Baja',
 };
 
 const PREVENTIVE_STATUS_LABEL = {
@@ -41,6 +51,23 @@ const WEAR_LABEL = {
   medium: 'Medio',
   high: 'Alto',
 };
+
+const OPERATIONAL_STATUS_LABEL = {
+  fault: 'Frenada por mantención',
+  available: 'Disponible',
+  in_operation: 'En operación',
+  paused: 'En pausa',
+};
+
+const MAINTENANCE_BLOCKS = [
+  { key: 'active', title: 'Activos', searchRole: 'maintenance-search-active' },
+  {
+    key: 'overdue',
+    title: 'No resueltos por vencimiento',
+    searchRole: 'maintenance-search-overdue',
+  },
+  { key: 'history', title: 'Históricos', searchRole: 'maintenance-search-history' },
+];
 
 function pad(value) {
   return String(value).padStart(2, '0');
@@ -67,6 +94,19 @@ function localToIso(value) {
   return Number.isFinite(date.getTime()) ? date.toISOString() : null;
 }
 
+function normalizeText(value) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function matchesSearch(value, term) {
+  const needle = normalizeText(term);
+  return !needle || normalizeText(value).includes(needle);
+}
+
 function fmtDateTime(value) {
   return formatLocalDateTime(value);
 }
@@ -85,21 +125,41 @@ function preventiveStatusBadge(status) {
   )}</span>`;
 }
 
+function wearBadge(level) {
+  return `<span class="wear wear--${escapeHtml(level)}">${escapeHtml(
+    WEAR_LABEL[level] || level,
+  )}</span>`;
+}
+
+function operationalBadge(status) {
+  return `<span class="maint-badge maint-badge--${escapeHtml(status)}">${escapeHtml(
+    OPERATIONAL_STATUS_LABEL[status] || status,
+  )}</span>`;
+}
+
+function maintenanceCode(event) {
+  return event.ticket_code || event.order_code || event.sourceId || event.id;
+}
+
 /**
  * @param {import('../data/ManufacturingStore.js').ManufacturingStore} store
+ * @param {{role?: string}} [options]
  * @returns {HTMLElement}
  */
-export function MaintenancePanel(store) {
+export function MaintenancePanel(store, { role = 'maintenance' } = {}) {
+  let activeTab = 'tickets';
   let selectedTicketId = null;
   let historyWorkCenterId = null;
+  let machineSection = '';
   const filters = { status: '', priority: '', workCenterId: '' };
+  const searches = { machines: '', tickets: '', active: '', overdue: '', history: '' };
 
   const root = el(`
     <section class="view maintenance-view">
       <header class="view__header">
         <div>
           <h1>Mantenimiento</h1>
-          <p class="view__subtitle">Tickets correctivos, tiempos de parada y mantenimiento preventivo por máquina.</p>
+          <p class="view__subtitle">Máquinas, tickets y mantenciones programadas sincronizadas con el calendario.</p>
         </div>
         <div class="maintenance-filters">
           <label>Estado
@@ -129,42 +189,99 @@ export function MaintenancePanel(store) {
         </div>
       </header>
 
-      <div data-role="fault-banner" aria-live="polite"></div>
+      <nav class="maintenance-tabs" role="tablist" aria-label="Secciones de mantenimiento">
+        <button type="button" class="maintenance-tabs__tab" role="tab" data-role="maintenance-tab" data-tab="machines" aria-selected="false">
+          <span class="maintenance-tabs__icon">${icon('maintenance')}</span><span>Máquinas</span>
+        </button>
+        <button type="button" class="maintenance-tabs__tab" role="tab" data-role="maintenance-tab" data-tab="tickets" aria-selected="true">
+          <span class="maintenance-tabs__icon">${icon('orders')}</span><span>Tickets</span>
+        </button>
+        <button type="button" class="maintenance-tabs__tab" role="tab" data-role="maintenance-tab" data-tab="maintenances" aria-selected="false">
+          <span class="maintenance-tabs__icon">${icon('scheduling')}</span><span>Mantenimientos</span>
+        </button>
+      </nav>
 
-      <section class="panel">
-        <header class="panel__header">
-          <h2>Bandeja de tickets</h2>
-          <span class="panel__subtitle" data-role="ticket-count"></span>
-        </header>
-        <div class="panel__body">
-        <div class="table-wrap table-wrap--tickets">
-          <table class="data-table maintenance-ticket-table">
-            <thead>
-              <tr>
-                <th>Código</th><th>Centro</th><th>Prioridad</th><th>Estado</th>
-                <th>Creado</th><th>Evento de parada</th><th>Acción</th>
-              </tr>
-            </thead>
-            <tbody data-role="ticket-list"></tbody>
-          </table>
-        </div>
-        </div>
-      </section>
+      <div class="maintenance-tabpanel" data-role="maintenance-tabpanel" data-panel="machines" role="tabpanel" hidden>
+        <div data-role="fault-banner" aria-live="polite"></div>
 
-      <div class="maintenance-grid">
-        <section class="panel" data-role="ticket-detail"></section>
+        <section class="panel">
+          <header class="panel__header">
+            <h2>Máquinas</h2>
+            <div class="maintenance-block-tools">
+              <input type="search" data-role="maintenance-search-machines" aria-label="Buscar máquinas" placeholder="Buscar máquina o código" />
+              <select data-role="machine-section-filter" aria-label="Filtrar por sección">
+                <option value="">Todas las secciones</option>
+                ${[...new Set(store.workCenters.map((wc) => wc.station_type).filter(Boolean))]
+                  .map(
+                    (station) =>
+                      `<option value="${escapeHtml(station)}">${escapeHtml(station)}</option>`,
+                  )
+                  .join('')}
+              </select>
+            </div>
+          </header>
+          <div class="panel__body">
+            <div data-role="machine-alert" aria-live="polite"></div>
+            <div class="table-wrap">
+              <table class="data-table data-table--compact">
+                <thead><tr><th>Máquina</th><th>Código</th><th>Sección</th><th>Estado</th><th>Frecuencia recomendada</th><th>Desgaste</th><th>Acciones</th></tr></thead>
+                <tbody data-role="machine-list"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
         <section class="panel" data-role="history"></section>
+
+        <section class="panel">
+          <header class="panel__header">
+            <h2>Órdenes de mantenimiento preventivo</h2>
+            <button type="button" class="btn btn--small btn--primary" data-preventive-create>Programar preventiva</button>
+          </header>
+          <div class="panel__body">
+            <div data-role="preventive-list"></div>
+          </div>
+        </section>
       </div>
 
-      <section class="panel">
-        <header class="panel__header">
-          <h2>Órdenes de mantenimiento preventivo</h2>
-          <button type="button" class="btn btn--small btn--primary" data-preventive-create>Programar preventiva</button>
-        </header>
-        <div class="panel__body">
-        <div data-role="preventive-list"></div>
-        </div>
-      </section>
+      <div class="maintenance-tabpanel" data-role="maintenance-tabpanel" data-panel="tickets" role="tabpanel">
+        <section class="panel">
+          <header class="panel__header">
+            <h2>Bandeja de tickets</h2>
+            <div class="maintenance-block-tools">
+              <input type="search" data-role="maintenance-search-tickets" aria-label="Buscar tickets" placeholder="Buscar ticket o máquina" />
+              <span class="panel__subtitle" data-role="ticket-count"></span>
+            </div>
+          </header>
+          <div class="panel__body">
+            <div class="table-wrap table-wrap--tickets">
+              <table class="data-table maintenance-ticket-table">
+                <thead>
+                  <tr>
+                    <th>Código</th><th>Centro</th><th>Prioridad</th><th>Estado</th>
+                    <th>Creado</th><th>Evento de parada</th><th>Acción</th>
+                  </tr>
+                </thead>
+                <tbody data-role="ticket-list"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+        <section class="panel maintenance-ticket-detail" data-role="ticket-detail"></section>
+      </div>
+
+      <div class="maintenance-tabpanel" data-role="maintenance-tabpanel" data-panel="maintenances" role="tabpanel" hidden>
+        ${MAINTENANCE_BLOCKS.map(
+          (block) => `
+            <section class="panel maintenance-block" data-role="maintenance-block-${block.key}">
+              <header class="panel__header" data-role="maintenance-block-search" data-block="${block.key}">
+                <h2>${escapeHtml(block.title)}</h2>
+                <input type="search" class="maintenance-block__search" data-role="${block.searchRole}" aria-label="Buscar en ${escapeHtml(block.title)}" placeholder="Buscar máquina o código" />
+              </header>
+              <div class="panel__body" data-role="maintenance-block-body-${block.key}"></div>
+            </section>`,
+        ).join('')}
+      </div>
 
       <div class="modal-root" data-role="modal-root"></div>
     </section>`);
@@ -175,6 +292,8 @@ export function MaintenancePanel(store) {
   const detailEl = root.querySelector('[data-role="ticket-detail"]');
   const historyEl = root.querySelector('[data-role="history"]');
   const preventiveListEl = root.querySelector('[data-role="preventive-list"]');
+  const machineListEl = root.querySelector('[data-role="machine-list"]');
+  const machineAlertEl = root.querySelector('[data-role="machine-alert"]');
   const modalRoot = root.querySelector('[data-role="modal-root"]');
 
   function ticketById(id) {
@@ -191,6 +310,17 @@ export function MaintenancePanel(store) {
     const ticket = selectedTicketId ? ticketById(selectedTicketId) : null;
     if (ticket) return ticket.work_center_id;
     return store.workCenters[0] ? store.workCenters[0].id : null;
+  }
+
+  function renderTabs() {
+    root.querySelectorAll('[data-role="maintenance-tab"]').forEach((tab) => {
+      const selected = tab.getAttribute('data-tab') === activeTab;
+      tab.setAttribute('aria-selected', String(selected));
+      tab.tabIndex = selected ? 0 : -1;
+    });
+    root.querySelectorAll('[data-role="maintenance-tabpanel"]').forEach((panel) => {
+      panel.hidden = panel.getAttribute('data-panel') !== activeTab;
+    });
   }
 
   function renderFaultBanner() {
@@ -239,8 +369,91 @@ export function MaintenancePanel(store) {
     return `<button type="button" class="btn btn--small" data-view="${escapeHtml(ticket.id)}">Ver historial</button>`;
   }
 
+  function scheduleButton(ticket) {
+    const disabled = !canRescheduleMaintenance(role) || ticket.ticket_status === 'resolved';
+    return `<button type="button" class="btn btn--small" data-schedule-ticket="${escapeHtml(
+      ticket.id,
+    )}" ${disabled ? 'disabled title="No se puede programar esta mantención"' : ''}>Programar mantención</button>`;
+  }
+
+  function frequencyAlerts() {
+    const today = new Date();
+    return store.workCenters.filter((wc) => {
+      const frequency = Number(wc.recommended_maintenance_frequency_days);
+      if (!Number.isFinite(frequency) || frequency < 1) return true;
+      const dates = [
+        ...store
+          .preventiveOrdersFor({ status: 'completed', workCenterId: wc.id })
+          .map((order) => order.completed_at || order.planned_date),
+        ...store.maintenanceHistoryForWorkCenter(wc.id).map((ticket) => ticket.resolved_at),
+      ].filter(Boolean);
+      if (dates.length === 0) return true;
+      const latest = Math.max(...dates.map((value) => new Date(value).getTime()));
+      if (!Number.isFinite(latest)) return true;
+      return (today.getTime() - latest) / 86400000 > frequency;
+    });
+  }
+
+  function renderMachines() {
+    const alerts = frequencyAlerts();
+    machineAlertEl.innerHTML =
+      alerts.length === 0
+        ? ''
+        : `<div class="maintenance-alert" role="status">${icon('maintenance')} Revisar frecuencia de mantención: ${alerts
+            .map((wc) => escapeHtml(wc.name))
+            .join(', ')}.</div>`;
+
+    const machines = store.workCenters.filter(
+      (wc) =>
+        (!machineSection || wc.station_type === machineSection) &&
+        (matchesSearch(wc.name, searches.machines) ||
+          matchesSearch(wc.code, searches.machines) ||
+          matchesSearch(wc.station_type, searches.machines)),
+    );
+    if (machines.length === 0) {
+      machineListEl.innerHTML = `<tr><td colspan="7" class="empty-cell">Sin máquinas para la búsqueda.</td></tr>`;
+      return;
+    }
+    machineListEl.innerHTML = machines
+      .map((wc) => {
+        const wear = store.maintenanceIndicatorsForWorkCenter(wc.id);
+        const frequency = wc.recommended_maintenance_frequency_days;
+        const frequencyControl = canEditMaintenanceFrequency(role)
+          ? `<input type="number" min="1" step="1" class="maintenance-frequency" data-role="frequency-input" data-center="${escapeHtml(
+              wc.id,
+            )}" value="${frequency ?? ''}" aria-label="Cada cuánto se recomienda mantención" placeholder="Días" />`
+          : `<span class="maint-code">${frequency ? `${escapeHtml(frequency)} días` : 'Sin frecuencia'}</span>`;
+        return `<tr data-role="machine-row" data-center="${escapeHtml(wc.id)}">
+          <td><strong>${escapeHtml(wc.name)}</strong></td>
+          <td class="maint-code">${escapeHtml(wc.code || '—')}</td>
+          <td>${escapeHtml(wc.station_type || '—')}</td>
+          <td>${operationalBadge(wc.operational_status)}</td>
+          <td>${frequencyControl}</td>
+          <td>${wearBadge(wear.wear_level)} · ${fmtNumber(wear.failure_count)} falla(s) · ${formatDurationLong(
+            wear.total_downtime_minutes,
+          )}</td>
+          <td class="cell--actions">
+            <button type="button" class="btn btn--small" data-preventive-create data-center="${escapeHtml(
+              wc.id,
+            )}">Programar preventiva</button>
+            <button type="button" class="btn btn--small" data-role="review-history" data-center="${escapeHtml(
+              wc.id,
+            )}">Revisar históricas</button>
+          </td>
+        </tr>`;
+      })
+      .join('');
+  }
+
   function renderTickets() {
-    const tickets = store.maintenanceTicketsFor(filters);
+    const tickets = store
+      .maintenanceTicketsFor(filters)
+      .filter(
+        (ticket) =>
+          matchesSearch(ticket.ticket_code, searches.tickets) ||
+          matchesSearch(workCenterName(ticket.work_center_id), searches.tickets) ||
+          matchesSearch(ticket.description, searches.tickets),
+      );
     ticketCountEl.textContent = `${tickets.length} ticket(s)`;
     if (tickets.length === 0) {
       ticketListEl.innerHTML = `<tr><td colspan="7" class="empty-cell">Sin tickets para los filtros seleccionados.</td></tr>`;
@@ -260,7 +473,9 @@ export function MaintenancePanel(store) {
               ? escapeHtml(stopEventLabel(store, ticket.operation_delay_id))
               : '—'
           }</td>
-          <td class="cell--actions">${actionButton(ticket)}</td>
+          <td class="cell--actions maintenance-ticket-actions">${scheduleButton(ticket)}${actionButton(
+            ticket,
+          )}</td>
         </tr>`;
       })
       .join('');
@@ -275,45 +490,88 @@ export function MaintenancePanel(store) {
         </div>`;
       return;
     }
+    const wear = store.maintenanceIndicatorsForWorkCenter(ticket.work_center_id);
+    const failures = store.maintenanceHistoryForWorkCenter(ticket.work_center_id);
+    const fullHistory = (
+      typeof store.maintenanceFeed === 'function' ? store.maintenanceFeed() : []
+    ).filter((event) => event.work_center_id === ticket.work_center_id);
     detailEl.innerHTML = `
       <header class="panel__header">
         <h2>${escapeHtml(ticket.ticket_code)} ${ticketStatusBadge(ticket.ticket_status)}</h2>
         <p class="panel__subtitle">${escapeHtml(workCenterName(ticket.work_center_id))}</p>
       </header>
       <div class="panel__body">
-      <dl class="detail-list">
-        <div><dt>Prioridad</dt><dd>${priorityBadge(ticket.priority)}</dd></div>
-        <div><dt>Origen</dt><dd>${ticket.escalated_to_maint ? 'Escalado desde piso' : 'Registro manual'}</dd></div>
-        <div><dt>Creado</dt><dd class="nowrap">${fmtDateTime(ticket.created_at)}</dd></div>
-        <div><dt>Evento de parada</dt><dd class="nowrap" title="${escapeHtml(
-          ticket.operation_delay_id || '',
-        )}">${escapeHtml(
-          ticket.operation_delay_id ? stopEventLabel(store, ticket.operation_delay_id) : '—',
-        )}</dd></div>
-        <div><dt>Técnico</dt><dd class="nowrap" title="${escapeHtml(
-          ticket.technician_ext_hr_employee_id || '',
-        )}">${escapeHtml(
-          ticket.technician_ext_hr_employee_id
-            ? technicianLabel(ticket.technician_ext_hr_employee_id)
-            : '—',
-        )}</dd></div>
-        <div><dt>Inicio intervención</dt><dd class="nowrap">${fmtDateTime(ticket.intervention_started_at)}</dd></div>
-        <div><dt>Inicio parada</dt><dd class="nowrap">${fmtDateTime(ticket.downtime_started_at)}</dd></div>
-        <div><dt>Fin parada</dt><dd class="nowrap">${fmtDateTime(ticket.downtime_ended_at)}</dd></div>
-        <div><dt>Parada total</dt><dd class="nowrap">${
-          ticket.downtime_minutes === null ? '—' : formatDurationLong(ticket.downtime_minutes)
-        }</dd></div>
-        <div><dt>Resuelto</dt><dd class="nowrap">${fmtDateTime(ticket.resolved_at)}</dd></div>
-      </dl>
-      <p class="maintenance-description">${escapeHtml(ticket.description)}</p>
-      ${
-        ticket.resolution_notes
-          ? `<p class="maintenance-description"><strong>Notas de cierre:</strong> ${escapeHtml(
-              ticket.resolution_notes,
-            )}</p>`
-          : ''
-      }
-        <div class="detail-actions">${actionButton(ticket)}</div>
+        <dl class="detail-list">
+          <div><dt>Prioridad</dt><dd>${priorityBadge(ticket.priority)}</dd></div>
+          <div><dt>Origen</dt><dd>${ticket.escalated_to_maint ? 'Escalado desde piso' : 'Registro manual'}</dd></div>
+          <div><dt>Creado</dt><dd class="nowrap">${fmtDateTime(ticket.created_at)}</dd></div>
+          <div><dt>Evento de parada</dt><dd class="nowrap" title="${escapeHtml(
+            ticket.operation_delay_id || '',
+          )}">${escapeHtml(
+            ticket.operation_delay_id ? stopEventLabel(store, ticket.operation_delay_id) : '—',
+          )}</dd></div>
+          <div><dt>Técnico</dt><dd class="nowrap" title="${escapeHtml(
+            ticket.technician_ext_hr_employee_id || '',
+          )}">${escapeHtml(
+            ticket.technician_ext_hr_employee_id
+              ? technicianLabel(ticket.technician_ext_hr_employee_id)
+              : '—',
+          )}</dd></div>
+          <div><dt>Inicio intervención</dt><dd class="nowrap">${fmtDateTime(ticket.intervention_started_at)}</dd></div>
+          <div><dt>Inicio parada</dt><dd class="nowrap">${fmtDateTime(ticket.downtime_started_at)}</dd></div>
+          <div><dt>Fin parada</dt><dd class="nowrap">${fmtDateTime(ticket.downtime_ended_at)}</dd></div>
+          <div><dt>Parada total</dt><dd class="nowrap">${
+            ticket.downtime_minutes === null ? '—' : formatDurationLong(ticket.downtime_minutes)
+          }</dd></div>
+          <div><dt>Resuelto</dt><dd class="nowrap">${fmtDateTime(ticket.resolved_at)}</dd></div>
+        </dl>
+        <p class="maintenance-description">${escapeHtml(ticket.description)}</p>
+        ${
+          ticket.resolution_notes
+            ? `<p class="maintenance-description"><strong>Notas de cierre:</strong> ${escapeHtml(
+                ticket.resolution_notes,
+              )}</p>`
+            : ''
+        }
+        <div class="maintenance-detail-sections">
+          <section>
+            <h3>Historial de fallas</h3>
+            ${
+              failures.length === 0
+                ? '<p class="empty-note">Sin fallas resueltas para esta máquina.</p>'
+                : `<ul class="maintenance-detail-list">${failures
+                    .map(
+                      (row) =>
+                        `<li><span class="maint-code">${escapeHtml(row.ticket_code)}</span> · ${formatLocalDate(
+                          row.resolved_at,
+                        )} · ${formatDurationLong(row.downtime_minutes || 0)}</li>`,
+                    )
+                    .join('')}</ul>`
+            }
+          </section>
+          <section>
+            <h3>Historial completo de mantenciones</h3>
+            ${
+              fullHistory.length === 0
+                ? '<p class="empty-note">Sin mantenciones registradas.</p>'
+                : `<ul class="maintenance-detail-list">${fullHistory
+                    .map(
+                      (event) =>
+                        `<li><span class="maint-code">${escapeHtml(maintenanceCode(event))}</span> · ${escapeHtml(
+                          event.work_center_name || workCenterName(event.work_center_id),
+                        )} · ${formatLocalDate(event.start_date)}</li>`,
+                    )
+                    .join('')}</ul>`
+            }
+          </section>
+          <section>
+            <h3>Indicador de desgaste</h3>
+            <p>${wearBadge(wear.wear_level)} · ${fmtNumber(
+              wear.failure_count,
+            )} falla(s) · ${formatDurationLong(wear.total_downtime_minutes)} acumulados</p>
+          </section>
+        </div>
+        <div class="detail-actions">${scheduleButton(ticket)} ${actionButton(ticket)}</div>
       </div>`;
   }
 
@@ -364,9 +622,7 @@ export function MaintenancePanel(store) {
         <div><dt>Fallas resueltas</dt><dd>${fmtNumber(wear.failure_count)}</dd></div>
         <div><dt>Parada acumulada</dt><dd>${formatDurationLong(wear.total_downtime_minutes)}</dd></div>
         <div><dt>MTTR</dt><dd>${formatDurationLong(wear.mttr_minutes)}</dd></div>
-        <div><dt>Desgaste</dt><dd><span class="wear wear--${escapeHtml(wear.wear_level)}">${escapeHtml(
-          WEAR_LABEL[wear.wear_level] || wear.wear_level,
-        )}</span></dd></div>
+        <div><dt>Desgaste</dt><dd>${wearBadge(wear.wear_level)}</dd></div>
       </dl>
       <div class="table-wrap">
         <table class="data-table data-table--compact">
@@ -432,6 +688,90 @@ export function MaintenancePanel(store) {
           </tbody>
         </table>
       </div>`;
+  }
+
+  function maintenanceSearchText(event) {
+    return [
+      maintenanceCode(event),
+      event.work_center_name || workCenterName(event.work_center_id),
+      event.sourceId,
+      event.description,
+    ]
+      .filter(Boolean)
+      .join(' ');
+  }
+
+  function maintenanceSubject(event) {
+    if (['maintenance', 'plant_manager'].includes(role)) {
+      return event.technician_name || technicianLabel(event.technician_ext_hr_employee_id);
+    }
+    return `Máquina ${escapeHtml(event.work_center_id || '—')} · ${formatDurationLong(
+      event.downtime_minutes,
+    )}`;
+  }
+
+  function renderMaintenanceBlock(block, events) {
+    const filtered = events.filter((event) =>
+      matchesSearch(maintenanceSearchText(event), searches[block.key]),
+    );
+    const bodyEl = root.querySelector(`[data-role="maintenance-block-body-${block.key}"]`);
+    if (filtered.length === 0) {
+      bodyEl.innerHTML = `<p class="empty-note">Sin mantenciones</p>`;
+      return;
+    }
+    bodyEl.innerHTML = `
+      <div class="table-wrap">
+        <table class="data-table data-table--compact">
+          <thead><tr><th>Código</th><th>Máquina</th><th>Tipo</th><th>Estado</th><th>Inicio</th><th>Fecha visible</th><th>Responsable</th><th>Acción</th></tr></thead>
+          <tbody>
+            ${filtered
+              .map((event) => {
+                const resolved = isResolvedMaintenance(event);
+                const action = resolved
+                  ? `<button type="button" class="btn btn--small btn--danger" data-delete-maintenance="${escapeHtml(
+                      event.id,
+                    )}" ${role === 'maintenance' ? '' : 'disabled'}>Eliminar</button>`
+                  : `<button type="button" class="btn btn--small btn--primary" data-resolve-scheduled="${escapeHtml(
+                      event.id,
+                    )}" ${
+                      role === 'maintenance' && canResolveScheduledMaintenance(event)
+                        ? ''
+                        : 'disabled'
+                    }>Resolver</button>`;
+                return `<tr data-maintenance-row="${escapeHtml(event.id)}">
+                  <td class="maint-code"><strong>${escapeHtml(maintenanceCode(event))}</strong></td>
+                  <td>${escapeHtml(event.work_center_name || workCenterName(event.work_center_id))}</td>
+                  <td>${escapeHtml(
+                    event.maintenanceType === 'preventive' ? 'Preventiva' : 'Correctiva',
+                  )}</td>
+                  <td>${
+                    event.maintenanceType === 'preventive'
+                      ? preventiveStatusBadge(event.status)
+                      : ticketStatusBadge(event.status)
+                  }</td>
+                  <td class="maint-date">${formatLocalDate(event.start_date)}</td>
+                  <td class="maint-date">${formatLocalDate(
+                    event.visible_end_date || event.end_date,
+                  )}</td>
+                  <td>${maintenanceSubject(event)}</td>
+                  <td class="cell--actions">${action}</td>
+                </tr>`;
+              })
+              .join('')}
+          </tbody>
+        </table>
+      </div>`;
+  }
+
+  function renderMaintenances() {
+    const feed = typeof store.maintenanceFeed === 'function' ? store.maintenanceFeed() : [];
+    const groups = { active: [], overdue: [], history: [] };
+    feed.forEach((event) => {
+      if (isResolvedMaintenance(event)) groups.history.push(event);
+      else if (event.is_overdue) groups.overdue.push(event);
+      else groups.active.push(event);
+    });
+    MAINTENANCE_BLOCKS.forEach((block) => renderMaintenanceBlock(block, groups[block.key]));
   }
 
   function showModal(innerHtml) {
@@ -596,13 +936,74 @@ export function MaintenancePanel(store) {
     });
   }
 
+  function openScheduleModal(ticketId) {
+    const ticket = ticketById(ticketId);
+    if (!ticket) return;
+    const techOptions = store.technicians
+      .map(
+        (tech) =>
+          `<option value="${escapeHtml(tech.ext_hr_employee_id)}">${escapeHtml(tech.name)} — ${escapeHtml(
+            tech.specialty,
+          )}</option>`,
+      )
+      .join('');
+    const technician = ticket.technician_ext_hr_employee_id || '';
+    showModal(`
+      <h2 id="schedule-title">Programar mantención · ${escapeHtml(ticket.ticket_code)}</h2>
+      <form data-role="schedule-form" class="stack-form">
+        <p class="context-note">${escapeHtml(workCenterName(ticket.work_center_id))} · ${escapeHtml(
+          ticket.description,
+        )}</p>
+        <label>Técnico asignado
+          <select name="technician_ext_hr_employee_id" required>
+            <option value="">Selecciona…</option>${techOptions}
+          </select>
+        </label>
+        <label>Inicio
+          <input type="date" name="scheduledStartDate" value="${relativeDay(0)}" required />
+        </label>
+        <label>Plazo
+          <input type="date" name="scheduledEndDate" value="${daysFromNow(1)}" required />
+        </label>
+        <p class="hint">${technician ? `Técnico actual: ${escapeHtml(technicianLabel(technician))}` : 'Sin técnico asignado'}</p>
+        <p class="form-error" data-role="error" role="alert"></p>
+        <div class="modal-actions">
+          <button type="button" class="btn" data-close>Cancelar</button>
+          <button type="submit" class="btn btn--primary">Programar mantención</button>
+        </div>
+      </form>`);
+    const form = modalRoot.querySelector('[data-role="schedule-form"]');
+    form.querySelector('[name="technician_ext_hr_employee_id"]').value = technician;
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const errorEl = form.querySelector('[data-role="error"]');
+      try {
+        store.scheduleMaintenanceFromTicket(
+          ticketId,
+          {
+            technician_ext_hr_employee_id: form.querySelector(
+              '[name="technician_ext_hr_employee_id"]',
+            ).value,
+            scheduled_start_date: form.querySelector('[name="scheduledStartDate"]').value,
+            scheduled_end_date: form.querySelector('[name="scheduledEndDate"]').value,
+          },
+          role,
+        );
+        showToast('Mantención programada', { tone: 'success' });
+        closeModal();
+      } catch (error) {
+        errorEl.textContent = error.message;
+      }
+    });
+  }
+
   function openPreventiveModal(workCenterId) {
     const centerId = workCenterId || selectedWorkCenterId();
     if (!centerId) return;
     const suggestion = buildPreventiveOrderFromHistory(
       store.maintenanceTickets,
       centerId,
-      new Date().toISOString().slice(0, 10),
+      relativeDay(0),
     );
     const wear = store.maintenanceIndicatorsForWorkCenter(centerId);
     const techOptions = store.technicians
@@ -642,13 +1043,18 @@ export function MaintenancePanel(store) {
         const plannedDate = form.querySelector('[name="plannedDate"]').value;
         const title = form.querySelector('[name="title"]').value;
         const technician = form.querySelector('[name="technician_ext_hr_employee_id"]').value;
-        store.createPreventiveMaintenanceOrder({
+        const order = store.createPreventiveMaintenanceOrder({
           workCenterId: centerId,
           sourceTicketId: suggestion.source_ticket_id,
           plannedDate,
           title,
           technician_ext_hr_employee_id: technician || null,
         });
+        store.schedulePreventiveMaintenance(
+          order.id,
+          { scheduled_start_date: plannedDate, scheduled_end_date: plannedDate },
+          role,
+        );
         showToast('Orden preventiva creada', { tone: 'success' });
         closeModal();
       } catch (error) {
@@ -681,9 +1087,69 @@ export function MaintenancePanel(store) {
     }
   }
 
+  async function handleResolveScheduled(id) {
+    const confirmed = await confirmDialog({
+      title: 'Resolver mantención',
+      message: '¿Está seguro que quiere resolver esta mantención?',
+      confirmLabel: 'Resolver',
+    });
+    if (!confirmed) return;
+    try {
+      store.resolveScheduledMaintenance(id, { resolvedAt: new Date().toISOString() }, role);
+      showToast('Mantención resuelta', { tone: 'success' });
+    } catch (error) {
+      await notifyDialog({ title: 'No se pudo resolver la mantención', message: error.message });
+    }
+  }
+
+  async function handleDeleteMaintenance(id) {
+    const confirmed = await confirmDialog({
+      title: 'Eliminar mantención histórica',
+      message: 'Esta acción elimina el registro de v2 y del calendario. No se puede deshacer.',
+      confirmLabel: 'Eliminar',
+      danger: true,
+    });
+    if (!confirmed) return;
+    try {
+      store.deleteResolvedMaintenance(id, role);
+      showToast('Mantención histórica eliminada', { tone: 'success' });
+    } catch (error) {
+      await notifyDialog({ title: 'No se pudo eliminar la mantención', message: error.message });
+    }
+  }
+
+  function handleReviewHistory(workCenterId) {
+    searches.history = workCenterName(workCenterId);
+    root.querySelector('[data-role="maintenance-search-history"]').value = searches.history;
+    activeTab = 'maintenances';
+    historyWorkCenterId = workCenterId;
+    renderAll();
+  }
+
   root.addEventListener('click', (event) => {
     const button = event.target.closest('button');
     if (!button) return;
+    if (button.matches('[data-role="maintenance-tab"]')) {
+      activeTab = button.getAttribute('data-tab');
+      renderAll();
+      return;
+    }
+    if (button.matches('[data-schedule-ticket]')) {
+      openScheduleModal(button.getAttribute('data-schedule-ticket'));
+      return;
+    }
+    if (button.matches('[data-role="review-history"]')) {
+      handleReviewHistory(button.getAttribute('data-center'));
+      return;
+    }
+    if (button.matches('[data-resolve-scheduled]')) {
+      handleResolveScheduled(button.getAttribute('data-resolve-scheduled'));
+      return;
+    }
+    if (button.matches('[data-delete-maintenance]')) {
+      handleDeleteMaintenance(button.getAttribute('data-delete-maintenance'));
+      return;
+    }
     if (button.matches('[data-take]')) {
       openTakeModal(button.getAttribute('data-take'));
       return;
@@ -729,15 +1195,44 @@ export function MaintenancePanel(store) {
     } else if (target.matches('[data-role="history-center"]')) {
       historyWorkCenterId = target.value;
       renderAll();
+    } else if (target.matches('[data-role="machine-section-filter"]')) {
+      machineSection = target.value;
+      renderMachines();
+    } else if (target.matches('[data-role="frequency-input"]')) {
+      try {
+        store.setRecommendedMaintenanceFrequency(target.dataset.center, target.value, role);
+        showToast('Frecuencia recomendada actualizada', { tone: 'success' });
+      } catch (error) {
+        notifyDialog({ title: 'No se pudo actualizar la frecuencia', message: error.message });
+      }
     }
   });
 
+  root.addEventListener('input', (event) => {
+    const target = event.target;
+    const searchKey = {
+      'maintenance-search-machines': 'machines',
+      'maintenance-search-tickets': 'tickets',
+      'maintenance-search-active': 'active',
+      'maintenance-search-overdue': 'overdue',
+      'maintenance-search-history': 'history',
+    }[target.getAttribute('data-role')];
+    if (!searchKey) return;
+    searches[searchKey] = target.value;
+    if (searchKey === 'machines') renderMachines();
+    else if (searchKey === 'tickets') renderTickets();
+    else renderMaintenances();
+  });
+
   function renderAll() {
+    renderTabs();
     renderFaultBanner();
+    renderMachines();
     renderTickets();
     renderDetail();
     renderHistory();
     renderPreventives();
+    renderMaintenances();
   }
 
   store.addEventListener('change', renderAll);

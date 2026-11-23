@@ -95,6 +95,16 @@ function isoDatePart(value) {
   return match ? match[1] : null;
 }
 
+function normalizeWorkCenter(workCenter) {
+  if (!isPlainObject(workCenter)) return workCenter;
+  const days = Number(workCenter.recommended_maintenance_frequency_days);
+  return {
+    ...workCenter,
+    recommended_maintenance_frequency_days:
+      Number.isFinite(days) && days >= 1 ? Math.round(days) : null,
+  };
+}
+
 function normalizeProductionOrder(order) {
   if (!isPlainObject(order)) return order;
   return {
@@ -141,6 +151,8 @@ function normalizeData(data) {
     }
     if (key === 'productionOrders') {
       normalized[key] = data[key].map(normalizeProductionOrder);
+    } else if (key === 'workCenters') {
+      normalized[key] = data[key].map(normalizeWorkCenter);
     } else if (key === 'maintenanceTickets') {
       normalized[key] = data[key].map(normalizeMaintenanceTicket);
     } else if (key === 'preventiveMaintenanceOrders') {

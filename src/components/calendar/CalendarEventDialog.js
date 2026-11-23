@@ -1,10 +1,34 @@
-import { el, escapeHtml, formatLocalDate, ORDER_STATUS_LABEL, PRIORITY_LABEL } from '../format.js';
+import {
+  el,
+  escapeHtml,
+  formatDurationLong,
+  formatLocalDate,
+  ORDER_STATUS_LABEL,
+  PRIORITY_LABEL,
+} from '../format.js';
 import { icon } from '../icons.js';
 import { showToast } from '../Toast.js';
 import { workCenterLabel } from '../labels.js';
 import { canEditOrderSchedule } from '../../domain/calendar-scheduling.js';
+import { canResolveScheduledMaintenance, isResolvedMaintenance } from '../../domain/maintenance.js';
 
 const SC08_NOTE = 'solo contexto operativo — no evaluación de desempeño';
+
+function pad(value) {
+  return String(value).padStart(2, '0');
+}
+
+function nowLocalInput() {
+  const date = new Date();
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
+    date.getHours(),
+  )}:${pad(date.getMinutes())}`;
+}
+
+function localToIso(value) {
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+}
 
 function displayName(name, role, fallback) {
   if (!name) return fallback;
@@ -25,6 +49,10 @@ function detailRow(label, value) {
  */
 export function CalendarEventDialog({ event, role = 'planner', store, onBack } = {}) {
   const isOrder = event?.kind === 'order';
+  const isMaintenance = event?.kind === 'maintenance';
+  const maintenanceResolved = isMaintenance && isResolvedMaintenance(event);
+  const canResolveMaintenance =
+    isMaintenance && role === 'maintenance' && canResolveScheduledMaintenance(event);
   const editable = Boolean(
     isOrder && canEditOrderSchedule(role) && !['completed', 'cancelled'].includes(event.status),
   );
@@ -76,6 +104,11 @@ export function CalendarEventDialog({ event, role = 'planner', store, onBack } =
                 )
           }
           ${detailRow('Prioridad', escapeHtml(PRIORITY_LABEL[event?.priority] || event?.priority || '—'))}
+          ${
+            isMaintenance && !maintenanceResolved
+              ? detailRow('Tiempo parado', escapeHtml(formatDurationLong(event?.downtime_minutes)))
+              : ''
+          }
           ${detailRow(personLabel, escapeHtml(displayName(personName, role, personFallback)))}
         </dl>
         ${
@@ -105,6 +138,15 @@ export function CalendarEventDialog({ event, role = 'planner', store, onBack } =
             : ''
         }
         ${
+          canResolveMaintenance
+            ? `<div class="calendar-dialog__resolve" data-role="resolve-area">
+                <button type="button" class="btn btn--tiny btn--primary" data-role="resolve-maintenance">${icon(
+                  'maintenance',
+                )} Resolver</button>
+              </div>`
+            : ''
+        }
+        ${
           editable
             ? `<div class="calendar-dialog__edit">
                 <label>Inicio
@@ -124,6 +166,63 @@ export function CalendarEventDialog({ event, role = 'planner', store, onBack } =
   root.querySelector('[data-role="event-back"]').addEventListener('click', () => {
     if (typeof onBack === 'function') onBack();
   });
+
+  if (canResolveMaintenance) {
+    const area = root.querySelector('[data-role="resolve-area"]');
+
+    function renderResolveButton() {
+      area.innerHTML = `<button type="button" class="btn btn--tiny btn--primary" data-role="resolve-maintenance">${icon(
+        'maintenance',
+      )} Resolver</button>`;
+      area
+        .querySelector('[data-role="resolve-maintenance"]')
+        .addEventListener('click', openResolvePopup);
+    }
+
+    function openResolvePopup() {
+      area.innerHTML = `
+        <div class="calendar-dialog__resolve-popup" data-role="resolve-popup" role="dialog" aria-modal="true">
+          <p class="calendar-dialog__resolve-message" data-role="resolve-message">¿Está seguro que quiere resolver esta mantención?</p>
+          <form data-role="resolve-form" class="calendar-dialog__resolve-form">
+            <label>Fecha y hora de resolución
+              <input type="datetime-local" name="resolvedAt" required />
+            </label>
+            <span class="form-error" data-role="resolve-error" role="alert"></span>
+            <div class="calendar-dialog__resolve-actions">
+              <button type="button" class="btn btn--tiny" data-role="resolve-cancel">Cancelar</button>
+              <button type="submit" class="btn btn--tiny btn--primary">Confirmar</button>
+            </div>
+          </form>
+        </div>`;
+      const input = area.querySelector('[name="resolvedAt"]');
+      input.value = nowLocalInput();
+      input.focus();
+      area
+        .querySelector('[data-role="resolve-cancel"]')
+        .addEventListener('click', renderResolveButton);
+      area.querySelector('[data-role="resolve-form"]').addEventListener('submit', (submitEvent) => {
+        submitEvent.preventDefault();
+        const errorEl = area.querySelector('[data-role="resolve-error"]');
+        try {
+          const resolvedAt = localToIso(input.value);
+          if (!resolvedAt) throw new Error('Debe indicar una fecha y hora de resolución válida.');
+          store.resolveScheduledMaintenance(
+            event.id || `maintenance:${event.sourceId}`,
+            { resolvedAt },
+            'maintenance',
+          );
+          event.status = 'resolved';
+          event.resolved_at = resolvedAt;
+          area.innerHTML = `<p class="calendar-dialog__resolved" data-role="resolved-note">Solo lectura</p>`;
+          showToast('Mantención resuelta', { tone: 'success' });
+        } catch (error) {
+          errorEl.textContent = error.message;
+        }
+      });
+    }
+
+    renderResolveButton();
+  }
 
   if (canEditStations) {
     root.querySelector('[data-role="edit-stations"]').addEventListener('click', () => {
