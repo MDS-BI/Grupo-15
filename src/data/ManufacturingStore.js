@@ -74,6 +74,12 @@ import {
   validatePlannedDates,
 } from '../domain/order-scheduling.js';
 import {
+  buildCalendarRange,
+  calendarEventsForMonth as deriveCalendarEventsForMonth,
+  canEditOrderSchedule,
+  sortPendingOrders,
+} from '../domain/calendar-scheduling.js';
+import {
   buildLineBalanceSuggestions,
   computeBalanceSummary,
   computeOrderDetail,
@@ -99,6 +105,13 @@ const ROLE_USER_PROPERTIES = Object.freeze({
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function datePart(value) {
+  if (typeof value !== 'string') return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const match = value.match(/^(\d{4}-\d{2}-\d{2})T/);
+  return match ? match[1] : null;
 }
 
 export class ManufacturingStore extends EventTarget {
@@ -2081,6 +2094,150 @@ export class ManufacturingStore extends EventTarget {
     }
     order.planned_start_date = start;
     order.planned_end_date = end;
+    this.#persist();
+    this.#emit();
+    return order;
+  }
+
+  pendingSchedulingOrders() {
+    const today = new Date().toISOString().slice(0, 10);
+    const candidates = this.productionOrders
+      .filter((order) => {
+        if (!canRescheduleOrder(order)) return false;
+        if (!order.planned_start_date || !order.planned_end_date) return true;
+        const valid = validatePlannedDates({
+          planned_start_date: order.planned_start_date,
+          planned_end_date: order.planned_end_date,
+          scheduled_start_time: order.scheduled_start_time,
+          scheduled_end_time: order.scheduled_end_time,
+        });
+        return !valid.valid || order.planned_end_date < today;
+      })
+      .map((order) => ({ ...order, operations: this.operationsForOrder(order.id) }));
+    return sortPendingOrders(candidates);
+  }
+
+  calendarEventsForMonth(month) {
+    const orders = this.productionOrders.map((order) => {
+      const operations = this.operationsForOrder(order.id);
+      const operator = operations.find((row) => row.operator_id);
+      return {
+        ...order,
+        operations,
+        product_name: this.productById(order.product_id)?.name || null,
+        operator_id: operator?.operator_id || null,
+        operator_name: operator?.operator_id
+          ? this.hrEmployees.find((row) => row.ext_hr_employee_id === operator.operator_id)?.name ||
+            null
+          : null,
+        work_center_id:
+          order.work_center_id ||
+          operations.find((row) => row.work_center_id)?.work_center_id ||
+          null,
+        work_center_name:
+          this.workCenterById(
+            order.work_center_id || operations.find((row) => row.work_center_id)?.work_center_id,
+          )?.name || null,
+      };
+    });
+    const maintenanceTickets = this.maintenanceTickets.map((ticket) => {
+      const date = datePart(ticket.created_at);
+      const technician = [...mtFx.technicians, ...this.hrEmployees].find(
+        (row) => row.ext_hr_employee_id === ticket.technician_ext_hr_employee_id,
+      );
+      return {
+        ...ticket,
+        scheduled_start_date: ticket.scheduled_start_date || date,
+        scheduled_end_date: ticket.scheduled_end_date || date,
+        work_center_name: this.workCenterById(ticket.work_center_id)?.name || null,
+        technician_name: technician?.name || null,
+      };
+    });
+    const preventiveMaintenanceOrders = this.preventiveMaintenanceOrders.map((order) => ({
+      ...order,
+      scheduled_start_date: order.scheduled_start_date || datePart(order.planned_date),
+      scheduled_end_date: order.scheduled_end_date || datePart(order.planned_date),
+      work_center_name: this.workCenterById(order.work_center_id)?.name || null,
+      technician_name:
+        [...mtFx.technicians, ...this.hrEmployees].find(
+          (row) => row.ext_hr_employee_id === order.technician_ext_hr_employee_id,
+        )?.name || null,
+    }));
+    return deriveCalendarEventsForMonth(month, {
+      orders,
+      maintenanceTickets,
+      preventiveMaintenanceOrders,
+      productionOrderOperations: this.productionOrderOperations,
+    });
+  }
+
+  scheduleOrderRange(orderId, payload = {}, role = null) {
+    if (role && !canEditOrderSchedule(role)) {
+      throw new Error('Su rol no puede modificar horarios del calendario.');
+    }
+    const order = this.orderById(orderId);
+    if (!order) throw new Error(`Orden no encontrada: ${orderId}`);
+    if (!canRescheduleOrder(order)) {
+      throw new Error('Una orden cerrada no admite cambios de horario.');
+    }
+    const range = buildCalendarRange(
+      payload.startDate,
+      payload.endDate,
+      payload.startTime,
+      payload.endTime,
+    );
+    const result = validatePlannedDates({
+      planned_start_date: range.start_date,
+      planned_end_date: range.end_date,
+      scheduled_start_time: range.start_time,
+      scheduled_end_time: range.end_time,
+    });
+    if (!result.valid) {
+      throw new Error(
+        result.error === 'hora_invalida'
+          ? 'Las horas deben tener el formato HH:mm.'
+          : result.error === 'rango_horario_invertido'
+            ? 'La hora de término debe ser posterior a la de inicio.'
+            : 'Las fechas deben tener el formato YYYY-MM-DD y existir en el calendario.',
+      );
+    }
+    order.planned_start_date = range.start_date;
+    order.planned_end_date = range.end_date;
+    order.scheduled_start_time = range.start_time;
+    order.scheduled_end_time = range.end_time;
+    this.#persist();
+    this.#emit();
+    return order;
+  }
+
+  setOrderPriority(orderId, priority, role = 'plant_manager') {
+    if (role !== 'plant_manager') {
+      throw new Error('Solo la jefa de planta puede cambiar la prioridad.');
+    }
+    if (!['low', 'normal', 'high', 'urgent'].includes(priority)) {
+      throw new Error(`Prioridad inválida: ${priority}`);
+    }
+    const order = this.orderById(orderId);
+    if (!order) throw new Error(`Orden no encontrada: ${orderId}`);
+    if (!canRescheduleOrder(order)) {
+      throw new Error('Una orden cerrada no admite cambios de prioridad.');
+    }
+    order.priority = priority;
+    this.#persist();
+    this.#emit();
+    return order;
+  }
+
+  setCriticalUrgent(orderId, flag, role = 'plant_manager') {
+    if (role !== 'plant_manager') {
+      throw new Error('Solo la jefa de planta puede marcar urgencia crítica.');
+    }
+    const order = this.orderById(orderId);
+    if (!order) throw new Error(`Orden no encontrada: ${orderId}`);
+    if (!canRescheduleOrder(order)) {
+      throw new Error('Una orden cerrada no admite cambios de urgencia crítica.');
+    }
+    order.is_critical_urgent = Boolean(flag);
     this.#persist();
     this.#emit();
     return order;

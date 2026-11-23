@@ -4,7 +4,10 @@
  */
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-const PRIORITY_RANK = { high: 0, normal: 1, low: 2 };
+const TIME_HH_MM = /^([01]\d|2[0-3]):[0-5]\d$/;
+const DEFAULT_START_TIME = '08:00';
+const DEFAULT_END_TIME = '16:00';
+const PRIORITY_RANK = { urgent: -1, high: 0, normal: 1, low: 2 };
 
 /**
  * Acepta `null` o una fecha `YYYY-MM-DD` que exista en el calendario.
@@ -25,7 +28,12 @@ export function isValidIsoDate(value) {
  * @param {{planned_start_date?:string|null, planned_end_date?:string|null}} dates
  * @returns {{valid:boolean, error?:string}}
  */
-export function validatePlannedDates({ planned_start_date, planned_end_date } = {}) {
+export function validatePlannedDates({
+  planned_start_date,
+  planned_end_date,
+  scheduled_start_time,
+  scheduled_end_time,
+} = {}) {
   if (!isValidIsoDate(planned_start_date) || !isValidIsoDate(planned_end_date)) {
     return { valid: false, error: 'fecha_invalida' };
   }
@@ -35,6 +43,14 @@ export function validatePlannedDates({ planned_start_date, planned_end_date } = 
     String(planned_end_date) < String(planned_start_date)
   ) {
     return { valid: false, error: 'rango_invertido' };
+  }
+  const startTime = scheduled_start_time === undefined ? DEFAULT_START_TIME : scheduled_start_time;
+  const endTime = scheduled_end_time === undefined ? DEFAULT_END_TIME : scheduled_end_time;
+  if (!TIME_HH_MM.test(String(startTime)) || !TIME_HH_MM.test(String(endTime))) {
+    return { valid: false, error: 'hora_invalida' };
+  }
+  if (String(endTime) <= String(startTime)) {
+    return { valid: false, error: 'rango_horario_invertido' };
   }
   return { valid: true };
 }

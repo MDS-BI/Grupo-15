@@ -52,6 +52,30 @@ function submit(selector) {
   node.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
 }
 
+function mountScheduling(role = 'planner', options = {}) {
+  const panel = ProductionSchedulingPanel(store, { role, ...options });
+  document.body.appendChild(panel);
+  return panel;
+}
+
+function dispatchMouse(selector, type, options = {}) {
+  const node = document.querySelector(selector);
+  expect(node).toBeTruthy();
+  const event = new window.MouseEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    button: 0,
+    ...options,
+  });
+  node.dispatchEvent(event);
+  return event;
+}
+
+function currentMonthKey() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
 beforeEach(() => {
   dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost/' });
   globalThis.window = dom.window;
@@ -129,6 +153,154 @@ describe('Planificación de producción (US-10)', () => {
     change('[data-role="filter-status"]', 'completed');
     expect(document.querySelector('[data-date="start"][data-order="po_3001"]').disabled).toBe(true);
     expect(document.querySelector('[data-save="po_3001"]').disabled).toBe(true);
+  });
+});
+
+describe('Calendario mensual por rol (US-13)', () => {
+  it('abre el mes actual, recuerda el mes entre pestañas y vuelve al actual', () => {
+    mountScheduling('planner');
+    const monthLabel = () => document.querySelector('[data-month-label]').textContent;
+    const initial = monthLabel();
+
+    expect(initial).toContain(String(new Date().getFullYear()));
+    expect(document.querySelector('[data-role="calendar-filter"]').value).toBe('Ambos');
+    expect(document.querySelectorAll('.calendar-day').length).toBeGreaterThan(27);
+
+    click('[data-view="list"]');
+    click('[data-view="calendar"]');
+    expect(monthLabel()).toBe(initial);
+
+    click('[data-month-nav="next"]');
+    const next = monthLabel();
+    expect(next).not.toBe(initial);
+    click('[data-view="list"]');
+    click('[data-view="calendar"]');
+    expect(monthLabel()).toBe(next);
+
+    click('[data-month-nav="today"]');
+    expect(monthLabel()).toBe(initial);
+  });
+
+  it('filtra órdenes, mantenciones y ambos tipos', () => {
+    mountScheduling('planner');
+    expect(document.querySelectorAll('[data-event-kind="order"]').length).toBeGreaterThan(0);
+    expect(document.querySelectorAll('[data-event-kind="maintenance"]').length).toBeGreaterThan(0);
+
+    change('[data-role="calendar-filter"]', 'Solo Órdenes de Trabajo');
+    expect(document.querySelectorAll('[data-event-kind="maintenance"]')).toHaveLength(0);
+    expect(document.querySelectorAll('[data-event-kind="order"]').length).toBeGreaterThan(0);
+
+    change('[data-role="calendar-filter"]', 'Solo Mantenciones');
+    expect(document.querySelectorAll('[data-event-kind="order"]')).toHaveLength(0);
+    expect(document.querySelectorAll('[data-event-kind="maintenance"]').length).toBeGreaterThan(0);
+  });
+
+  it('muestra la bandeja y los controles críticos solo según el rol', () => {
+    document.body.innerHTML = '';
+    mountScheduling('planner');
+    const pending = store.pendingSchedulingOrders();
+    expect(pending.length).toBeGreaterThan(0);
+    const orderId = pending[0].id;
+    expect(document.querySelector('[data-role="pending-tray"]')).toBeTruthy();
+    expect(document.querySelector(`[data-pending-order="${orderId}"]`).textContent).toContain(
+      '% de avance',
+    );
+    expect(document.querySelector(`[data-priority-control="${orderId}"]`)).toBeNull();
+    expect(document.querySelector(`[data-critical-toggle="${orderId}"]`)).toBeNull();
+
+    document.body.innerHTML = '';
+    mountScheduling('plant_manager');
+    expect(document.querySelector('[data-role="pending-tray"]')).toBeTruthy();
+    expect(document.querySelector(`[data-priority-control="${orderId}"]`)).toBeTruthy();
+    expect(document.querySelector(`[data-critical-toggle="${orderId}"]`)).toBeTruthy();
+    change(`[data-priority-control="${orderId}"]`, 'urgent');
+    expect(store.orderById(orderId).priority).toBe('urgent');
+
+    document.body.innerHTML = '';
+    mountScheduling('supervisor');
+    expect(document.querySelector('[data-role="pending-tray"]').hidden).toBe(true);
+    expect(document.querySelector('[data-view="list"]')).toBeTruthy();
+    expect(document.querySelectorAll('input[type="time"], [data-schedule-save]')).toHaveLength(0);
+
+    document.body.innerHTML = '';
+    mountScheduling('operator', { operatorId: 'emp_op_01' });
+    expect(document.querySelector('[data-view="list"]')).toBeNull();
+    expect(document.querySelector('[data-role="calendar-grid"]')).toBeTruthy();
+    expect(document.querySelector('.calendar-day').draggable).toBe(false);
+  });
+
+  it('aplica foco, cancela con clic derecho y guarda un rango con horas editables', () => {
+    mountScheduling('planner');
+    const pending = store.pendingSchedulingOrders();
+    expect(pending.length).toBeGreaterThan(0);
+    const orderId = pending[0].id;
+    const month = currentMonthKey();
+    const startDate = `${month}-09`;
+    const endDate = `${month}-11`;
+
+    click(`[data-focus-order="${orderId}"]`);
+    expect(document.querySelector('.scheduling-focus-backdrop').hidden).toBe(false);
+    expect(document.querySelector('.scheduling-floating-card')).toBeTruthy();
+    expect(document.querySelector('[data-role="drag-hint"]').textContent).toMatch(/clic derecho/i);
+
+    const cancelled = dispatchMouse(`[data-date="${startDate}"]`, 'contextmenu');
+    expect(cancelled.defaultPrevented).toBe(true);
+    expect(document.querySelector('[data-role="schedule-popup"]').hidden).toBe(true);
+    expect(document.querySelector('.scheduling-focus-backdrop').hidden).toBe(true);
+
+    click(`[data-focus-order="${orderId}"]`);
+    dispatchMouse(`[data-date="${startDate}"]`, 'mousedown');
+    dispatchMouse(`[data-date="${endDate}"]`, 'mouseover');
+    expect(
+      document
+        .querySelector(`[data-date="${startDate}"]`)
+        .classList.contains('calendar-day--drag-range'),
+    ).toBe(true);
+    expect(
+      document
+        .querySelector(`[data-date="${endDate}"]`)
+        .classList.contains('calendar-day--drag-range'),
+    ).toBe(true);
+
+    dispatchMouse(`[data-date="${endDate}"]`, 'mouseup');
+    expect(document.querySelector('[data-role="schedule-popup"]')).toBeTruthy();
+    expect(document.querySelector('[data-schedule-time="start"]').value).toBe('08:00');
+    expect(document.querySelector('[data-schedule-time="end"]').value).toBe('16:00');
+
+    fill('[data-schedule-time="start"]', '09:30');
+    fill('[data-schedule-time="end"]', '17:30');
+    click('[data-schedule-save]');
+
+    const order = store.orderById(orderId);
+    expect(order.planned_start_date).toBe(startDate);
+    expect(order.planned_end_date).toBe(endDate);
+    expect(order.scheduled_start_time).toBe('09:30');
+    expect(order.scheduled_end_time).toBe('17:30');
+    expect(document.querySelector('[data-role="schedule-popup"]').hidden).toBe(true);
+  });
+
+  it('abre el menú diario por tarea y permite volver a la lista del día', () => {
+    mountScheduling('supervisor');
+    const chip = document.querySelector('[data-event-kind]');
+    expect(chip).toBeTruthy();
+    const date = chip.closest('.calendar-day').dataset.date;
+    const eventId = chip.dataset.eventId;
+
+    click(`[data-date="${date}"]`);
+    expect(document.querySelector('[data-role="day-menu"]')).toBeTruthy();
+    expect(document.querySelector(`[data-event-id="${eventId}"]`)).toBeTruthy();
+
+    click(`[data-event-id="${eventId}"]`);
+    const dialog = document.querySelector('[data-role="event-dialog"]');
+    expect(dialog).toBeTruthy();
+    expect(dialog.textContent).toContain('Volver a la lista del día');
+    expect(
+      dialog.querySelector('input, select, textarea, [data-schedule-save], [data-dialog-save]'),
+    ).toBeNull();
+
+    click('[data-role="event-back"]');
+    expect(document.querySelector('[data-role="day-menu"]')).toBeTruthy();
+    expect(document.querySelector('[data-role="event-dialog"]')).toBeNull();
   });
 });
 

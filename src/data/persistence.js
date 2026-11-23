@@ -83,10 +83,69 @@ function hasMinimalShape(payload) {
   return REQUIRED_ARRAYS.every((key) => Array.isArray(payload.data[key]));
 }
 
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_HH_MM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+function isoDatePart(value) {
+  if (typeof value !== 'string') return null;
+  if (ISO_DATE.test(value)) return value;
+  const match = value.match(/^(\d{4}-\d{2}-\d{2})T/);
+  return match ? match[1] : null;
+}
+
+function normalizeProductionOrder(order) {
+  if (!isPlainObject(order)) return order;
+  return {
+    ...order,
+    is_critical_urgent:
+      typeof order.is_critical_urgent === 'boolean' ? order.is_critical_urgent : false,
+    scheduled_start_time:
+      typeof order.scheduled_start_time === 'string' && TIME_HH_MM.test(order.scheduled_start_time)
+        ? order.scheduled_start_time
+        : '08:00',
+    scheduled_end_time:
+      typeof order.scheduled_end_time === 'string' && TIME_HH_MM.test(order.scheduled_end_time)
+        ? order.scheduled_end_time
+        : '16:00',
+  };
+}
+
+function normalizeMaintenanceTicket(ticket) {
+  if (!isPlainObject(ticket)) return ticket;
+  const derivedDate = isoDatePart(ticket.created_at);
+  return {
+    ...ticket,
+    scheduled_start_date: isoDatePart(ticket.scheduled_start_date) || derivedDate,
+    scheduled_end_date: isoDatePart(ticket.scheduled_end_date) || derivedDate,
+  };
+}
+
+function normalizePreventiveOrder(order) {
+  if (!isPlainObject(order)) return order;
+  const derivedDate = isoDatePart(order.planned_date);
+  return {
+    ...order,
+    scheduled_start_date: isoDatePart(order.scheduled_start_date) || derivedDate,
+    scheduled_end_date: isoDatePart(order.scheduled_end_date) || derivedDate,
+  };
+}
+
 function normalizeData(data) {
   const normalized = {};
   for (const key of COLLECTION_KEYS) {
-    normalized[key] = Array.isArray(data[key]) ? data[key] : [];
+    if (!Array.isArray(data[key])) {
+      normalized[key] = [];
+      continue;
+    }
+    if (key === 'productionOrders') {
+      normalized[key] = data[key].map(normalizeProductionOrder);
+    } else if (key === 'maintenanceTickets') {
+      normalized[key] = data[key].map(normalizeMaintenanceTicket);
+    } else if (key === 'preventiveMaintenanceOrders') {
+      normalized[key] = data[key].map(normalizePreventiveOrder);
+    } else {
+      normalized[key] = data[key];
+    }
   }
   return normalized;
 }
@@ -208,7 +267,7 @@ function cloneFixture(value) {
 }
 
 export function createFixtureSnapshot() {
-  return {
+  return normalizeData({
     companies: cloneFixture(companies),
     unitsOfMeasure: cloneFixture(unitsOfMeasure),
     warehouses: cloneFixture(warehouses),
@@ -239,7 +298,7 @@ export function createFixtureSnapshot() {
         cloneFixture(ROLE_USERS[role]),
       ]),
     ),
-  };
+  });
 }
 
 export function resetDemoSnapshot(storage = defaultStorage()) {

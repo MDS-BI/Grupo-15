@@ -28,6 +28,57 @@ describe('order-scheduling', () => {
     ).toEqual({ valid: false, error: 'fecha_invalida' });
   });
 
+  it('valida horas HH:mm, rango horario y conserva los errores de fecha', () => {
+    const dates = { planned_start_date: '2026-10-01', planned_end_date: '2026-10-10' };
+    expect(validatePlannedDates(dates)).toEqual({ valid: true });
+    expect(
+      validatePlannedDates({
+        ...dates,
+        scheduled_start_time: '08:00',
+        scheduled_end_time: '16:00',
+      }),
+    ).toEqual({ valid: true });
+    expect(
+      validatePlannedDates({ ...dates, scheduled_start_time: '8:00', scheduled_end_time: '16:00' }),
+    ).toEqual({ valid: false, error: 'hora_invalida' });
+    expect(
+      validatePlannedDates({
+        ...dates,
+        scheduled_start_time: '24:00',
+        scheduled_end_time: '16:00',
+      }),
+    ).toEqual({ valid: false, error: 'hora_invalida' });
+    expect(
+      validatePlannedDates({
+        ...dates,
+        scheduled_start_time: '16:00',
+        scheduled_end_time: '08:00',
+      }),
+    ).toEqual({ valid: false, error: 'rango_horario_invertido' });
+    expect(
+      validatePlannedDates({
+        ...dates,
+        scheduled_start_time: '16:00',
+        scheduled_end_time: '16:00',
+      }),
+    ).toEqual({ valid: false, error: 'rango_horario_invertido' });
+    expect(
+      validatePlannedDates({
+        planned_start_date: '2026-10-10',
+        planned_end_date: '2026-10-01',
+        scheduled_start_time: '25:00',
+        scheduled_end_time: '16:00',
+      }),
+    ).toEqual({ valid: false, error: 'rango_invertido' });
+    expect(
+      validatePlannedDates({
+        planned_start_date: '2026-02-30',
+        planned_end_date: null,
+        scheduled_start_time: '25:00',
+      }),
+    ).toEqual({ valid: false, error: 'fecha_invalida' });
+  });
+
   it('no permite reprogramar órdenes cerradas', () => {
     expect(canRescheduleOrder({ status: 'planned' })).toBe(true);
     expect(canRescheduleOrder({ status: 'in_progress' })).toBe(true);
