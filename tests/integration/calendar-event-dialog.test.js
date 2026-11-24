@@ -1,7 +1,19 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { JSDOM } from 'jsdom';
 import { ManufacturingStore } from '../../src/data/ManufacturingStore.js';
 import { CalendarEventDialog } from '../../src/components/calendar/CalendarEventDialog.js';
+import { ProductionSchedulingPanel } from '../../src/components/ProductionSchedulingPanel.js';
+
+const css = readFileSync(resolve('src/styles/manufacturing.css'), 'utf8');
+
+function cssRule(selector) {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = css.match(new RegExp(`${escaped}\\s*\\{([^}]*)\\}`, 'm'));
+  expect(match, `Regla CSS no encontrada: ${selector}`).toBeTruthy();
+  return match[1];
+}
 
 function memoryStorage() {
   const map = new Map();
@@ -52,6 +64,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.useRealTimers();
   dom.window.close();
 });
@@ -198,5 +211,169 @@ describe('CalendarEventDialog (US-13)', () => {
 
     expect(dialog.textContent).toContain('Solo lectura');
     expect(dialog.querySelector('input, select, textarea, [data-dialog-save]')).toBeNull();
+  });
+
+  it('el menú del día enumera todas las tareas resumidas y el popup queda sobre la tabla', () => {
+    const date = `${currentMonthKey()}-16`;
+    const events = Array.from({ length: 5 }, (_, index) => ({
+      id: `overflow:${index}`,
+      sourceId: `overflow_${index}`,
+      kind: index % 2 === 0 ? 'order' : 'maintenance',
+      title: `Tarea completa ${index + 1}`,
+      start_date: date,
+      end_date: date,
+      start_time: '09:00',
+      end_time: '18:00',
+      is_critical_urgent: false,
+    }));
+    vi.spyOn(store, 'calendarEventsForMonth').mockReturnValue(events);
+    const panel = ProductionSchedulingPanel(store, { role: 'supervisor' });
+    document.body.append(panel);
+
+    const day = document.querySelector(`[data-date="${date}"]`);
+    expect(day.querySelectorAll('.calendar-event-chip')).toHaveLength(3);
+    expect(day.querySelector('.calendar-day__more').textContent.trim()).toBe('+2 más');
+    day
+      .querySelector('.calendar-day__more')
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    const menuItems = [...document.querySelectorAll('[data-role="day-menu"] [data-event-id]')];
+    expect(menuItems.map((item) => item.textContent)).toEqual(
+      events.map((event) => expect.stringContaining(event.title)),
+    );
+
+    expect(cssRule('.data-table thead th')).toMatch(/position:\s*sticky/);
+    expect(cssRule('.schedule-popup')).toMatch(/z-index:\s*1001/);
+    expect(cssRule('.confirm-dialog')).toMatch(/z-index:\s*1100/);
+  });
+});
+
+describe('Modales centrados del calendario (US-13 / AC-92)', () => {
+  function mountPanel(role = 'supervisor') {
+    document.body.innerHTML = '';
+    const panel = ProductionSchedulingPanel(store, { role, operatorId: 'emp_op_01' });
+    document.body.appendChild(panel);
+    return panel;
+  }
+
+  function clickNode(node) {
+    expect(node).toBeTruthy();
+    node.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
+  }
+
+  function pressEscape() {
+    document.dispatchEvent(
+      new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
+  }
+
+  function dayWithEvent() {
+    const chip = document.querySelector('[data-event-kind]');
+    expect(chip).toBeTruthy();
+    return chip.closest('.calendar-day');
+  }
+
+  function openDayMenu() {
+    const day = dayWithEvent();
+    clickNode(day);
+    return day;
+  }
+
+  function openEventFromMenu() {
+    openDayMenu();
+    const item = document.querySelector('[data-role="day-menu"] [data-event-id]');
+    expect(item).toBeTruthy();
+    clickNode(item);
+  }
+
+  function openScheduleModal() {
+    mountPanel('planner');
+    clickNode(document.querySelector('.pending-tray__row'));
+    const day = document.querySelector(`[data-date="${currentMonthKey()}-24"]`);
+    expect(day).toBeTruthy();
+    day.dispatchEvent(
+      new window.MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }),
+    );
+    document.dispatchEvent(
+      new window.MouseEvent('mouseup', { bubbles: true, cancelable: true, button: 0 }),
+    );
+  }
+
+  it('abre el menú diario como modal en body y lo cierra por botón, Escape y clic fuera', () => {
+    mountPanel();
+    openDayMenu();
+    let backdrop = document.querySelector('[data-role="day-menu-backdrop"]');
+    expect(backdrop.classList.contains('modal-backdrop')).toBe(true);
+    expect(backdrop.parentElement).toBe(document.body);
+    expect(backdrop.querySelector('.modal[data-role="day-menu"]')).toBeTruthy();
+    expect(document.querySelector('.calendar-main [data-role="day-menu"]')).toBeNull();
+    expect(document.querySelector('.calendar-grid [data-role="day-menu"]')).toBeNull();
+
+    clickNode(backdrop.querySelector('[data-day-menu-close]'));
+    expect(document.querySelector('[data-role="day-menu-backdrop"]')).toBeNull();
+
+    clickNode(dayWithEvent());
+    pressEscape();
+    expect(document.querySelector('[data-role="day-menu-backdrop"]')).toBeNull();
+
+    clickNode(dayWithEvent());
+    backdrop = document.querySelector('[data-role="day-menu-backdrop"]');
+    clickNode(backdrop);
+    expect(document.querySelector('[data-role="day-menu-backdrop"]')).toBeNull();
+  });
+
+  it('abre el detalle como modal en body, mantiene Volver y cierra con Escape y clic fuera', () => {
+    mountPanel();
+    openEventFromMenu();
+    let backdrop = document.querySelector('[data-role="event-dialog-backdrop"]');
+    expect(backdrop.classList.contains('modal-backdrop')).toBe(true);
+    expect(backdrop.parentElement).toBe(document.body);
+    expect(backdrop.querySelector('.modal [data-role="event-dialog"]')).toBeTruthy();
+    expect(backdrop.querySelector('[data-role="event-dialog"]').getAttribute('draggable')).toBe(
+      'false',
+    );
+    expect(backdrop.textContent).toContain('Volver a la lista del día');
+    expect(document.querySelector('.calendar-main [data-role="event-dialog"]')).toBeNull();
+
+    clickNode(backdrop.querySelector('[data-role="event-back"]'));
+    expect(document.querySelector('[data-role="day-menu-backdrop"]')).toBeTruthy();
+    expect(document.querySelector('[data-role="event-dialog-backdrop"]')).toBeNull();
+
+    clickNode(document.querySelector('[data-role="day-menu"] [data-event-id]'));
+    pressEscape();
+    expect(document.querySelector('[data-role="event-dialog-backdrop"]')).toBeNull();
+
+    openDayMenu();
+    clickNode(document.querySelector('[data-role="day-menu"] [data-event-id]'));
+    backdrop = document.querySelector('[data-role="event-dialog-backdrop"]');
+    clickNode(backdrop);
+    expect(document.querySelector('[data-role="event-dialog-backdrop"]')).toBeNull();
+  });
+
+  it('abre el popup de horario como modal en body y lo cierra por botón, Escape y clic fuera', () => {
+    openScheduleModal();
+    let backdrop = document.querySelector('[data-role="schedule-popup-backdrop"]');
+    expect(backdrop.classList.contains('modal-backdrop')).toBe(true);
+    expect(backdrop.parentElement).toBe(document.body);
+    expect(backdrop.querySelector('.modal[data-role="schedule-popup"]')).toBeTruthy();
+    expect(backdrop.querySelector('[data-schedule-time="start"]').value).toBe('08:00');
+    expect(backdrop.querySelector('[data-schedule-time="end"]').value).toBe('16:00');
+    expect(document.querySelector('.calendar-main [data-role="schedule-popup"]')).toBeNull();
+
+    clickNode(backdrop.querySelector('[data-role="schedule-popup-close"]'));
+    expect(document.querySelector('[data-role="schedule-popup-backdrop"]')).toBeNull();
+
+    openScheduleModal();
+    pressEscape();
+    expect(document.querySelector('[data-role="schedule-popup-backdrop"]')).toBeNull();
+
+    openScheduleModal();
+    backdrop = document.querySelector('[data-role="schedule-popup-backdrop"]');
+    clickNode(backdrop);
+    expect(document.querySelector('[data-role="schedule-popup-backdrop"]')).toBeNull();
+  });
+
+  it('reserva las capas 1000 y 1001 para los modales', () => {
+    expect(cssRule('.modal-backdrop')).toMatch(/z-index:\s*1000/);
+    expect(cssRule('.modal')).toMatch(/z-index:\s*1001/);
   });
 });

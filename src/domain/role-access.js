@@ -48,3 +48,7 @@ export function visibleTechnicianNamesFor(role) {
 export function roleLabel(role) {
   return ROLE_LABELS[role] ?? String(role ?? '');
 }
+
+export function roleChangeMessage(role) {
+  return `¿Deseas cambiar tu vista al rol ${roleLabel(role)}?`;
+}

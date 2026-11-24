@@ -16,9 +16,9 @@ import { PlantPerformancePanel } from './components/PlantPerformancePanel.js';
 import { ProductionSchedulingPanel } from './components/ProductionSchedulingPanel.js';
 import { LineBalancePanel } from './components/LineBalancePanel.js';
 import { RoleAccessPanel } from './components/RoleAccessPanel.js';
-import { RoleAdminPanel } from './components/RoleAdminPanel.js';
 import { escapeHtml } from './components/format.js';
 import { confirmDialog } from './components/ConfirmDialog.js';
+import { ChangePasswordDialog } from './components/ChangePasswordDialog.js';
 import { icon } from './components/icons.js';
 import { mountToastRegion, showToast } from './components/Toast.js';
 import { authenticate, DEMO_ACCOUNTS } from './data/fixtures/demo-accounts.js';
@@ -87,14 +87,12 @@ const MODULES = [
     render: (context) =>
       RoleAccessPanel({
         currentRole: context.role,
-        modules: MODULES.filter((module) => module.id !== 'admin-roles'),
+        username: context.username,
+        store,
+        modules: context.modules,
+        initialTab: context.roleTab,
+        onRoleChange: context.onRoleChange,
       }),
-  },
-  {
-    id: 'admin-roles',
-    label: 'Datos de roles',
-    icon: 'admin-roles',
-    render: () => RoleAdminPanel({ store }),
   },
 ];
 
@@ -104,6 +102,7 @@ const state = {
   assignedRoles: [],
   realRole: null,
   role: DEFAULT_ROLE,
+  roleTab: 'roles',
   screen: 'login',
   drawerOpen: false,
   userMenuOpen: false,
@@ -163,6 +162,7 @@ function forgetRole() {
   state.assignedRoles = [];
   state.realRole = null;
   state.role = DEFAULT_ROLE;
+  state.roleTab = 'roles';
   state.active = 'dashboard';
   state.drawerOpen = false;
   state.userMenuOpen = false;
@@ -174,10 +174,14 @@ function forgetRole() {
   }
 }
 
-function moduleFromHash() {
+function routeFromHash() {
   const hash = globalThis.location?.hash || '';
   const value = hash.replace(/^#\/?/, '').split('?')[0];
-  return MODULES.some((module) => module.id === value) ? value : null;
+  if (value === 'admin-roles') return { moduleId: 'roles', roleTab: 'config' };
+  return {
+    moduleId: MODULES.some((module) => module.id === value) ? value : null,
+    roleTab: 'roles',
+  };
 }
 
 function syncHash(moduleId, replace = false) {
@@ -194,6 +198,7 @@ function syncHash(moduleId, replace = false) {
 function navigateTo(moduleId) {
   if (!isModuleAllowed(state.role, moduleId)) return;
   state.active = moduleId;
+  state.roleTab = 'roles';
   state.screen = 'app';
   state.drawerOpen = false;
   state.userMenuOpen = false;
@@ -201,20 +206,25 @@ function navigateTo(moduleId) {
   renderApp();
 }
 
-function handleLocationChange() {
+function handleLocationChange({ render = true } = {}) {
   if (state.screen === 'login' || !state.realRole) return;
-  const target = moduleFromHash();
+  const route = routeFromHash();
   state.active =
-    target && isModuleAllowed(state.role, target) ? target : homeModuleForRole(state.role);
+    route.moduleId && isModuleAllowed(state.role, route.moduleId)
+      ? route.moduleId
+      : homeModuleForRole(state.role);
+  state.roleTab =
+    route.roleTab === 'config' && isModuleAllowed(state.role, 'admin-roles') ? 'config' : 'roles';
   syncHash(state.active, true);
   state.screen = 'app';
-  renderApp();
+  if (render) renderApp();
 }
 
 function selectEffectiveRole(role, { goHome = false } = {}) {
   if (!state.assignedRoles.includes(role)) return;
   state.role = role;
   persistRole();
+  if (state.roleTab === 'config' && !isModuleAllowed(role, 'admin-roles')) state.roleTab = 'roles';
 
   if (goHome) state.active = homeModuleForRole(state.role);
   else if (!isModuleAllowed(state.role, state.active)) state.active = homeModuleForRole(state.role);
@@ -232,6 +242,7 @@ function login(roles, username) {
   state.assignedRoles = roles;
   state.realRole = roles[0] ?? DEFAULT_ROLE;
   state.role = state.realRole;
+  state.roleTab = 'roles';
   state.active = homeModuleForRole(state.role);
   state.screen = 'app';
   state.drawerOpen = false;
@@ -267,6 +278,34 @@ async function resetDemoData() {
     tone: restored ? 'success' : 'danger',
   });
   renderContent();
+}
+
+function passwordChangeMessage(reason) {
+  return (
+    {
+      'invalid-current-password': 'La contraseña actual no es correcta.',
+      'user-not-found': 'No se encontró el usuario autenticado.',
+      'empty-password': 'La nueva contraseña no puede estar vacía.',
+    }[reason] ?? 'No se pudo cambiar la contraseña'
+  );
+}
+
+function openChangePassword() {
+  state.userMenuOpen = false;
+  renderShell();
+  const dialog = ChangePasswordDialog({
+    onSubmit: ({ currentPassword, newPassword }) => {
+      const username = String(state.username ?? '')
+        .trim()
+        .toLowerCase();
+      const result = store.changeUserPassword(username, currentPassword, newPassword);
+      showToast(result.ok ? 'Contraseña actualizada' : passwordChangeMessage(result.reason), {
+        tone: result.ok ? 'success' : 'danger',
+      });
+      return result;
+    },
+  });
+  document.body.append(dialog);
 }
 
 function visibleModules() {
@@ -412,6 +451,9 @@ function userMenu() {
         </button>`
             : ''
         }
+        <button type="button" class="user-menu__item" data-change-password role="menuitem">
+          <span>Cambiar contraseña</span>
+        </button>
         <button type="button" class="user-menu__item" data-logout role="menuitem">
           ${icon('logout')}<span>Cerrar sesión</span>
         </button>
@@ -465,6 +507,7 @@ function renderShell() {
 
   app.querySelector('[data-logout]')?.addEventListener('click', logout);
   app.querySelector('[data-reset-demo]')?.addEventListener('click', resetDemoData);
+  app.querySelector('[data-change-password]')?.addEventListener('click', openChangePassword);
 
   const menuToggle = app.querySelector('[data-role="user-menu-toggle"]');
   menuToggle.addEventListener('click', () => {
@@ -512,7 +555,10 @@ function renderContent() {
     module.render({
       role: state.role,
       realRole: state.realRole,
+      username: state.username,
       modules: MODULES,
+      roleTab: state.roleTab,
+      onRoleChange: (role) => selectEffectiveRole(role),
       onNavigate: navigateTo,
     }),
   );
@@ -551,8 +597,10 @@ if (saved) {
   state.assignedRoles = saved.assignedRoles;
   state.realRole = saved.realRole;
   state.role = saved.role;
+  state.roleTab = 'roles';
   state.active = homeModuleForRole(state.role);
   state.screen = 'app';
+  handleLocationChange({ render: false });
 }
 
 renderApp();

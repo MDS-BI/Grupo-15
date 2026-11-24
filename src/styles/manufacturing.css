@@ -106,6 +106,8 @@ button {
 }
 
 .topbar {
+  position: relative;
+  z-index: 20;
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -183,6 +185,8 @@ button {
 }
 
 .sidebar {
+  position: relative;
+  z-index: 30;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
@@ -858,6 +862,7 @@ button {
 .modal-backdrop {
   position: fixed;
   inset: 0;
+  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -865,6 +870,8 @@ button {
 }
 
 .modal {
+  position: relative;
+  z-index: 1001;
   width: min(420px, 90vw);
   background: var(--erp-surface);
   border-radius: 10px;
@@ -906,6 +913,8 @@ button {
 }
 
 .confirm-dialog {
+  position: relative;
+  z-index: 1100;
   width: min(440px, 92vw);
   padding: 0;
   border: 1px solid var(--erp-border);
@@ -917,12 +926,14 @@ button {
 }
 
 .confirm-dialog::backdrop {
+  z-index: 1100;
   background: var(--erp-overlay);
 }
 
 .confirm-dialog--fallback {
   position: fixed;
   inset: 0;
+  z-index: 1100;
   margin: auto;
 }
 
@@ -1016,25 +1027,6 @@ button {
 }
 
 /* ---------------- Mantenimiento (US-09) ---------------- */
-
-.maintenance-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  align-items: flex-end;
-}
-
-.maintenance-filters label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.875rem;
-  color: var(--erp-text-muted);
-}
-
-.maintenance-filters select {
-  min-width: 140px;
-}
 
 .table-wrap--tickets {
   width: 100%;
@@ -2430,6 +2422,44 @@ button {
   color: var(--erp-text-muted);
 }
 
+.role-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0;
+  border-bottom: 1px solid var(--erp-border);
+}
+
+.role-tabs__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  background: transparent;
+  color: var(--erp-text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+
+.role-tabs__tab[aria-selected='true'] {
+  border-color: var(--erp-border);
+  background: var(--erp-surface);
+  color: var(--erp-accent);
+}
+
+.role-tabs__tab:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.role-tabpanel[hidden] {
+  display: none;
+}
+
 .role-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -2502,11 +2532,17 @@ button {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  width: 100%;
   padding: 1.25rem;
+  appearance: none;
   background: var(--erp-surface);
   border: 1px solid var(--erp-border);
   border-radius: 8px;
   box-shadow: var(--erp-shadow);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
 }
 
 .role-card.is-active {
@@ -2536,6 +2572,7 @@ button {
 }
 
 .role-card__desc {
+  display: block;
   margin: 0;
   color: var(--erp-text-muted);
 }
@@ -2643,19 +2680,8 @@ textarea:focus-visible,
   outline-offset: 2px;
 }
 
-@keyframes view-enter {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 .content > .view {
-  animation: view-enter 240ms var(--erp-ease) both;
+  width: 100%;
 }
 
 .topbar__breadcrumb {
@@ -2977,7 +3003,7 @@ select:not([hidden]) {
   position: fixed;
   right: 1rem;
   bottom: 1rem;
-  z-index: 1000;
+  z-index: 1200;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -3055,19 +3081,6 @@ select:not([hidden]) {
 
   .btn--header-action {
     align-self: flex-start;
-  }
-
-  .maintenance-filters {
-    width: 100%;
-  }
-
-  .maintenance-filters label {
-    flex: 1 1 140px;
-  }
-
-  .maintenance-filters select {
-    width: 100%;
-    min-width: 0;
   }
 
   .orders-toolbar .inline-field,
@@ -3150,8 +3163,37 @@ select:not([hidden]) {
   display: none !important;
 }
 
+.scheduling-calendar {
+  position: relative;
+}
+
 .scheduling-tabs {
-  margin-bottom: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0 0 1rem;
+  border-bottom: 1px solid var(--erp-border);
+}
+
+.scheduling-tabs__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  background: transparent;
+  color: var(--erp-text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+
+.scheduling-tabs__tab[aria-selected='true'] {
+  border-color: var(--erp-border);
+  background: var(--erp-surface);
+  color: var(--erp-accent);
 }
 
 .calendar-toolbar {
@@ -3189,16 +3231,22 @@ select:not([hidden]) {
 
 .calendar-layout {
   display: grid;
-  grid-template-columns: minmax(220px, 270px) minmax(0, 1fr);
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
   align-items: start;
 }
 
 .pending-tray {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  width: 100%;
+  padding: 0.55rem 0.75rem;
   border: 1px solid var(--erp-border);
   border-radius: 10px;
   background: var(--erp-surface);
-  padding: 0.85rem;
 }
 
 .pending-tray__header {
@@ -3264,12 +3312,16 @@ select:not([hidden]) {
 
 .calendar-main {
   position: relative;
+  z-index: 50;
+  width: 100%;
   min-width: 0;
+  background: #fff;
 }
 
 .calendar-weekdays,
 .calendar-grid {
   display: grid;
+  width: 100%;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 4px;
 }
@@ -3293,6 +3345,7 @@ select:not([hidden]) {
   flex-direction: column;
   gap: 0.25rem;
   min-height: 96px;
+  max-height: 190px;
   padding: 0.4rem;
   border: 1px solid var(--erp-border);
   border-radius: 8px;
@@ -3376,9 +3429,22 @@ select:not([hidden]) {
 }
 
 .calendar-event-chip span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.calendar-day__more {
+  width: 100%;
+  padding: 0.18rem 0.3rem;
+  border: 1px dashed var(--erp-border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--erp-accent);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-align: left;
 }
 
 .calendar-hint {
@@ -3658,7 +3724,7 @@ select:not([hidden]) {
 
 .scheduling-floating-card {
   position: fixed;
-  z-index: 41;
+  z-index: 60;
   display: grid;
   gap: 0.2rem;
   padding: 0.55rem 0.75rem;
@@ -3674,7 +3740,7 @@ select:not([hidden]) {
   position: absolute;
   top: 30%;
   left: 50%;
-  z-index: 42;
+  z-index: 1001;
   width: min(360px, 92%);
   transform: translateX(-50%);
   padding: 1rem;
@@ -3905,4 +3971,297 @@ select:not([hidden]) {
   font-size: 0.82rem;
   font-weight: 600;
   color: var(--erp-muted);
+}
+
+/* ---------------- Fase 30: US-12, US-13 y US-15 ---------------- */
+
+.role-admin__users li {
+  display: inline-flex;
+}
+
+.role-admin__user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.6rem;
+  background: var(--erp-bg);
+  border: 1px solid var(--erp-border);
+  border-radius: 999px;
+  font-size: 0.85rem;
+}
+
+.role-admin__remove-user {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--erp-text-muted);
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+}
+
+.role-admin__remove-user:hover {
+  background: rgba(220, 38, 38, 0.12);
+  color: #b91c1c;
+}
+
+.modal__close {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.5rem;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--erp-text-muted);
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.modal__close:hover {
+  background: var(--erp-soft);
+  color: var(--erp-text);
+}
+
+.modal__header {
+  margin: 0;
+  padding: 1rem 2.5rem 1rem 1.25rem;
+  border-bottom: 1px solid var(--erp-border);
+}
+
+.modal__body {
+  padding: 1rem 1.25rem;
+}
+
+.modal__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0 1.25rem 1rem;
+}
+
+.change-password-modal {
+  width: min(440px, 92vw);
+}
+
+.change-password-form,
+.schedule-popup__fields {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.form-field,
+.schedule-popup__fields label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.form-field input,
+.schedule-popup__fields input {
+  width: 100%;
+  height: 36px;
+  padding: 0 0.5rem;
+  border: 1px solid var(--erp-border);
+  border-radius: 6px;
+  font: inherit;
+}
+
+.form-error {
+  min-height: 1rem;
+  color: #b91c1c;
+  font-size: 0.78rem;
+}
+
+.calendar-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.pending-tray {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+}
+
+.pending-tray__header {
+  margin-bottom: 0;
+}
+
+.pending-tray__row {
+  display: flex;
+  flex: 1 1 280px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+  border-top: 0;
+}
+
+.calendar-main {
+  z-index: 50;
+  background: #fff;
+}
+
+.calendar-main--focused {
+  z-index: 50;
+  background: #fff;
+}
+
+.calendar-grid.is-selecting {
+  user-select: none;
+}
+
+.scheduling-floating-card {
+  z-index: 60;
+}
+
+.schedule-popup.modal {
+  position: relative;
+  top: auto;
+  left: auto;
+  width: min(420px, 90vw);
+  transform: none;
+  padding: 0;
+  border: 0;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.25);
+}
+
+.schedule-popup__fields {
+  padding: 0 1rem 0.4rem;
+}
+
+.schedule-popup__range {
+  margin: 0.25rem 1rem 0.6rem;
+}
+
+.schedule-popup__actions {
+  padding: 0 1rem 1rem;
+}
+
+.maintenance-machines-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  transition: grid-template-columns 240ms var(--erp-ease);
+}
+
+.maintenance-machines-layout.is-selected {
+  grid-template-columns: 0.85fr 1.15fr;
+}
+
+.maintenance-machines-list {
+  min-width: 0;
+}
+
+.maintenance-machine-detail:empty {
+  display: none;
+}
+
+.maintenance-machine-detail {
+  min-width: 0;
+}
+
+.maintenance-machine-detail.is-selected {
+  display: block;
+}
+
+.machine-calendar__header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin: 0.85rem 0 0.5rem;
+}
+
+.machine-calendar__grid {
+  width: 100%;
+  table-layout: fixed;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-collapse: collapse;
+  text-align: center;
+}
+
+.machine-calendar__weekday {
+  padding: 0.35rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.machine-calendar__cell {
+  height: 34px;
+  border: 1px solid var(--erp-border);
+  font-size: 0.78rem;
+  vertical-align: middle;
+}
+
+.machine-calendar__cell.is-outside {
+  opacity: 0.45;
+}
+
+.machine-calendar__cell--none {
+  background-color: #fff;
+}
+
+.machine-calendar__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  margin-top: 0.6rem;
+  font-size: 0.78rem;
+}
+
+.machine-calendar__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.machine-calendar__legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+.machine-calendar__legend-swatch--none {
+  background-color: transparent;
+  border: 1px solid #cbd5e1;
+}
+
+.machine-calendar__legend-swatch--corrective {
+  background-color: #dc2626;
+}
+
+.machine-calendar__cell--corrective {
+  background-color: #dc2626;
+}
+
+.machine-calendar__legend-swatch--planned_use {
+  background-color: #2563eb;
+}
+
+.machine-calendar__cell--planned_use {
+  background-color: #2563eb;
+}
+
+.machine-calendar__legend-swatch--preventive {
+  background-color: #7c3aed;
+}
+
+.machine-calendar__cell--preventive {
+  background-color: #7c3aed;
 }

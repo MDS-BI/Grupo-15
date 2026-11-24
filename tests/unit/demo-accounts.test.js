@@ -45,6 +45,20 @@ describe('Cuentas de demostración por rol', () => {
     expect(authenticate('  TEST  ', 'test')).toEqual(CANONICAL_ROLES);
   });
 
+  it('authenticate lee la credencial cambiada desde las tablas entregadas', () => {
+    const changed = Object.fromEntries(
+      Object.entries(ROLE_USERS).map(([role, rows]) => [
+        role,
+        rows.map((row) => (row.username === 'test' ? { ...row, password: 'clave-cambiada' } : row)),
+      ]),
+    );
+
+    expect(authenticate('test', 'test', changed)).toBeNull();
+    expect(authenticate('test', 'clave-cambiada', changed)).toEqual(CANONICAL_ROLES);
+    expect(authenticate('jefa', 'jefa', changed)).toEqual(['plant_manager']);
+    expect(ROLE_USERS.plant_manager.find((row) => row.username === 'jefa').password).toBe('jefa');
+  });
+
   it('niega la cuenta genérica y credenciales inválidas', () => {
     expect(authenticate('usuario', 'usuario')).toBeNull();
     expect(authenticate('jefa', 'incorrecta')).toBeNull();

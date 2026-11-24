@@ -1,5 +1,6 @@
 import { el, escapeHtml } from './format.js';
 import { showToast } from './Toast.js';
+import { confirmDialog } from './ConfirmDialog.js';
 import { CANONICAL_ROLES, roleLabel } from '../domain/role-access.js';
 
 export function RoleAdminPanel({ store } = {}) {
@@ -8,7 +9,7 @@ export function RoleAdminPanel({ store } = {}) {
       <header class="view__header">
         <div>
           <p class="view__eyebrow">Sistema</p>
-          <h1>Datos de roles</h1>
+          <h1>Configurar roles</h1>
           <p class="view__subtitle">Altas y asignaciones persistidas en la demo.</p>
         </div>
       </header>
@@ -62,8 +63,14 @@ export function RoleAdminPanel({ store } = {}) {
       const items = rows.length
         ? rows
             .map(
-              (row) =>
-                `<li data-username="${escapeHtml(row.username)}">${escapeHtml(row.username)}</li>`,
+              (row) => `
+                <li class="role-admin__user-chip" data-username="${escapeHtml(row.username)}">
+                  <span class="role-admin__user-name">${escapeHtml(row.username)}</span>
+                  <button type="button" class="role-admin__remove-user"
+                    data-remove-user="${escapeHtml(row.username)}" data-role="${role}"
+                    aria-label="Quitar a ${escapeHtml(row.username)} de ${escapeHtml(roleLabel(role))}"
+                    title="Quitar">×</button>
+                </li>`,
             )
             .join('')
         : '<li class="role-admin__empty">Sin usuarios</li>';
@@ -108,6 +115,34 @@ export function RoleAdminPanel({ store } = {}) {
     } else {
       showToast('El usuario no existe en las tablas de roles', { tone: 'danger' });
     }
+  });
+
+  root.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-remove-user]');
+    if (!button) return;
+    const username = button.dataset.removeUser;
+    const role = button.dataset.role;
+    if (!username || !role) return;
+
+    const confirmed = await confirmDialog({
+      title: 'Quitar usuario',
+      message: `¿Quitar a "${username}" del rol ${roleLabel(role)}? El usuario conservará sus otros roles asignados.`,
+      confirmLabel: 'Quitar',
+      danger: true,
+    });
+    if (!confirmed) return;
+
+    const result = store.removeRoleUser(role, username);
+    if (result?.ok) {
+      showToast(`Usuario ${username} quitado de ${roleLabel(role)}`, { tone: 'success' });
+      renderTables();
+      return;
+    }
+    const message =
+      result?.reason === 'last-plant-manager'
+        ? 'No se puede quitar al último usuario de Jefa de Planta'
+        : `No se pudo quitar a ${username} de ${roleLabel(role)}`;
+    showToast(message, { tone: 'danger' });
   });
 
   renderTables();

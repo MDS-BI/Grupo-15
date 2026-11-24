@@ -4,7 +4,6 @@ import { showToast } from './Toast.js';
 import { CalendarEventDialog } from './calendar/CalendarEventDialog.js';
 import {
   DEFAULT_CALENDAR_FILTER,
-  canEditOrderSchedule,
   canViewOrderDetails,
   filterCalendarEvents,
 } from '../domain/calendar-scheduling.js';
@@ -52,6 +51,57 @@ function sortedRange(first, second) {
   if (!second || first <= second)
     return { start: first, end: first === second ? first : second || first };
   return { start: second, end: first };
+}
+
+function createCalendarModal({
+  role,
+  label,
+  className = '',
+  closeAttribute = '',
+  content,
+  onClose,
+  onClick,
+}) {
+  const closeMarkup = closeAttribute || `data-role="${role}-close"`;
+  const closeSelector = closeAttribute ? `[${closeAttribute}]` : `[data-role="${role}-close"]`;
+  const backdrop = el(`
+    <div class="modal-backdrop" data-role="${role}-backdrop">
+      <div class="modal ${className}" role="dialog" aria-modal="true" aria-label="${escapeHtml(label)}" data-role="${role}">
+        <button type="button" class="modal__close" ${closeMarkup} aria-label="Cerrar">×</button>
+        ${content}
+      </div>
+    </div>`);
+  let closed = false;
+
+  function close(notify = true) {
+    if (closed) return;
+    closed = true;
+    document.removeEventListener('keydown', onKeyDown);
+    backdrop.remove();
+    if (notify && typeof onClose === 'function') onClose();
+  }
+
+  function onKeyDown(event) {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    close();
+  }
+
+  backdrop.addEventListener('click', (event) => {
+    if (event.target === backdrop) {
+      close();
+      return;
+    }
+    if (event.target.closest(closeSelector)) {
+      close();
+      return;
+    }
+    if (typeof onClick === 'function') onClick(event, close);
+  });
+  document.body.appendChild(backdrop);
+  document.addEventListener('keydown', onKeyDown);
+  backdrop.closeModal = () => close(false);
+  return backdrop;
 }
 
 function buildMonthCells(month, events) {
@@ -112,15 +162,15 @@ export function ProductionSchedulingPanel(store, options = {}) {
           <span class="badge badge--danger" data-summary="overdue">Atrasadas: 0</span>
         </div>
       </header>
-      <nav class="tab-bar scheduling-tabs" data-role="view-tabs" aria-label="Vistas de planificación">
-        <button type="button" class="tab-bar__btn" data-view="calendar">Calendario</button>
+      <nav class="tab-bar scheduling-tabs maintenance-tabs" role="tablist" data-role="view-tabs" aria-label="Vistas de planificación">
+        <button type="button" class="tab-bar__btn scheduling-tabs__tab maintenance-tabs__tab" role="tab" data-view="calendar" aria-controls="calendar-view" aria-selected="true">Calendario</button>
         ${
           role === 'operator'
             ? ''
-            : '<button type="button" class="tab-bar__btn" data-view="list">Listado</button>'
+            : '<button type="button" class="tab-bar__btn scheduling-tabs__tab maintenance-tabs__tab" role="tab" data-view="list" aria-controls="list-view" aria-selected="false">Listado</button>'
         }
       </nav>
-      <div class="scheduling-calendar" data-role="calendar-view">
+      <div class="scheduling-calendar" id="calendar-view" data-role="calendar-view">
         <div class="calendar-toolbar">
           <div class="calendar-month-nav">
             <button type="button" class="btn btn--tiny" data-month-nav="prev" aria-label="Mes anterior">‹</button>
@@ -139,7 +189,7 @@ export function ProductionSchedulingPanel(store, options = {}) {
         <div class="executive-summary" data-role="executive-summary" hidden></div>
         <div class="calendar-layout">
           <aside class="pending-tray" data-role="pending-tray" hidden></aside>
-          <div class="calendar-main">
+          <div class="calendar-main" data-role="calendar-main">
             <div class="calendar-weekdays">
               ${WEEKDAYS.map((day) => `<span>${day}</span>`).join('')}
             </div>
@@ -147,8 +197,6 @@ export function ProductionSchedulingPanel(store, options = {}) {
             <p class="calendar-hint" data-role="drag-hint" hidden>
               Clic derecho para salir del modo selección de horario.
             </p>
-            <div class="calendar-day-menu" data-role="day-menu" hidden></div>
-            <div class="calendar-dialog-slot" data-role="event-dialog-slot"></div>
           </div>
         </div>
         <div class="scheduling-focus-backdrop" data-role="focus-backdrop" hidden></div>
@@ -156,25 +204,8 @@ export function ProductionSchedulingPanel(store, options = {}) {
           <strong data-role="floating-title"></strong>
           <span>Arrastre sobre los días para elegir el rango.</span>
         </div>
-        <div class="schedule-popup" data-role="schedule-popup" hidden>
-          <h3>Nuevo rango horario</h3>
-          <div class="schedule-popup__fields">
-            <label>Inicio
-              <input type="time" data-schedule-time="start" value="08:00" />
-            </label>
-            <label>Término
-              <input type="time" data-schedule-time="end" value="16:00" />
-            </label>
-          </div>
-          <p class="schedule-popup__range" data-role="schedule-range"></p>
-          <div class="schedule-popup__actions">
-            <button type="button" class="btn btn--tiny btn--primary" data-schedule-save>Guardar</button>
-            <button type="button" class="btn btn--tiny" data-schedule-cancel>Cancelar</button>
-            <span class="form-error" data-error="schedule" role="alert"></span>
-          </div>
-        </div>
       </div>
-      <article class="panel" data-role="list-view" hidden>
+      <article class="panel" id="list-view" data-role="list-view" hidden>
         <div class="panel__body">
           <div class="filter-row">
             <label class="inline-field">Estado
@@ -218,16 +249,23 @@ export function ProductionSchedulingPanel(store, options = {}) {
   const kindFilter = root.querySelector('[data-role="calendar-filter"]');
   const executiveSummaryEl = root.querySelector('[data-role="executive-summary"]');
   const trayEl = root.querySelector('[data-role="pending-tray"]');
+  const mainEl = root.querySelector('[data-role="calendar-main"]');
   const gridEl = root.querySelector('[data-role="calendar-grid"]');
   const hintEl = root.querySelector('[data-role="drag-hint"]');
-  const dayMenuEl = root.querySelector('[data-role="day-menu"]');
-  const dialogSlotEl = root.querySelector('[data-role="event-dialog-slot"]');
   const backdropEl = root.querySelector('[data-role="focus-backdrop"]');
   const floatingEl = root.querySelector('[data-role="floating-card"]');
-  const popupEl = root.querySelector('[data-role="schedule-popup"]');
   const filters = { status: '', dateFrom: '', dateTo: '' };
+  let dayMenuModal = null;
+  let popupModal = null;
+  let eventModal = null;
 
-  if (!canEditOrderSchedule(role)) popupEl.remove();
+  document.body.append(backdropEl, floatingEl);
+
+  function closeModal(modal) {
+    if (!modal) return;
+    if (typeof modal.closeModal === 'function') modal.closeModal();
+    else modal.remove();
+  }
 
   function assignedOrderIds() {
     if (!operatorId) return [];
@@ -371,7 +409,9 @@ export function ProductionSchedulingPanel(store, options = {}) {
     const today = new Date().toISOString().slice(0, 10);
     gridEl.innerHTML = cells
       .map((cell) => {
-        const chips = cell.events
+        const visibleEvents = cell.events.slice(0, 3);
+        const hiddenCount = cell.events.length - visibleEvents.length;
+        const chips = visibleEvents
           .map(
             (
               event,
@@ -381,6 +421,9 @@ export function ProductionSchedulingPanel(store, options = {}) {
             </button>`,
           )
           .join('');
+        const moreButton = hiddenCount
+          ? `<button type="button" class="calendar-day__more" data-day-more="${cell.key}" title="Ver ${cell.events.length} tareas">+${hiddenCount} más</button>`
+          : '';
         const indicators =
           role === 'plant_manager'
             ? `<span class="calendar-day__indicators">
@@ -388,10 +431,10 @@ export function ProductionSchedulingPanel(store, options = {}) {
                 ${cell.events.some((event) => event.kind === 'maintenance') ? '<i data-indicator="maintenance"></i>' : ''}
               </span>`
             : '';
-        return `<div class="calendar-day ${cell.outside ? 'calendar-day--outside' : ''} ${cell.key === today ? 'calendar-day--today' : ''}" data-date="${cell.key}" role="button" tabindex="0" draggable="${role === 'planner' || role === 'plant_manager' ? 'true' : 'false'}">
+        return `<div class="calendar-day ${cell.outside ? 'calendar-day--outside' : ''} ${cell.key === today ? 'calendar-day--today' : ''}" data-date="${cell.key}" role="button" tabindex="0" draggable="false">
           <span class="calendar-day__number">${Number(cell.key.slice(-2))}</span>
           ${indicators}
-          <span class="calendar-day__events">${chips}</span>
+          <span class="calendar-day__events">${chips}${moreButton}</span>
         </div>`;
       })
       .join('');
@@ -408,56 +451,140 @@ export function ProductionSchedulingPanel(store, options = {}) {
     }
   }
 
-  function renderDayMenu(events) {
-    if (!state.dayMenuDate || state.selectedEventId || !MENU_ROLES.has(role)) {
-      dayMenuEl.hidden = true;
-      dayMenuEl.innerHTML = '';
-      return;
-    }
-    const dayEvents = events.filter((event) => dateKeyInRange(state.dayMenuDate, event));
-    dayMenuEl.hidden = false;
-    dayMenuEl.innerHTML = `
-      <header class="calendar-day-menu__header">
-        <h3>Tareas del ${escapeHtml(formatLocalDate(state.dayMenuDate))}</h3>
-        <button type="button" class="btn btn--tiny" data-day-menu-close aria-label="Cerrar lista">×</button>
-      </header>
-      ${
-        dayEvents.length
-          ? dayEvents
-              .map(
-                (
-                  event,
-                ) => `<button type="button" class="calendar-day-menu__item" data-event-id="${escapeHtml(event.id)}">
-                  ${icon(event.kind === 'order' ? 'scheduling' : 'maintenance')}
-                  <span>${escapeHtml(event.title)}</span>
-                  <small>${escapeHtml(event.start_time || '08:00')} - ${escapeHtml(event.end_time || '16:00')}</small>
-                </button>`,
-              )
-              .join('')
-          : '<p class="empty-note">Sin tareas para este día.</p>'
-      }`;
+  function openDayMenu(date, events) {
+    const dayEvents = events.filter((event) => dateKeyInRange(date, event));
+    const modal = createCalendarModal({
+      role: 'day-menu',
+      label: 'Tareas del día',
+      closeAttribute: 'data-day-menu-close',
+      content: `
+        <header class="calendar-day-menu__header">
+          <h3>Tareas del ${escapeHtml(formatLocalDate(date))}</h3>
+        </header>
+        ${
+          dayEvents.length
+            ? dayEvents
+                .map(
+                  (
+                    event,
+                  ) => `<button type="button" class="calendar-day-menu__item" data-event-id="${escapeHtml(event.id)}">
+                    ${icon(event.kind === 'order' ? 'scheduling' : 'maintenance')}
+                    <span>${escapeHtml(event.title)}</span>
+                    <small>${escapeHtml(event.start_time || '08:00')} - ${escapeHtml(event.end_time || '16:00')}</small>
+                  </button>`,
+                )
+                .join('')
+            : '<p class="empty-note">Sin tareas para este día.</p>'
+        }`,
+      onClose: () => {
+        state.dayMenuDate = null;
+        dayMenuModal = null;
+      },
+      onClick: (event, close) => {
+        const item = event.target.closest('[data-event-id]');
+        if (!item) return;
+        state.selectedEventId = item.dataset.eventId;
+        close(false);
+        dayMenuModal = null;
+        renderCalendar();
+      },
+    });
+    modal.dataset.date = date;
+    return modal;
   }
 
-  function renderDialog(events) {
-    const event = events.find((candidate) => candidate.id === state.selectedEventId);
-    if (!event) {
-      dialogSlotEl.innerHTML = '';
-      return;
+  function openEventDialog(event) {
+    const modal = CalendarEventDialog({
+      event,
+      role,
+      store,
+      operatorId,
+      onBack: () => {
+        state.selectedEventId = null;
+        state.dayMenuDate = event.start_date;
+        renderCalendar();
+      },
+      onClose: () => {
+        state.selectedEventId = null;
+        state.dayMenuDate = null;
+        renderCalendar();
+      },
+    });
+    modal.dataset.eventId = event.id;
+    return modal;
+  }
+
+  function openSchedulePopup() {
+    const { startDate, endDate, startTime, endTime } = state.popup;
+    const modal = createCalendarModal({
+      role: 'schedule-popup',
+      label: 'Nuevo rango horario',
+      className: 'schedule-popup',
+      content: `
+        <h3>Nuevo rango horario</h3>
+        <div class="schedule-popup__fields">
+          <label>Inicio
+            <input type="time" data-schedule-time="start" value="${escapeHtml(startTime)}" />
+          </label>
+          <label>Término
+            <input type="time" data-schedule-time="end" value="${escapeHtml(endTime)}" />
+          </label>
+        </div>
+        <p class="schedule-popup__range" data-role="schedule-range">${escapeHtml(
+          `${formatLocalDate(startDate)} al ${formatLocalDate(endDate)}`,
+        )}</p>
+        <div class="schedule-popup__actions">
+          <button type="button" class="btn btn--tiny btn--primary" data-schedule-save>Guardar</button>
+          <button type="button" class="btn btn--tiny" data-schedule-cancel>Cancelar</button>
+          <span class="form-error" data-error="schedule" role="alert"></span>
+        </div>`,
+      onClose: () => clearFocus(),
+      onClick: (event, close) => {
+        if (event.target.closest('[data-schedule-save]')) {
+          savePopup();
+          return;
+        }
+        if (event.target.closest('[data-schedule-cancel]')) {
+          close(false);
+          clearFocus();
+        }
+      },
+    });
+    modal.dataset.range = `${startDate}:${endDate}`;
+    return modal;
+  }
+
+  function syncModals(events) {
+    const dayKey =
+      state.dayMenuDate &&
+      !state.selectedEventId &&
+      !state.popup &&
+      !state.focusOrderId &&
+      MENU_ROLES.has(role)
+        ? state.dayMenuDate
+        : null;
+    if (dayMenuModal && (!dayKey || dayMenuModal.dataset.date !== dayKey)) {
+      closeModal(dayMenuModal);
+      dayMenuModal = null;
     }
-    dialogSlotEl.innerHTML = '';
-    dialogSlotEl.appendChild(
-      CalendarEventDialog({
-        event,
-        role,
-        store,
-        operatorId,
-        onBack: () => {
-          state.selectedEventId = null;
-          state.dayMenuDate = event.start_date;
-          renderCalendar();
-        },
-      }),
-    );
+    if (!dayMenuModal && dayKey) dayMenuModal = openDayMenu(dayKey, events);
+
+    const popupKey = state.popup ? `${state.popup.startDate}:${state.popup.endDate}` : null;
+    if (popupModal && (!popupKey || popupModal.dataset.range !== popupKey)) {
+      closeModal(popupModal);
+      popupModal = null;
+    }
+    if (!popupModal && popupKey) popupModal = openSchedulePopup();
+
+    const eventKey = state.selectedEventId;
+    if (eventModal && (!eventKey || eventModal.dataset.eventId !== eventKey)) {
+      closeModal(eventModal);
+      eventModal = null;
+    }
+    if (!eventModal && eventKey) {
+      const event = events.find((candidate) => candidate.id === eventKey);
+      if (event) eventModal = openEventDialog(event);
+    }
   }
 
   function renderFocus() {
@@ -465,23 +592,21 @@ export function ProductionSchedulingPanel(store, options = {}) {
     backdropEl.hidden = !active;
     floatingEl.hidden = !active;
     hintEl.hidden = !active;
+    gridEl.classList.toggle('is-selecting', active);
+    mainEl.classList.toggle('calendar-main--focused', active);
     if (!active) return;
     const order = store.orderById(state.focusOrderId);
-    root.querySelector('[data-role="floating-title"]').textContent =
+    floatingEl.querySelector('[data-role="floating-title"]').textContent =
       order?.order_number || state.focusOrderId;
     floatingEl.style.left = `${state.pointer.x + 14}px`;
     floatingEl.style.top = `${state.pointer.y + 14}px`;
   }
 
   function renderPopup() {
-    if (!state.popup) {
-      popupEl.hidden = true;
-      return;
-    }
-    popupEl.hidden = false;
-    popupEl.querySelector('[data-schedule-time="start"]').value = state.popup.startTime;
-    popupEl.querySelector('[data-schedule-time="end"]').value = state.popup.endTime;
-    popupEl.querySelector('[data-role="schedule-range"]').textContent =
+    if (!popupModal || !state.popup) return;
+    popupModal.querySelector('[data-schedule-time="start"]').value = state.popup.startTime;
+    popupModal.querySelector('[data-schedule-time="end"]').value = state.popup.endTime;
+    popupModal.querySelector('[data-role="schedule-range"]').textContent =
       `${formatLocalDate(state.popup.startDate)} al ${formatLocalDate(state.popup.endDate)}`;
   }
 
@@ -492,9 +617,8 @@ export function ProductionSchedulingPanel(store, options = {}) {
     renderExecutiveSummary();
     renderTray();
     renderGrid(events);
-    renderDayMenu(events);
-    renderDialog(events);
     renderFocus();
+    syncModals(events);
     renderPopup();
   }
 
@@ -565,24 +689,29 @@ export function ProductionSchedulingPanel(store, options = {}) {
     state.dragStart = null;
     state.dragEnd = null;
     state.popup = null;
+    state.suppressDayClick = false;
     renderCalendar();
   }
 
   function savePopup() {
     if (!state.popup) return;
-    const errorEl = popupEl.querySelector('[data-error="schedule"]');
+    const timeStart = popupModal?.querySelector('[data-schedule-time="start"]');
+    const timeEnd = popupModal?.querySelector('[data-schedule-time="end"]');
+    const errorEl = popupModal?.querySelector('[data-error="schedule"]');
+    if (!timeStart || !timeEnd || !errorEl) return;
     try {
       store.scheduleOrderRange(
         state.popup.orderId,
         {
           startDate: state.popup.startDate,
           endDate: state.popup.endDate,
-          startTime: popupEl.querySelector('[data-schedule-time="start"]').value,
-          endTime: popupEl.querySelector('[data-schedule-time="end"]').value,
+          startTime: timeStart.value,
+          endTime: timeEnd.value,
         },
         role,
       );
       state.popup = null;
+      state.suppressDayClick = false;
       errorEl.textContent = '';
       showToast('Horario guardado', { tone: 'success' });
       render();
@@ -619,31 +748,6 @@ export function ProductionSchedulingPanel(store, options = {}) {
       renderCalendar();
       return;
     }
-    const focusButton = target.closest('[data-focus-order]');
-    if (focusButton && role === 'planner') {
-      state.focusOrderId = focusButton.dataset.focusOrder;
-      state.dragStart = null;
-      state.dragEnd = null;
-      state.popup = null;
-      state.dayMenuDate = null;
-      state.selectedEventId = null;
-      state.pointer = { x: event.clientX || 0, y: event.clientY || 0 };
-      renderCalendar();
-      return;
-    }
-    if (target.closest('[data-schedule-save]')) {
-      savePopup();
-      return;
-    }
-    if (target.closest('[data-schedule-cancel]')) {
-      clearFocus();
-      return;
-    }
-    if (target.closest('[data-day-menu-close]')) {
-      state.dayMenuDate = null;
-      renderCalendar();
-      return;
-    }
     const eventButton = target.closest('[data-event-id]');
     if (eventButton) {
       state.selectedEventId = eventButton.dataset.eventId;
@@ -666,6 +770,21 @@ export function ProductionSchedulingPanel(store, options = {}) {
       state.selectedEventId = null;
       renderCalendar();
     }
+  });
+
+  trayEl.addEventListener('click', (event) => {
+    if (role !== 'planner') return;
+    if (event.target.closest('select, input, button:not(.pending-tray__focus)')) return;
+    const row = event.target.closest('.pending-tray__row');
+    if (!row) return;
+    state.focusOrderId = row.dataset.pendingOrder;
+    state.dragStart = null;
+    state.dragEnd = null;
+    state.popup = null;
+    state.dayMenuDate = null;
+    state.selectedEventId = null;
+    state.pointer = { x: event.clientX || 0, y: event.clientY || 0 };
+    renderCalendar();
   });
 
   root.addEventListener('change', (event) => {
@@ -740,11 +859,17 @@ export function ProductionSchedulingPanel(store, options = {}) {
     renderDragHighlight();
   }
 
-  root.addEventListener('mousedown', startDrag);
+  root.addEventListener('mousedown', (event) => {
+    if (!event.target.closest('.calendar-day')) return;
+    if (state.focusOrderId) event.preventDefault();
+    startDrag(event);
+  });
   root.addEventListener('mouseover', extendDrag);
   root.addEventListener('mouseenter', extendDrag, true);
-  root.addEventListener('mouseup', () => openPopup());
-  document.addEventListener('mouseup', () => openPopup());
+  root.addEventListener('dragstart', (event) => {
+    if (event.target.closest('.calendar-day')) event.preventDefault();
+  });
+  document.addEventListener('mouseup', openPopup);
 
   root.addEventListener('contextmenu', (event) => {
     if (!event.target.closest('.scheduling-calendar')) return;

@@ -119,6 +119,12 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function normalizedUsername(value) {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase();
+}
+
 function datePart(value) {
   if (typeof value !== 'string') return null;
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
@@ -2226,9 +2232,7 @@ export class ManufacturingStore extends EventTarget {
 
   addRoleUser(role, { username } = {}) {
     const property = ROLE_USER_PROPERTIES[role];
-    const normalized = String(username ?? '')
-      .trim()
-      .toLowerCase();
+    const normalized = normalizedUsername(username);
     if (!property || !normalized) return null;
 
     const rows = this[property];
@@ -2250,9 +2254,7 @@ export class ManufacturingStore extends EventTarget {
 
   assignRoleToUser(username, role) {
     const property = ROLE_USER_PROPERTIES[role];
-    const normalized = String(username ?? '')
-      .trim()
-      .toLowerCase();
+    const normalized = normalizedUsername(username);
     if (!property || !normalized) return false;
     if (!this.rolesForUsername(normalized).length) return false;
 
@@ -2269,6 +2271,45 @@ export class ManufacturingStore extends EventTarget {
     this.#persist();
     this.#emit();
     return true;
+  }
+
+  removeRoleUser(role, username) {
+    const property = ROLE_USER_PROPERTIES[role];
+    const normalized = normalizedUsername(username);
+    if (!property || !normalized) return { ok: false, reason: 'invalid-input' };
+
+    const rows = this[property];
+    const index = rows.findIndex((row) => row.username === normalized);
+    if (index < 0) return { ok: false, reason: 'user-not-found' };
+    if (role === 'plant_manager' && rows.length === 1) {
+      return { ok: false, reason: 'last-plant-manager' };
+    }
+
+    const [removed] = rows.splice(index, 1);
+    this.#persist();
+    this.#emit();
+    return { ok: true, role, username: normalized, removed: clone(removed) };
+  }
+
+  changeUserPassword(username, currentPassword, newPassword) {
+    const normalized = normalizedUsername(username);
+    const current = String(currentPassword ?? '');
+    const next = String(newPassword ?? '').trim();
+    if (!normalized) return { ok: false, reason: 'user-not-found' };
+    if (!next) return { ok: false, reason: 'empty-password' };
+
+    const matchingRows = CANONICAL_ROLES.flatMap((role) =>
+      this[ROLE_USER_PROPERTIES[role]].filter((row) => row.username === normalized),
+    );
+    if (!matchingRows.length) return { ok: false, reason: 'user-not-found' };
+    if (!matchingRows.every((row) => row.password === current)) {
+      return { ok: false, reason: 'invalid-current-password' };
+    }
+
+    for (const row of matchingRows) row.password = next;
+    this.#persist();
+    this.#emit();
+    return { ok: true, username: normalized, updated: matchingRows.length };
   }
 
   canPerformActionFor(role, action) {

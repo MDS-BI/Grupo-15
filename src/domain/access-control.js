@@ -45,7 +45,7 @@ export const MODULE_GROUPS = Object.freeze([
     modules: ['dashboard', 'orders', 'operator', 'supervision', 'maintenance'],
   },
   { label: 'Planificación', modules: ['bom', 'scheduling', 'line-balance', 'plant'] },
-  { label: 'Sistema', modules: ['roles', 'admin-roles'] },
+  { label: 'Sistema', modules: ['roles'] },
 ]);
 
 export const ROLE_HOME_MODULE = Object.freeze({

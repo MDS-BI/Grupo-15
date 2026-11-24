@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { JSDOM } from 'jsdom';
 import { ManufacturingStore } from '../../src/data/ManufacturingStore.js';
 import { DashboardOverview } from '../../src/components/DashboardOverview.js';
@@ -22,6 +24,15 @@ function memoryStorage() {
       map.clear();
     },
   };
+}
+
+const css = readFileSync(resolve('src/styles/manufacturing.css'), 'utf8');
+
+function cssRule(selector) {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = css.match(new RegExp(`${escaped}\\s*\\{([^}]*)\\}`, 'm'));
+  expect(match, `Regla CSS no encontrada: ${selector}`).toBeTruthy();
+  return match[1];
 }
 
 let dom;
@@ -86,6 +97,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   dom.window.close();
 });
 
@@ -245,7 +257,7 @@ describe('Calendario mensual por rol (US-13)', () => {
 
     const cancelled = dispatchMouse(`[data-date="${startDate}"]`, 'contextmenu');
     expect(cancelled.defaultPrevented).toBe(true);
-    expect(document.querySelector('[data-role="schedule-popup"]').hidden).toBe(true);
+    expect(document.querySelector('[data-role="schedule-popup"]')).toBeNull();
     expect(document.querySelector('.scheduling-focus-backdrop').hidden).toBe(true);
 
     click(`[data-focus-order="${orderId}"]`);
@@ -276,7 +288,7 @@ describe('Calendario mensual por rol (US-13)', () => {
     expect(order.planned_end_date).toBe(endDate);
     expect(order.scheduled_start_time).toBe('09:30');
     expect(order.scheduled_end_time).toBe('17:30');
-    expect(document.querySelector('[data-role="schedule-popup"]').hidden).toBe(true);
+    expect(document.querySelector('[data-role="schedule-popup"]')).toBeNull();
   });
 
   it('abre el menú diario por tarea y permite volver a la lista del día', () => {
@@ -301,6 +313,99 @@ describe('Calendario mensual por rol (US-13)', () => {
     click('[data-role="event-back"]');
     expect(document.querySelector('[data-role="day-menu"]')).toBeTruthy();
     expect(document.querySelector('[data-role="event-dialog"]')).toBeNull();
+  });
+
+  it('presenta Calendario y Listado como pestañas integradas', () => {
+    mountScheduling('planner');
+    const tabs = [...document.querySelectorAll('[data-role="view-tabs"] [role="tab"]')];
+
+    expect(tabs.map((tab) => tab.textContent.trim())).toEqual(['Calendario', 'Listado']);
+    expect(tabs[0].getAttribute('aria-selected')).toBe('true');
+    expect(tabs[1].getAttribute('aria-selected')).toBe('false');
+    for (const tab of tabs) {
+      expect(tab.classList.contains('scheduling-tabs__tab')).toBe(true);
+      expect(tab.classList.contains('maintenance-tabs__tab')).toBe(true);
+    }
+
+    click('[data-view="list"]');
+    expect(document.querySelector('[data-view="calendar"]').getAttribute('aria-selected')).toBe(
+      'false',
+    );
+    expect(document.querySelector('[data-view="list"]').getAttribute('aria-selected')).toBe('true');
+
+    document.body.innerHTML = '';
+    mountScheduling('operator', { operatorId: 'emp_op_01' });
+    expect(document.querySelectorAll('[data-role="view-tabs"] [role="tab"]')).toHaveLength(1);
+    expect(document.querySelector('[data-view="list"]')).toBeNull();
+  });
+
+  it('ocupa todo el ancho con siete columnas y títulos legibles', () => {
+    expect(cssRule('.calendar-layout')).toMatch(/width:\s*100%/);
+    expect(cssRule('.calendar-main')).toMatch(/width:\s*100%/);
+    expect(cssRule('.calendar-grid')).toMatch(/width:\s*100%/);
+    expect(cssRule('.calendar-grid')).toMatch(
+      /grid-template-columns:\s*repeat\(7,\s*minmax\(0,\s*1fr\)\)/,
+    );
+    expect(cssRule('.calendar-event-chip span')).toMatch(/white-space:\s*normal/);
+    expect(cssRule('.calendar-event-chip span')).not.toMatch(/text-overflow:\s*ellipsis/);
+
+    mountScheduling('supervisor');
+    const chip = document.querySelector('[data-event-kind]');
+    expect(chip.querySelector('span').textContent.trim()).toBe(chip.getAttribute('title'));
+  });
+
+  it('limita a tres eventos por día y enumera todos desde "+N más"', () => {
+    const date = `${currentMonthKey()}-15`;
+    const events = Array.from({ length: 5 }, (_, index) => ({
+      id: `fixture:${index}`,
+      sourceId: `fixture_${index}`,
+      kind: index % 2 === 0 ? 'order' : 'maintenance',
+      title: `Tarea ${index + 1}`,
+      start_date: date,
+      end_date: date,
+      start_time: '08:00',
+      end_time: '16:00',
+      is_critical_urgent: false,
+    }));
+    vi.spyOn(store, 'calendarEventsForMonth').mockReturnValue(events);
+    mountScheduling('supervisor');
+
+    const day = document.querySelector(`[data-date="${date}"]`);
+    expect(day.querySelectorAll('.calendar-event-chip')).toHaveLength(3);
+    const more = day.querySelector('.calendar-day__more');
+    expect(more.textContent.trim()).toBe('+2 más');
+
+    more.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    const items = [...document.querySelectorAll('[data-role="day-menu"] [data-event-id]')];
+    expect(items).toHaveLength(5);
+    expect(items.map((item) => item.dataset.eventId)).toEqual(events.map((event) => event.id));
+  });
+});
+
+describe('Distribución ancha del calendario (US-13 / AC-91)', () => {
+  const roles = ['plant_manager', 'planner', 'supervisor', 'operator', 'maintenance'];
+
+  it('sitúa la bandeja antes de .calendar-main y conserva su visibilidad por rol', () => {
+    for (const role of roles) {
+      document.body.innerHTML = '';
+      mountScheduling(role, { operatorId: 'emp_op_01' });
+      const children = [...document.querySelector('.calendar-layout').children];
+      const tray = children.find((node) => node.classList.contains('pending-tray'));
+      const main = children.find((node) => node.classList.contains('calendar-main'));
+      expect(tray, `bandeja ausente para ${role}`).toBeTruthy();
+      expect(main, `calendario ausente para ${role}`).toBeTruthy();
+      expect(children.indexOf(tray)).toBeLessThan(children.indexOf(main));
+      expect(tray.hidden).toBe(!['planner', 'plant_manager'].includes(role));
+      expect(document.querySelectorAll('.calendar-day').length).toBeGreaterThan(27);
+    }
+  });
+
+  it('define .calendar-layout de una sola columna y .calendar-main al 100 %', () => {
+    expect(cssRule('.calendar-layout')).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)/);
+    expect(cssRule('.calendar-layout')).not.toMatch(/minmax\(\s*\d+px/);
+    expect(cssRule('.calendar-main')).toMatch(/width:\s*100%/);
+    expect(cssRule('.pending-tray')).toMatch(/display:\s*flex/);
+    expect(cssRule('.calendar-day')).toMatch(/min-height:\s*(?:9[6-9]|[1-9]\d{2,})px/);
   });
 });
 

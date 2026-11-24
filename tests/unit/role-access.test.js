@@ -3,6 +3,7 @@ import {
   CANONICAL_ROLES,
   isModuleAllowedForRoles,
   modulesForRoles,
+  roleChangeMessage,
   roleLabel,
   rolesForUsername,
   visibleEmployeeNamesFor,
@@ -71,8 +72,22 @@ describe('Store de administración de roles', () => {
   it('resuelve roles y tablas desde el store', () => {
     const store = new ManufacturingStore({ storage: memoryStorage(), hydrate: false });
     expect(store.roleUsersFor('maintenance')).toHaveLength(3);
+    expect(store.rolesForUsername('test')).toEqual(CANONICAL_ROLES);
     expect(store.rolesForUsername('doble')).toEqual(['operator', 'maintenance']);
+    expect(store.rolesForUsername('jefa')).toEqual(['plant_manager']);
     expect(store.rolesForUsername('usuario')).toEqual([]);
+  });
+
+  it('compone el mensaje exacto de cambio de rol', () => {
+    expect(roleChangeMessage('plant_manager')).toBe(
+      '¿Deseas cambiar tu vista al rol Jefa de Planta?',
+    );
+    expect(roleChangeMessage('operator')).toBe(
+      '¿Deseas cambiar tu vista al rol Operador de Máquina?',
+    );
+    expect(roleChangeMessage('maintenance')).toBe(
+      '¿Deseas cambiar tu vista al rol Encargado de Mantenimiento?',
+    );
   });
 
   it('persiste altas y asignaciones y las restaura con resetDemoData', () => {

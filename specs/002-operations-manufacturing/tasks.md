@@ -727,3 +727,183 @@ T200 tests/integration/calendar-event-dialog.test.js
 
 - T160–T210 son IDs nuevos y consecutivos; no se reutilizan T115–T118 ni T124–T126.
 - Todas las tareas nuevas usan `- [ ]`, ID secuencial, marcador `[P]` cuando corresponde, etiqueta `[US12]`–`[US15]` y ruta de archivo explícita.
+
+---
+
+## Fase 29: Pulido de interfaz y roles (2026-11-23)
+
+**Objetivo**: corregir la jerarquía de capas entre encabezados sticky de tablas, barras y ventanas emergentes; dar a la cuadrícula mensual ancho completo, siete columnas proporcionadas, títulos legibles, tope de tres eventos con "+N más" y pestañas "Calendario"/"Listado" del mismo sistema visual que Mantenimiento; y unificar "Datos de roles" como subpestaña "Configurar roles" dentro de "Roles", filtrando tarjetas por usuario autenticado y confirmando el cambio de rol desde tarjeta con `ConfirmDialog.js`.
+
+**Prueba Independiente US-13**: con `ProductionSchedulingPanel` montado en jsdom, verificar que las pestañas usan `role="tab"` con estilo de subpestaña, que la cuadrícula conserva siete columnas a ancho completo, que un día con cinco actividades muestra tres títulos legibles y "+2 más" y que el menú diario enumera las cinco; abrir un modal, un `ConfirmDialog` y un toast sobre una tabla con `thead th` sticky y comprobar que ninguno queda tapado.
+
+**Prueba Independiente US-12**: iniciar sesión con dos cuentas de roles distintos en `login-shell.test.js`, comprobar que la navegación lateral solo ofrece "Roles" (`#/roles`), que la subpestaña "Roles" muestra únicamente las tarjetas asignadas a cada usuario, que presionar otra tarjeta abre `ConfirmDialog` con el mensaje exacto y no cambia el rol al cancelar, y que "Configurar roles" solo se habilita con el rol activo `plant_manager` (también desde `#/admin-roles`).
+
+### Pruebas para Fase 29 (escribir primero) ⚠️
+
+- [X] T211 [P] [US13] Crear `tests/integration/overlay-layering.test.js` con casos fallidos que lean `src/styles/manufacturing.css` y comprueben la escala estricta: `thead th` sticky en `z-index: 1`, barra superior 20 y lateral 30, modo foco 40–60, `.modal-backdrop` 1000, `.modal` 1001, `.confirm-dialog` 1100 y `.toast-region` 1200, además de ausencia de `transform`/`filter`/`perspective`/`will-change` en `.view`, `.content` y `.panel` que atrapen modales.
+- [X] T212 [P] [US13] Ampliar `tests/integration/plant-scheduling-panels.test.js` con casos fallidos de pestañas `role="tab"`/`aria-selected` con clases de subpestaña, `.calendar-grid` a ancho completo con siete columnas, títulos legibles en `.calendar-event-chip span`, tope de tres chips por día y botón `.calendar-day__more` "+N más" que abre el menú con todas las actividades.
+- [X] T213 [P] [US13] Ampliar `tests/integration/calendar-event-dialog.test.js` con el caso fallido de que el menú diario lista los N eventos completos cuando la celda muestra "+N más" y de que el popup permanece por encima de un encabezado de tabla con `position: sticky`.
+- [X] T214 [P] [US12] Ampliar `tests/integration/role-admin-panel.test.js` con casos fallidos de que las cinco tablas, altas y asignaciones de `RoleAdminPanel({ store })` se monten como subpestaña "Configurar roles" dentro de `src/components/RoleAccessPanel.js`, sin botón lateral "Datos de roles" y con acceso solo para `plant_manager`.
+- [X] T215 [P] [US12] Ampliar `tests/unit/role-access.test.js` con casos fallidos para `rolesForUsername` sobre `test/test` (cinco tablas), `doble/doble` (dos) y cuenta de un solo rol, y para el nuevo `roleChangeMessage` de `src/domain/role-access.js` con el texto exacto "¿Deseas cambiar tu vista al rol <Nombre del rol>?".
+- [X] T216 [P] [US12] Ampliar `tests/integration/login-shell.test.js` con casos fallidos de navegación sin `admin-roles`, de `#/admin-roles` abriendo "Configurar roles" solo con rol activo `plant_manager`, y de tarjeta de rol distinto al activo abriendo `ConfirmDialog` antes de actualizar el selector superior de `src/manufacturing-main.js`.
+
+### Implementación para Fase 29 — US-13 (capas y calendario)
+
+- [X] T217 [US13] Definir en `src/styles/manufacturing.css` la escala de capas: `thead th` con `position: sticky` en `z-index: 1`, barra superior 20 y lateral 30, modo foco 40/41/42, `.modal-backdrop` 1000, `.modal` 1001, `.confirm-dialog` 1100 y `.toast-region` 1200, sin modificar la lógica de los componentes.
+- [X] T218 [US13] Eliminar en `src/styles/manufacturing.css` los contextos de apilamiento de `.content > .view`, `.view`, `.content` y `.panel`: retirar `animation: view-enter` y cualquier `transform`, `filter`, `perspective`, `contain: paint` o `will-change` que encierre a los modales por debajo de las tablas, conservando el aspecto visual.
+- [X] T219 [US13] Ajustar en `src/styles/manufacturing.css` los niveles de `.modal-backdrop`/`.modal` (1000/1001), `.confirm-dialog`, `.confirm-dialog::backdrop` y `.confirm-dialog--fallback` (1100) y `.toast-region` (1200), sin editar `src/components/ConfirmDialog.js` ni `src/components/Toast.js` (FR-18).
+- [X] T220 [US13] Ajustar en `src/styles/manufacturing.css` `.scheduling-focus-backdrop` (40), `.scheduling-floating-card` (41) y `.schedule-popup` (1001) para que el popup horario se resuelva en la capa raíz y no quede bajo encabezados sticky ni sobre un `ConfirmDialog`.
+- [X] T221 [US13] Verificar en `src/components/ConfirmDialog.js` que el diálogo sigue montándose en `document.body` con su API intacta y, si el popup de `src/components/calendar/CalendarEventDialog.js` depende de un ancestro con transformación, reubicarlo en el contenedor raíz de `src/manufacturing-main.js` sin cambiar textos ni comportamiento.
+- [X] T222 [US13] Modificar `renderCalendar()` en `src/components/ProductionSchedulingPanel.js` para mostrar como máximo tres `.calendar-event-chip` por día y añadir un `.calendar-day__more` con texto "+N más" que abra `renderDayMenu()` con la totalidad de órdenes y mantenciones, conservando `data-event-id`, `title`, el arrastre y el menú por tarea.
+- [X] T223 [US13] Modificar `src/components/ProductionSchedulingPanel.js` para que las pestañas "Calendario" y "Listado" usen `role="tab"`, `aria-selected` inicial y las clases alineadas con `.maintenance-tabs__tab`, manteniendo "Listado" oculta para `operator` y sin cambiar el comportamiento de cambio de vista.
+- [X] T224 [US13] Ajustar en `src/styles/manufacturing.css` `.calendar-layout`, `.calendar-main` y `.calendar-grid` para ocupar el 100 % del ancho con `repeat(7, minmax(0, 1fr))`, `.calendar-event-chip span` con título legible, altura tope por `.calendar-day` para tres chips más `.calendar-day__more`, y estilos de `.scheduling-tabs`/`.scheduling-tabs__tab` equivalentes a `.maintenance-tabs` sin apariencia de botón nativo.
+- [X] T225 [US13] Ejecutar `npm test -- --run tests/integration/overlay-layering.test.js tests/integration/plant-scheduling-panels.test.js tests/integration/calendar-event-dialog.test.js` y `npm run lint` sobre `src/`; verificar en `package.json` y `vitest.config.mjs` que no cambiaron y que el mes visitado sigue volviendo al actual al recargar.
+
+### Implementación para Fase 29 — US-12 (roles)
+
+- [X] T226 [P] [US12] Extender `src/domain/role-access.js` con `roleChangeMessage(role)` que devuelva "¿Deseas cambiar tu vista al rol <Nombre del rol>?" usando `roleLabel`, sin alterar `CANONICAL_ROLES`, `rolesForUsername` ni la matriz de permisos (depende de T215).
+- [X] T227 [US12] Reestructurar `src/components/RoleAccessPanel.js` con dos subpestañas `role="tab"`, `aria-selected` y `data-role="role-tab"` para "Roles" y "Configurar roles", usando el mismo lenguaje visual que `.maintenance-tabs` y sin duplicar el selector superior.
+- [X] T228 [US12] Modificar `src/components/RoleAccessPanel.js` para recibir `store` y `username`, y mostrar en la subpestaña "Roles" únicamente las tarjetas de `store.rolesForUsername(username)`, conservando nombre, descripción, páginas disponibles y el badge "Rol efectivo" del rol activo (depende de T215 y T227).
+- [X] T229 [US12] Modificar `src/components/RoleAccessPanel.js` para invocar `confirmDialog({ message: roleChangeMessage(role) })` de `src/components/ConfirmDialog.js` al presionar una tarjeta de rol distinto al activo, aplicando el cambio solo al confirmar y conservando el rol activo al cancelar o pulsar Escape (depende de T226, T228 y T219).
+- [X] T230 [US12] Integrar en `src/components/RoleAccessPanel.js` el contenido de `RoleAdminPanel({ store })` dentro de la subpestaña "Configurar roles", montándolo solo cuando `currentRole === 'plant_manager'` y manteniendo las cinco tablas, altas y asignaciones persistentes en `erp.manufacturing.v2` (depende de T214 y T227).
+- [X] T231 [P] [US12] Modificar `src/manufacturing-main.js` para eliminar el módulo lateral `admin-roles` ("Datos de roles"), pasar `store` y `username` a `RoleAccessPanel`, y resolver `#/admin-roles` como entrada directa a `#/roles` con "Configurar roles" activa solo para `plant_manager` (depende de T227 y T230).
+- [X] T232 [P] [US12] Modificar `src/domain/access-control.js` para quitar `admin-roles` de `MODULE_GROUPS` y del menú lateral, conservando el identificador en `MODULE_ACCESS` y en la lista de rutas de FR-18 para la denegación por URL (depende de T214).
+- [X] T233 [US12] Añadir en `src/styles/manufacturing.css` los estilos de las subpestañas de `src/components/RoleAccessPanel.js`, del badge "Rol efectivo" y del grid de tarjetas filtrado, sin nuevo selector de rol ni dependencias externas (depende de T227).
+- [X] T234 [US12] Ejecutar `npm test -- --run tests/unit/role-access.test.js tests/integration/role-admin-panel.test.js tests/integration/login-shell.test.js` y `npm run lint` sobre `src/`; verificar en `src/manufacturing-main.js` y `src/domain/access-control.js` que no queda el botón "Datos de roles" y que los IDs de ruta de FR-18 permanecen intactos.
+
+### Dependencias y paralelización — Fase 29
+
+- Las pruebas T211–T216 son independientes entre sí y deben escribirse primero.
+- US-13: T217 → T218 → T219 → T220 → T221 en secuencia por compartir `src/styles/manufacturing.css` y la capa raíz; T222 y T223 pueden avanzar juntos solo si se usan worktrees porque comparten `src/components/ProductionSchedulingPanel.js`; T224 cierra estilos y T225 el gate.
+- US-12: T226 es paralelo a US-13 tras T215; T227 → T228 → T229 → T230 en secuencia por compartir `src/components/RoleAccessPanel.js`; T231 y T232 son paralelos entre sí y con T233 una vez cerradas T229/T230; T234 cierra el gate.
+- T229 depende de T219 para que `ConfirmDialog` quede por encima de tablas con encabezado sticky; US-12 no reabre Fases 1 a 28 ni modifica T001–T210.
+
+### Ejemplo de Ejecución Paralela — Fase 29
+
+```text
+# Pruebas primero
+T211 tests/integration/overlay-layering.test.js
+T212 tests/integration/plant-scheduling-panels.test.js
+T213 tests/integration/calendar-event-dialog.test.js
+T214 tests/integration/role-admin-panel.test.js
+T215 tests/unit/role-access.test.js
+T216 tests/integration/login-shell.test.js
+
+# Implementación paralela tras las pruebas
+T226 src/domain/role-access.js
+T231 src/manufacturing-main.js   (tras T227 y T230)
+T232 src/domain/access-control.js
+```
+
+**Punto de control**: la Fase 29 es desplegable por historia; US-13 deja modales siempre visibles y el calendario legible, y US-12 deja un único acceso "Roles" con tarjetas filtradas, cambio confirmado y administración restringida a la Jefa de Planta.
+
+---
+
+## Fase 30: Ampliación de roles, calendario y mantenimiento (2026-11-23)
+
+**Objetivo**: ampliar US-12 con baja confirmada de usuarios por rol y cambio de contraseña propia persistido en `erp.manufacturing.v2`; ampliar US-13 con bandeja horizontal superior, calendario al 100 % del ancho en los cinco roles, modales centrados para menú diario/detalle/horario, hitbox completa de tarjeta y arrastre de rango sin arrastre nativo; y ampliar US-15 con eliminación de filtros globales, layout de dos paneles con encogimiento y deselección, filtro por estado de máquina, mini-calendario informativo con leyenda de colores, Tickets con una sola acción y Mantenimientos en dos listas. Fases 1 a 29 permanecen intactas y los IDs comienzan en T235.
+
+**Prueba Independiente US-12**: con jsdom, montar `RoleAdminPanel({ store })` dentro de `RoleAccessPanel` como `plant_manager`, hacer clic en "Quitar" (×) de un chip, confirmar y comprobar que `store.roleUsersFor(role)` ya no contiene el usuario y que el snapshot `erp.manufacturing.v2` conserva el cambio tras recargar; intentar quitar al último `plant_manager` debe mostrar rechazo sin mutar; abrir "Cambiar contraseña" desde el menú superior, invalidar la contraseña actual y luego cambiarla correctamente, verificando que `authenticate` con las tablas del store acepta la nueva contraseña con cualquier rol asignado.
+
+**Prueba Independiente US-13**: con jsdom y los cinco roles, verificar que `.calendar-layout` es una sola columna, que `.pending-tray` aparece como barra horizontal antes de `.calendar-main` solo para planner y plant_manager, y que `.calendar-main` ocupa el 100 % del ancho; abrir menú diario, detalle de evento y popup de horario y comprobar `.modal-backdrop`/`.modal` centrados con cierre por botón, Escape y clic fuera; en planner, hacer clic en cualquier zona de `.pending-tray__row`, arrastrar desde el día 24 hasta el 28 con `mousedown`/`mouseenter` y soltar con `document.mouseup`, comprobando color en vivo, `draggable="false"`, `preventDefault`, `user-select: none`, capas 40/50/60 y que el modal se abre una sola vez con el rango 24–28.
+
+**Prueba Independiente US-15**: con jsdom, montar `MaintenancePanel({ store })` y comprobar que no existe `.maintenance-filters`, que Máquinas usa dos paneles con el derecho vacío y proporción inicial, que el filtro por estado ofrece exactamente "Todos", "Disponible", "En operación", "En mantención" y "Detenida / En fallo", que al seleccionar una máquina el layout pasa a `0.85fr 1.15fr` y que "Deseleccionar" o un clic fuera (ignorando modales y ‹/›) restauran el estado inicial; validar mini-calendario con Leyenda sin color/rojo/azul/morado y celdas no clickeables, Tickets sin "Resolver"/"Tomar intervención" y Mantenimientos con exactamente dos listas, filtro Vigentes/Vencidos y buscador histórico prellenado desde "Revisar históricas".
+
+### Pruebas para Fase 30 — US-12 (escribir primero) ⚠️
+
+- [X] T235 [P] [US12] Crear `tests/unit/role-user-credentials.test.js` con casos jsdom fallidos para `removeRoleUser` y `changeUserPassword` en `src/data/ManufacturingStore.js`: baja persistida en `erp.manufacturing.v2`, rechazo al quitar el último usuario de `role_users_plant_manager`, contraseña inicial igual al nombre de usuario en altas, actualización en todas las tablas donde aparece el usuario y `authenticate` válido tras reconstruir el store desde el snapshot.
+- [X] T236 [P] [US12] Ampliar `tests/integration/role-admin-panel.test.js` con casos jsdom fallidos de botón "Quitar" (×) en los chips de las cinco tablas, apertura de `ConfirmDialog.js`, llamada a `store.removeRoleUser(role, username)`, `showToast`, re-render de tablas y mensaje de rechazo sin mutación para el último `plant_manager`.
+- [X] T237 [P] [US12] Ampliar `tests/integration/login-shell.test.js` con casos jsdom fallidos de opción "Cambiar contraseña" visible para cualquier usuario autenticado en `src/manufacturing-main.js`, modal con contraseña actual/nueva/confirmación, errores inline, persistencia en `erp.manufacturing.v2` e ingreso correcto con la nueva contraseña tras logout y recarga.
+
+### Pruebas para Fase 30 — US-13 (escribir primero) ⚠️
+
+- [X] T238 [P] [US13] Ampliar `tests/integration/plant-scheduling-panels.test.js` con casos jsdom fallidos que comprueben en `src/components/ProductionSchedulingPanel.js` que `.calendar-layout` usa una sola columna `minmax(0, 1fr)`, que `.pending-tray` es una barra horizontal compacta anterior a `.calendar-main` y que `.calendar-main` ocupa el 100 % del ancho útil para plant_manager, planner, supervisor, operator y maintenance, con celdas proporcionadas.
+- [X] T239 [P] [US13] Ampliar `tests/integration/calendar-event-dialog.test.js` con casos jsdom fallidos de renderizado centrado de menú diario, detalle de evento y popup de horario mediante `.modal-backdrop` y `.modal`, cierre por botón, Escape y clic fuera, y ausencia de markup incrustado bajo `.calendar-grid`.
+- [X] T240 [P] [US13] Crear `tests/integration/schedule-drag-selection.test.js` con casos jsdom fallidos de hitbox completa de `.pending-tray__row` en planner, controles `select`/`checkbox` intactos en plant_manager, capas 40/50/60, `draggable="false"` en `.calendar-day`, `preventDefault` en `mousedown`, `user-select: none` en `.calendar-grid`, coloreado inmediato de todo el rango y apertura única del modal con el rango exacto tras `document.mouseup`.
+- [X] T241 [P] [US13] Ampliar `tests/integration/overlay-layering.test.js` con aserciones jsdom fallidas sobre `src/styles/manufacturing.css` para `.scheduling-focus-backdrop` 40, bloque del calendario 50 con fondo blanco, `.scheduling-floating-card` 60 y `.modal-backdrop`/`.modal` 1000/1001 aplicados a los tres modales del calendario.
+
+### Pruebas para Fase 30 — US-15 (escribir primero) ⚠️
+
+- [X] T242 [P] [US15] Ampliar `tests/integration/maintenance-panel.test.js` con casos jsdom fallidos de ausencia de `.maintenance-filters`, layout de dos paneles inicialmente vacío, buscador por nombre/código, filtro por sección, filtro por estado con cinco opciones exactas, alerta de frecuencia en la lista, encogimiento a `0.85fr 1.15fr` al seleccionar y restauración mediante "Deseleccionar" (×) y clic fuera sin afectar modales ni navegación ‹/›.
+- [X] T243 [P] [US15] Ampliar `tests/integration/maintenance-panel.test.js` con casos jsdom fallidos del mini-calendario mensual de máquina: aparece solo con selección, encabezado con mes y botones ‹/› como única interacción, días L, Ma, Mi, J, V, S, D, celdas sin manejadores de clic ni atributo de botón, y leyenda visible para sin plan, correctiva/fallo (rojo), orden de trabajo (azul) y preventiva (morado).
+- [X] T244 [P] [US15] Ampliar `tests/integration/maintenance-panel.test.js` con casos jsdom fallidos de Tickets: tabla con buscador, detalle consolidado desplegable al hacer clic en una fila, ausencia total de "Resolver" y "Tomar intervención" en tabla y detalle, y único botón "Programar mantención" que abre el modal y refleja el ticket en Calendario y Mantenimientos activos.
+- [X] T245 [P] [US15] Ampliar `tests/integration/maintenance-panel.test.js` con casos jsdom fallidos de Mantenimientos: exactamente dos bloques buscables, lista activa con filtro "Todos"/"Vigentes"/"Vencidos" y botón "Resolver", lista histórica con "Eliminar" confirmado por `ConfirmDialog.js` y buscador prellenado con el nombre de la máquina al llegar desde "Revisar históricas".
+- [X] T246 [P] [US15] Crear `tests/unit/machine-calendar.test.js` con casos fallidos para `src/domain/machine-calendar.js`: generación matricial del mes, clasificación de días sin plan, rojo por ticket correctivo/fallo, azul por orden de trabajo que pasa por la máquina/estación, morado por preventiva planificada y prevalencia determinista cuando coinciden varias fuentes.
+
+### Implementación para Fase 30 — US-12 (roles y credenciales)
+
+- [X] T247 [P] [US12] Añadir `removeRoleUser(role, username)` en `src/data/ManufacturingStore.js` con normalización de usuario, baja en `ROLE_USER_PROPERTIES[role]`, rechazo explícito cuando dejaría `role_users_plant_manager` vacío, `#persist()` en `erp.manufacturing.v2`, `#emit()` y retorno booleano o motivo (depende de T235).
+- [X] T248 [US12] Añadir `changeUserPassword(username, currentPassword, newPassword)` en `src/data/ManufacturingStore.js` validando usuario, contraseña actual y nueva no vacía, actualizando `password` en las cinco tablas donde aparece el usuario, persistiendo en `erp.manufacturing.v2` y emitiendo el cambio sin alterar `rolesForUsername` (depende de T235 y T247).
+- [X] T249 [P] [US12] Verificar en `src/data/fixtures/demo-accounts.js` que `authenticate(username, password, roleUsers)` continúa leyendo las contraseñas de las tablas entregadas por el store y documentar en `tests/unit/demo-accounts.test.js` el caso de credencial cambiada, sin modificar `ROLE_USERS` ni `DEMO_ACCOUNTS` (depende de T235).
+- [X] T250 [P] [US12] Modificar `renderTables()` en `src/components/RoleAdminPanel.js` para envolver cada usuario en `.role-admin__user-chip` con texto del nombre y botón "Quitar" (×) usando `data-remove-user` y `data-role`, conservando `data-username` y las cinco tablas (depende de T236).
+- [X] T251 [US12] Modificar `src/components/RoleAdminPanel.js` para delegar el clic de "Quitar", abrir `confirmDialog` de `src/components/ConfirmDialog.js` con mensaje explícito, llamar a `store.removeRoleUser(role, username)` solo al confirmar, mostrar `showToast` de éxito o rechazo y volver a renderizar tablas y `datalist` (depende de T247, T250).
+- [X] T252 [P] [US12] Crear `src/components/ChangePasswordDialog.js` con `.modal-backdrop`/`.modal` centrado, campos "Contraseña actual", "Nueva contraseña" y "Confirmar nueva contraseña", errores inline, cierre por botón/Escape/clic fuera y callback `onSubmit({ currentPassword, newPassword, confirmPassword })`; no modificar `ConfirmDialog.js` ni `Toast.js` (depende de T237).
+- [X] T253 [US12] Modificar `userMenu()` y `renderShell()` en `src/manufacturing-main.js` para añadir "Cambiar contraseña" como `data-change-password` para todo usuario autenticado, abrir `ChangePasswordDialog`, invocar `store.changeUserPassword(state.username, ...)` con `state.username` normalizado, notificar con `showToast`, cerrar el menú y conservar `state.role` (depende de T248, T252).
+- [X] T254 [US12] Añadir en `src/styles/manufacturing.css` los estilos de `.role-admin__user-chip`, su botón "Quitar" (×) y el modal de cambio de contraseña, reutilizando tokens visuales existentes y sin librerías nuevas (depende de T250, T252).
+- [X] T255 [US12] Ejecutar `npm test -- --run tests/unit/role-user-credentials.test.js tests/unit/demo-accounts.test.js tests/integration/role-admin-panel.test.js tests/integration/login-shell.test.js` y `npm run lint` sobre `src/`, verificando en `src/data/ManufacturingStore.js` que el snapshot sigue siendo `erp.manufacturing.v2` (depende de T247, T248, T251, T253, T254).
+
+### Implementación para Fase 30 — US-13 (calendario y selección)
+
+- [X] T256 [P] [US13] Reordenar el markup de `src/components/ProductionSchedulingPanel.js` para que `.pending-tray` quede como barra horizontal compacta antes de `.calendar-main` dentro de `.calendar-layout`, manteniendo `hidden` para los roles sin bandeja y sin alterar filtros ni resumen ejecutivo (depende de T238).
+- [X] T257 [US13] Modificar `renderTray()` en `src/components/ProductionSchedulingPanel.js` para que todo `.pending-tray__row` sea la hitbox de activación del modo selección en planner mediante delegación en el contenedor, excluyendo de esa delegación los `select`/`checkbox`/`button` de plant_manager para que conserven su comportamiento (depende de T240, T256).
+- [X] T258 [US13] Modificar `renderGrid()` en `src/components/ProductionSchedulingPanel.js` para fijar `draggable="false"` en todas las celdas `.calendar-day`, añadir `dragstart` con `preventDefault()` y marcar `.calendar-grid` con la clase de selección que aplica `user-select: none` mientras el modo esté activo (depende de T240).
+- [X] T259 [US13] Modificar los manejadores de arrastre en `src/components/ProductionSchedulingPanel.js`: `mousedown` sobre una celda llama `preventDefault()`, fija día inicio y entra en modo; `mouseenter`/`mouseover` amplían y colorean el rango completo en tiempo real; un único handler en `document.mouseup` cancela el modo, cierra backdrop/tarjeta y abre el modal de horario con el rango exacto y horas "08:00"–"16:00" (depende de T240, T257, T258).
+- [X] T260 [US13] Ajustar `renderFocus()`, `renderDragHighlight()` y `renderPopup()` en `src/components/ProductionSchedulingPanel.js` para usar las clases de capas 40/50/60, fondo blanco exclusivo del bloque calendario y tarjeta flotante, evitando iluminar la bandeja o el resto del panel (depende de T241, T259).
+- [X] T261 [US13] Extraer el menú diario y el popup de horario de `src/components/ProductionSchedulingPanel.js` a nodos `.modal-backdrop`/`.modal` montados en `document.body`, con botón de cierre, Escape y clic fuera, eliminando su renderizado incrustado bajo el calendario y reutilizando el mismo patrón para el detalle de evento (depende de T239).
+- [X] T262 [P] [US13] Modificar `src/components/calendar/CalendarEventDialog.js` para montarse en `.modal-backdrop`/`.modal` centrado sobre la pantalla, conservar el flujo "Volver a la lista del día", el detalle por rol y `draggable="false"`, y cerrar con botón, Escape y clic fuera sin modificar textos ni permisos (depende de T239, T261).
+- [X] T263 [US13] Actualizar `src/styles/manufacturing.css` para `.calendar-layout` en `minmax(0, 1fr)`, barra `.pending-tray` horizontal, `.calendar-main` al 100 %, dimensionamiento cómodo de `.calendar-day`, `.calendar-grid.is-selecting { user-select: none }`, capas 40/50/60 y estilos centrales de `.modal-backdrop`/`.modal` para los tres modales del calendario (depende de T241, T256, T260, T261, T262).
+- [X] T264 [US13] Ejecutar `npm test -- --run tests/integration/plant-scheduling-panels.test.js tests/integration/calendar-event-dialog.test.js tests/integration/schedule-drag-selection.test.js tests/integration/overlay-layering.test.js` y `npm run lint` sobre `src/`, verificando en `src/styles/manufacturing.css` que no queda `.calendar-layout` de dos columnas ni popup incrustado (depende de T256–T263).
+
+### Implementación para Fase 30 — US-15 (mantenimiento y mini-calendario)
+
+- [X] T265 [P] [US15] Crear `src/domain/machine-calendar.js` con `buildMachineCalendarMonth({ year, month, tickets, workOrders, preventiveOrders, workCenterId })` que devuelva celdas con estado `none|corrective|planned_use|preventive` y orden de prevalencia determinista, sin importar componentes de UI (depende de T246).
+- [X] T266 [US15] Eliminar el bloque `.maintenance-filters` del header y las referencias/handlers de `filter-status`, `filter-priority` y `filter-work-center` en `src/components/MaintenancePanel.js`, conservando el resto del encabezado y las tres subpestañas (depende de T242).
+- [X] T267 [US15] Reestructurar el markup de la subpestaña "Máquinas" en `src/components/MaintenancePanel.js` con `.maintenance-machines-layout`, `.maintenance-machines-list` y `.maintenance-machine-detail` vacío; eliminar el `fault-banner` duplicado y los paneles sueltos de Historial y Preventivas, moviendo la alerta de frecuencia dentro de la lista (depende de T242).
+- [X] T268 [US15] Modificar el estado local de `src/components/MaintenancePanel.js` para `selectedMachineId`, `machineSearch`, `machineSection` y `machineStatus`, con opciones exactas "Todos", "Disponible", "En operación", "En mantención" y "Detenida / En fallo", y renderizado de filas filtradas con `data-machine-id` (depende de T242, T267).
+- [X] T269 [US15] Implementar en `src/components/MaintenancePanel.js` la selección de máquina que añade `is-selected` al layout (proporción `0.85fr 1.15fr`) y la deselección mediante botón "Deseleccionar" (×) que restaura el estado inicial y vacía el panel derecho, actualizando `aria-expanded`/foco sin recargar la vista (depende de T242, T268).
+- [X] T270 [US15] Añadir en `src/components/MaintenancePanel.js` un manejador de clic en documento que deseleccione la máquina solo cuando el clic cae fuera de `.maintenance-machines-list` y `.maintenance-machine-detail`, ignorando `document.body > .modal-backdrop`, `.modal`, `.confirm-dialog` y los botones ‹/› del mini-calendario (depende de T242, T269).
+- [X] T271 [US15] Consolidar en `.maintenance-machine-detail` de `src/components/MaintenancePanel.js` el badge operativo, el campo editable "Cada cuánto se recomienda mantención" con `canEditMaintenanceFrequency`, el indicador `deriveWearIndicator`, el historial de fallas, "Programar preventiva", "Revisar históricas" (prellena y enfoca el buscador histórico) y el botón "Deseleccionar" (depende de T242, T269).
+- [X] T272 [US15] Renderizar en `src/components/MaintenancePanel.js` el mini-calendario mensual debajo de ambos paneles solo con máquina seleccionada, usando `buildMachineCalendarMonth`, encabezado con botones ‹/› como única interacción, columnas L, Ma, Mi, J, V, S, D, celdas no clickeables y leyenda visible sin color/rojo/azul/morado; impedir que ‹/› dispare deselección (depende de T243, T265, T270).
+- [X] T273 [US15] Quitar de la tabla y del detalle de Tickets en `src/components/MaintenancePanel.js` los botones "Resolver" y "Tomar intervención", dejando buscador, fila expandible con historial/desgaste consolidados y "Programar mantención" como única acción que sigue pasando el ticket a `in_progress`, la máquina a `fault`, al Calendario y a Mantenimientos activos (depende de T244).
+- [X] T274 [US15] Sustituir `MAINTENANCE_BLOCKS` en `src/components/MaintenancePanel.js` por dos listas `active`/`history`, añadir el filtro "Todos"/"Vigentes"/"Vencidos" a la activa, conservar buscadores propios, "Resolver", "Eliminar" con `ConfirmDialog.js` y el prellenado del buscador histórico desde "Revisar históricas" (depende de T245, T271).
+- [X] T275 [US15] Actualizar `src/styles/manufacturing.css` con transición suave de `.maintenance-machines-layout`, estilos de los dos paneles, filtros de máquina, mini-calendario matricial y leyenda de colores, tabla de tickets sin columna de acción duplicada y los dos bloques de mantenimientos (depende de T267, T269, T272, T273, T274).
+- [X] T276 [US15] Ejecutar `npm test -- --run tests/unit/machine-calendar.test.js tests/integration/maintenance-panel.test.js` y `npm run lint` sobre `src/`, verificando en `src/components/MaintenancePanel.js` que no quedan `.maintenance-filters`, tres bloques ni botones obsoletos de tickets (depende de T265–T275).
+
+### Dependencias y paralelización — Fase 30
+
+- Las pruebas T235–T246 se escriben primero y son paralelas entre sí por archivo distinto; deben fallar antes de tocar `src/`.
+- US-12: T247 → T248 → T249 en `src/data/`; T250 → T251 en paralelo a T252; T253 depende de T248 y T252; T254 cierra estilos y T255 el gate.
+- US-13: T256 → T257 → T258 → T259 → T260 → T261 comparten `ProductionSchedulingPanel.js` y van en secuencia; T262 es paralelo a T256–T261 porque toca solo `CalendarEventDialog.js`; T263 y T264 cierran estilos y gate.
+- US-15: T265 es paralelo a T266–T271; T266 → T267 → T268 → T269 → T270 → T271 comparten `MaintenancePanel.js`; T272 depende de T265 y T270; T273 y T274 dependen de T271 para reutilizar el estado de máquina; T275 y T276 cierran estilos y gate.
+- Las tres historias son independientes entre sí y pueden ejecutarse en paralelo con worktrees; T277 y T278 son el cierre transversal y requieren los tres gates T255, T264 y T276.
+
+### Ejemplo de Ejecución Paralela — Fase 30
+
+```text
+# Pruebas primero (fallidas)
+T235 tests/unit/role-user-credentials.test.js
+T236 tests/integration/role-admin-panel.test.js
+T237 tests/integration/login-shell.test.js
+T238 tests/integration/plant-scheduling-panels.test.js
+T239 tests/integration/calendar-event-dialog.test.js
+T240 tests/integration/schedule-drag-selection.test.js
+T241 tests/integration/overlay-layering.test.js
+T242-T245 tests/integration/maintenance-panel.test.js (sección por sección)
+T246 tests/unit/machine-calendar.test.js
+
+# Implementación paralela por historia
+US-12: T247 → T248 → T253 → T255  |  T250 → T251 → T254  |  T252
+US-13: T256 → T257 → T258 → T259 → T260 → T261 → T263 → T264  |  T262
+US-15: T265 → T272  |  T266 → T267 → T268 → T269 → T270 → T271 → T273 → T274 → T275 → T276
+
+# Cierre
+T277 verificación de Fases 1–29 y FR-18 en specs/002-operations-manufacturing/tasks.md
+T278 trazabilidad AC-88–AC-103 en specs/002-operations-manufacturing/spec.md
+```
+
+### Cierre transversal — Fase 30
+
+- [X] T277 [P] Verificar en `specs/002-operations-manufacturing/tasks.md` que Fases 1 a 29 conservan sus IDs T001–T234 y que Fase 30 usa únicamente T235 en adelante, y en `package.json` y `vitest.config.mjs` que no se añadieron dependencias ni cambió la configuración existente.
+- [X] T278 [P] Verificar en `specs/002-operations-manufacturing/spec.md` y `specs/002-operations-manufacturing/checklists/requirements.md` que AC-88–AC-103 y SC-16–SC-20 quedan trazados con US-12, US-13 y US-15, sin reescribir AC-01–AC-87 ni las mejoras de `main`.
+
+**Punto de control**: la Fase 30 es desplegable por historia; US-12 cierra altas/bajas y credenciales persistentes, US-13 deja el calendario ancho con modales reales y arrastre exacto, y US-15 deja el panel de mantenimiento consolidado con mini-calendario y dos listas. Fases 1 a 29 siguen intactas.

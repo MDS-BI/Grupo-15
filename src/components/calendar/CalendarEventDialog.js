@@ -44,10 +44,10 @@ function detailRow(label, value) {
 }
 
 /**
- * @param {{event:Object, role?:string, store:Object, onBack?:Function}} options
+ * @param {{event:Object, role?:string, store:Object, onBack?:Function, onClose?:Function}} options
  * @returns {HTMLElement}
  */
-export function CalendarEventDialog({ event, role = 'planner', store, onBack } = {}) {
+export function CalendarEventDialog({ event, role = 'planner', store, onBack, onClose } = {}) {
   const isOrder = event?.kind === 'order';
   const isMaintenance = event?.kind === 'maintenance';
   const maintenanceResolved = isMaintenance && isResolvedMaintenance(event);
@@ -163,8 +163,38 @@ export function CalendarEventDialog({ event, role = 'planner', store, onBack } =
       </div>
     </section>`);
 
+  const backdrop = el(`
+    <div class="modal-backdrop" data-role="event-dialog-backdrop">
+      <div class="modal" role="dialog" aria-modal="true" aria-label="Detalle de tarea" data-role="event-dialog-modal">
+        <button type="button" class="modal__close" data-role="event-dialog-close" aria-label="Cerrar">×</button>
+      </div>
+    </div>`);
+  backdrop.querySelector('.modal').appendChild(root);
+  let closed = false;
+
+  function close(after) {
+    if (closed) return;
+    closed = true;
+    document.removeEventListener('keydown', onKeyDown);
+    backdrop.remove();
+    if (typeof after === 'function') after();
+  }
+
+  function onKeyDown(event) {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    close(onClose);
+  }
+
+  backdrop.addEventListener('click', (event) => {
+    if (event.target === backdrop) close(onClose);
+  });
+  backdrop.closeModal = () => close();
+  document.body.appendChild(backdrop);
+  document.addEventListener('keydown', onKeyDown);
+
   root.querySelector('[data-role="event-back"]').addEventListener('click', () => {
-    if (typeof onBack === 'function') onBack();
+    close(onBack);
   });
 
   if (canResolveMaintenance) {
@@ -256,5 +286,5 @@ export function CalendarEventDialog({ event, role = 'planner', store, onBack } =
     });
   }
 
-  return root;
+  return backdrop;
 }

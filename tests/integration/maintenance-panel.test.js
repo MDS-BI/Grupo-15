@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { JSDOM } from 'jsdom';
 import { ManufacturingStore } from '../../src/data/ManufacturingStore.js';
 import { MaintenancePanel } from '../../src/components/MaintenancePanel.js';
@@ -27,10 +29,13 @@ let dom;
 let storage;
 let store;
 
-function click(selector) {
-  const node = document.querySelector(selector);
+function clickNode(node) {
   expect(node).toBeTruthy();
   node.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+}
+
+function click(selector) {
+  clickNode(document.querySelector(selector));
 }
 
 function submit(formSelector) {
@@ -49,9 +54,9 @@ function activateTab(tab) {
   click(`[data-role="maintenance-tab"][data-tab="${tab}"]`);
 }
 
-function currentMonthKey() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+function selectMachine(id = 'wc_solda') {
+  activateTab('machines');
+  click(`[data-role="machine-row"][data-machine-id="${id}"]`);
 }
 
 function search(selector, value) {
@@ -59,6 +64,28 @@ function search(selector, value) {
   expect(input).toBeTruthy();
   input.value = value;
   input.dispatchEvent(new window.Event('input', { bubbles: true }));
+}
+
+function change(selector, value) {
+  const input = document.querySelector(selector);
+  expect(input).toBeTruthy();
+  input.value = value;
+  input.dispatchEvent(new window.Event('change', { bubbles: true }));
+}
+
+function currentMonthKey() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function scheduleTicket(ticketId = 'mt_1001') {
+  activateTab('tickets');
+  click(`[data-schedule-ticket="${ticketId}"]`);
+  expect(document.querySelector('[data-role="schedule-form"]')).toBeTruthy();
+  fill('[data-role="schedule-form"]', 'technician_ext_hr_employee_id', 'ext_hr_tec_01');
+  fill('[data-role="schedule-form"]', 'scheduledStartDate', relativeDay(0));
+  fill('[data-role="schedule-form"]', 'scheduledEndDate', daysFromNow(1));
+  submit('[data-role="schedule-form"]');
 }
 
 beforeEach(() => {
@@ -76,66 +103,208 @@ afterEach(() => {
   dom.window.close();
 });
 
-function scheduleTicket(ticketId = 'mt_1001') {
-  activateTab('tickets');
-  click(`[data-schedule-ticket="${ticketId}"]`);
-  expect(document.querySelector('[data-role="schedule-form"]')).toBeTruthy();
-  fill('[data-role="schedule-form"]', 'technician_ext_hr_employee_id', 'ext_hr_tec_01');
-  fill('[data-role="schedule-form"]', 'scheduledStartDate', relativeDay(0));
-  fill('[data-role="schedule-form"]', 'scheduledEndDate', daysFromNow(1));
-  submit('[data-role="schedule-form"]');
-}
-
-describe('Panel de mantenimiento (US-15)', () => {
-  it('muestra exactamente tres subpestañas con buscadores propios', () => {
+describe('Panel de mantenimiento · cabecera y máquinas (T242, T266-T271)', () => {
+  it('elimina los filtros globales y conserva las tres subpestañas', () => {
+    expect(document.querySelector('.maintenance-filters')).toBeNull();
+    expect(document.querySelector('[data-role="filter-status"]')).toBeNull();
+    expect(document.querySelector('[data-role="filter-priority"]')).toBeNull();
+    expect(document.querySelector('[data-role="filter-work-center"]')).toBeNull();
+    expect(document.querySelector('.view__header h1').textContent).toBe('Mantenimiento');
     expect(
       [...document.querySelectorAll('[data-role="maintenance-tab"]')].map((tab) =>
         tab.textContent.trim(),
       ),
     ).toEqual(['Máquinas', 'Tickets', 'Mantenimientos']);
-
-    expect(document.querySelector('[data-role="maintenance-search-machines"]')).toBeTruthy();
-    expect(document.querySelector('[data-role="maintenance-search-tickets"]')).toBeTruthy();
-    activateTab('maintenances');
-    expect(document.querySelectorAll('[data-role="maintenance-block-search"]')).toHaveLength(3);
   });
 
-  it('busca máquinas, tickets y mantenciones por nombre o código', () => {
-    activateTab('machines');
-    search('[data-role="maintenance-search-machines"]', 'Armado');
-    expect(document.querySelectorAll('[data-role="machine-row"]')).toHaveLength(1);
-    expect(document.querySelector('[data-role="machine-row"]').getAttribute('data-center')).toBe(
-      'wc_armado',
-    );
-
-    activateTab('tickets');
-    search('[data-role="maintenance-search-tickets"]', 'MTO-1001');
-    expect(document.querySelectorAll('[data-ticket-row]')).toHaveLength(1);
-
-    activateTab('maintenances');
-    search('[data-role="maintenance-search-active"]', 'PM-2001');
-    search('[data-role="maintenance-search-history"]', 'Corte');
-    expect(document.body.textContent).toContain('Sin mantenciones');
+  it('muestra dos paneles con el detalle vacío y la alerta dentro de la lista', () => {
+    const layout = document.querySelector('.maintenance-machines-layout');
+    expect(layout).toBeTruthy();
+    const list = layout.querySelector('.maintenance-machines-list');
+    const detail = layout.querySelector('.maintenance-machine-detail');
+    expect(list).toBeTruthy();
+    expect(detail).toBeTruthy();
+    expect(detail.innerHTML.trim()).toBe('');
+    expect(list.querySelector('[data-role="machine-alert"]')).toBeTruthy();
+    expect(document.querySelector('.fault-banner')).toBeNull();
+    expect(document.querySelector('[data-role="history"]')).toBeNull();
+    expect(document.querySelector('[data-role="preventive-list"]')).toBeNull();
+    expect(document.querySelector('.machine-calendar')).toBeNull();
   });
 
-  it('Revisar históricas cambia de pestaña y prellena el buscador con la máquina', () => {
-    activateTab('machines');
-    click('[data-role="review-history"][data-center="wc_armado"]');
-
+  it('busca por nombre o código, filtra por sección y por los cinco estados exactos', () => {
     expect(
-      document
-        .querySelector('[data-role="maintenance-tab"][data-tab="maintenances"]')
-        .getAttribute('aria-selected'),
-    ).toBe('true');
-    expect(document.querySelector('[data-role="maintenance-search-history"]').value).toBe(
-      'Línea de Armado',
-    );
-    expect(document.querySelector('[data-role="maintenance-block-history"]').textContent).toContain(
-      'Línea de Armado',
-    );
+      [...document.querySelectorAll('[data-role="machine-status-filter"] option')].map((option) =>
+        option.textContent.trim(),
+      ),
+    ).toEqual(['Todos', 'Disponible', 'En operación', 'En mantención', 'Detenida / En fallo']);
+
+    search('[data-role="maintenance-search-machines"]', 'Armado');
+    expect([...document.querySelectorAll('[data-role="machine-row"]')]).toHaveLength(1);
+    expect(document.querySelector('[data-role="machine-row"]').dataset.machineId).toBe('wc_armado');
+
+    search('[data-role="maintenance-search-machines"]', 'CT-ARM');
+    expect(document.querySelectorAll('[data-role="machine-row"]')).toHaveLength(1);
+
+    search('[data-role="maintenance-search-machines"]', '');
+    change('[data-role="machine-section-filter"]', 'soldadura');
+    expect(document.querySelectorAll('[data-role="machine-row"]')).toHaveLength(2);
+
+    change('[data-role="machine-section-filter"]', '');
+    change('[data-role="machine-status-filter"]', 'fault');
+    expect(
+      [...document.querySelectorAll('[data-role="machine-row"]')].map(
+        (row) => row.dataset.machineId,
+      ),
+    ).toEqual(['wc_corte']);
   });
 
-  it('programa una mantención desde un ticket y la sincroniza con calendario y Activos', () => {
+  it('selecciona, expande el detalle consolidado y restaura el estado al deseleccionar', async () => {
+    selectMachine('wc_solda');
+    const layout = document.querySelector('.maintenance-machines-layout');
+    expect(layout.classList.contains('is-selected')).toBe(true);
+    const row = document.querySelector('[data-machine-id="wc_solda"]');
+    expect(row.getAttribute('aria-expanded')).toBe('true');
+
+    const detail = document.querySelector('.maintenance-machine-detail');
+    expect(detail.textContent).toContain('Estación de Soldadura 1');
+    expect(detail.textContent).toContain('Disponible');
+    expect(detail.textContent).toContain('Cada cuánto se recomienda mantención');
+    expect(detail.querySelector('[data-role="frequency-input"]')).toBeTruthy();
+    expect(detail.textContent).toMatch(/Desgaste|Indicador de desgaste/);
+    expect(detail.textContent).toMatch(/Bajo|Medio|Alto/);
+    expect(detail.textContent).toContain('Historial de fallas');
+    expect(
+      [...detail.querySelectorAll('button')].some((button) =>
+        button.textContent.includes('Programar preventiva'),
+      ),
+    ).toBe(true);
+    expect(
+      [...detail.querySelectorAll('button')].some((button) =>
+        button.textContent.includes('Revisar históricas'),
+      ),
+    ).toBe(true);
+
+    const deselect = [...detail.querySelectorAll('button')].find((button) =>
+      button.textContent.includes('Deseleccionar'),
+    );
+    clickNode(deselect);
+    expect(
+      document.querySelector('.maintenance-machines-layout').classList.contains('is-selected'),
+    ).toBe(false);
+    expect(document.querySelector('.maintenance-machine-detail').innerHTML.trim()).toBe('');
+    expect(
+      document.querySelector('[data-machine-id="wc_solda"]').getAttribute('aria-expanded'),
+    ).toBe('false');
+    expect(document.activeElement.dataset.machineId).toBe('wc_solda');
+  });
+
+  it('deselecciona al hacer clic fuera, pero no en modales ni en la navegación del mini-calendario', () => {
+    const backdrop = document.createElement('div');
+    backdrop.className = 'modal-backdrop';
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    backdrop.appendChild(modal);
+    document.body.appendChild(backdrop);
+
+    selectMachine('wc_armado');
+    click('.modal');
+    expect(
+      document.querySelector('.maintenance-machines-layout').classList.contains('is-selected'),
+    ).toBe(true);
+
+    click('[data-machine-calendar-nav="prev"]');
+    expect(
+      document.querySelector('.maintenance-machines-layout').classList.contains('is-selected'),
+    ).toBe(true);
+
+    clickNode(document.body);
+    expect(
+      document.querySelector('.maintenance-machines-layout').classList.contains('is-selected'),
+    ).toBe(false);
+    expect(document.querySelector('.maintenance-machine-detail').innerHTML.trim()).toBe('');
+    backdrop.remove();
+  });
+});
+
+describe('Mini-calendario de máquina (T243, T272)', () => {
+  it('aparece solo con selección, con meses navegables, columnas y celdas informativas', () => {
+    activateTab('machines');
+    expect(document.querySelector('.machine-calendar')).toBeNull();
+    selectMachine('wc_solda');
+
+    const calendar = document.querySelector('.machine-calendar');
+    expect(calendar).toBeTruthy();
+    expect(document.querySelector('.maintenance-machines-layout').nextElementSibling).toBe(
+      calendar,
+    );
+    expect(
+      calendar.querySelector('[data-role="machine-calendar-label"]').textContent.trim(),
+    ).not.toBe('');
+    expect(calendar.querySelectorAll('[data-machine-calendar-nav]')).toHaveLength(2);
+    expect(
+      [...calendar.querySelectorAll('.machine-calendar__weekday')].map((node) => node.textContent),
+    ).toEqual(['L', 'Ma', 'Mi', 'J', 'V', 'S', 'D']);
+
+    const cells = [...calendar.querySelectorAll('[data-machine-calendar-cell]')];
+    expect(cells.length).toBeGreaterThanOrEqual(28);
+    cells.forEach((cell) => {
+      expect(cell.querySelector('button')).toBeNull();
+      expect(cell.hasAttribute('onclick')).toBe(false);
+      expect(cell.getAttribute('role')).not.toBe('button');
+      expect(cell.getAttribute('tabindex')).toBeNull();
+    });
+
+    const label = calendar.querySelector('[data-role="machine-calendar-label"]').textContent;
+    click('[data-machine-calendar-nav="next"]');
+    expect(document.querySelector('[data-role="machine-calendar-label"]').textContent).not.toBe(
+      label,
+    );
+    expect(
+      document.querySelector('.maintenance-machines-layout').classList.contains('is-selected'),
+    ).toBe(true);
+  });
+
+  it('muestra la leyenda visible de los cuatro estados', () => {
+    selectMachine('wc_armado');
+    const legend = document.querySelector('.machine-calendar__legend');
+    expect(legend).toBeTruthy();
+    expect(legend.textContent).toContain('Sin plan');
+    expect(legend.textContent).toContain('Correctiva / Fallo');
+    expect(legend.textContent).toContain('Orden de trabajo');
+    expect(legend.textContent).toContain('Preventiva');
+    expect(legend.querySelector('.machine-calendar__legend-swatch--none')).toBeTruthy();
+    expect(legend.querySelector('.machine-calendar__legend-swatch--corrective')).toBeTruthy();
+    expect(legend.querySelector('.machine-calendar__legend-swatch--planned_use')).toBeTruthy();
+    expect(legend.querySelector('.machine-calendar__legend-swatch--preventive')).toBeTruthy();
+  });
+});
+
+describe('Tickets y mantenciones (T244, T245, T273, T274)', () => {
+  it('muestra tabla con buscador y detalle desplegable sin acciones obsoletas', () => {
+    activateTab('tickets');
+    const panel = document.querySelector('[data-panel="tickets"]');
+    expect(panel.textContent).not.toContain('Resolver');
+    expect(panel.textContent).not.toContain('Tomar intervención');
+    expect([...panel.querySelectorAll('thead th')].map((th) => th.textContent)).not.toContain(
+      'Acción',
+    );
+    expect(document.querySelectorAll('[data-schedule-ticket]')).toHaveLength(
+      store.maintenanceTickets.length,
+    );
+
+    click('[data-ticket-row="mt_1001"]');
+    const detail = document.querySelector('[data-role="ticket-detail"]');
+    expect(detail.textContent).toContain('MTO-1001');
+    expect(detail.textContent).toContain('Historial de fallas');
+    expect(detail.textContent).toContain('Historial completo de mantenciones');
+    expect(detail.textContent).toMatch(/Indicador de desgaste|Bajo|Medio|Alto/);
+    expect(detail.textContent).not.toContain('Tomar intervención');
+    expect(detail.textContent).not.toContain('Resolver');
+    expect(detail.textContent).toContain('Programar mantención');
+  });
+
+  it('programa la mantención de un ticket y la refleja en calendario y activos', () => {
     scheduleTicket('mt_1001');
 
     const ticket = store.maintenanceTickets.find((row) => row.id === 'mt_1001');
@@ -143,9 +312,6 @@ describe('Panel de mantenimiento (US-15)', () => {
     expect(store.workCenterById(ticket.work_center_id).operational_status).toBe('fault');
     expect(ticket.scheduled_start_date).toBe(relativeDay(0));
     expect(ticket.scheduled_end_date).toBe(daysFromNow(1));
-
-    const event = store.maintenanceFeed().find((row) => row.id === 'maintenance:mt_1001');
-    expect(event).toBeTruthy();
     expect(
       store
         .calendarEventsForMonth(currentMonthKey())
@@ -159,22 +325,53 @@ describe('Panel de mantenimiento (US-15)', () => {
     );
   });
 
-  it('elimina una histórica confirmada de v2 y del calendario', async () => {
-    scheduleTicket('mt_1001');
-    store.resolveScheduledMaintenance(
-      'maintenance:mt_1001',
-      { resolvedAt: new Date(Date.now() + 60000).toISOString() },
-      'maintenance',
-    );
-
+  it('tiene exactamente dos listas buscables con filtro de vigencia', () => {
     activateTab('maintenances');
-    click('[data-delete-maintenance="maintenance:mt_1001"]');
+    expect(document.querySelectorAll('[data-role="maintenance-block-search"]')).toHaveLength(2);
+    expect(document.querySelector('[data-role="maintenance-block-active"] h2').textContent).toBe(
+      'Mantenimientos activos',
+    );
+    expect(document.querySelector('[data-role="maintenance-block-history"] h2').textContent).toBe(
+      'Mantenimientos históricos',
+    );
+    expect(
+      [...document.querySelectorAll('[data-role="maintenance-status-filter"] option')].map(
+        (option) => option.textContent.trim(),
+      ),
+    ).toEqual(['Todos', 'Vigentes', 'Vencidos']);
 
+    search('[data-role="maintenance-search-active"]', 'MTO-1001');
+    expect(
+      document.querySelectorAll('[data-role="maintenance-block-active"] [data-maintenance-row]'),
+    ).toHaveLength(1);
+    expect(document.body.textContent).toContain('MTO-1001');
+
+    search('[data-role="maintenance-search-active"]', '');
+    change('[data-role="maintenance-status-filter"]', 'vencidos');
+    expect(document.querySelectorAll('[data-maintenance-row]').length).toBeGreaterThan(0);
+    change('[data-role="maintenance-status-filter"]', 'todos');
+  });
+
+  it('mueve una activa resuelta al histórico y elimina una histórica confirmada', async () => {
+    scheduleTicket('mt_1001');
+    activateTab('maintenances');
+    click('[data-resolve-scheduled="maintenance:mt_1001"]');
     await vi.waitFor(() =>
       expect(document.querySelector('[data-role="confirm-dialog"]')).toBeTruthy(),
     );
     click('[data-role="confirm-dialog"] [data-role="confirm"]');
+    await vi.waitFor(() =>
+      expect(document.querySelector('[data-maintenance-row="maintenance:mt_1001"]')).toBeTruthy(),
+    );
+    expect(document.querySelector('[data-role="maintenance-block-history"]').textContent).toContain(
+      'MTO-1001',
+    );
 
+    click('[data-delete-maintenance="maintenance:mt_1001"]');
+    await vi.waitFor(() =>
+      expect(document.querySelector('[data-role="confirm-dialog"]')).toBeTruthy(),
+    );
+    click('[data-role="confirm-dialog"] [data-role="confirm"]');
     await vi.waitFor(() =>
       expect(store.maintenanceTickets.some((row) => row.id === 'mt_1001')).toBe(false),
     );
@@ -186,104 +383,48 @@ describe('Panel de mantenimiento (US-15)', () => {
         .some((row) => row.id === 'maintenance:mt_1001'),
     ).toBe(false);
   });
+
+  it('prellena y enfoca el buscador histórico desde Revisar históricas', () => {
+    selectMachine('wc_armado');
+    click('.maintenance-machine-detail [data-role="review-history"]');
+
+    expect(
+      document
+        .querySelector('[data-role="maintenance-tab"][data-tab="maintenances"]')
+        .getAttribute('aria-selected'),
+    ).toBe('true');
+    const searchEl = document.querySelector('[data-role="maintenance-search-history"]');
+    expect(searchEl.value).toBe('Línea de Armado');
+    expect(document.activeElement).toBe(searchEl);
+    expect(document.querySelector('[data-role="maintenance-block-history"]').textContent).toContain(
+      'Línea de Armado',
+    );
+  });
 });
 
-describe('Panel de mantenimiento (US-09)', () => {
-  it('muestra la bandeja priorizada y filtra por estado', () => {
-    const rows = [...document.querySelectorAll('[data-ticket-row]')].map((row) =>
-      row.getAttribute('data-ticket-row'),
+describe('Estilos requeridos por el rediseño (T275)', () => {
+  const css = () => readFileSync(resolve(process.cwd(), 'src/styles/manufacturing.css'), 'utf8');
+
+  it('define la transición y la proporción 0.85fr 1.15fr al seleccionar', () => {
+    const styles = css();
+    expect(styles).toMatch(
+      /\.maintenance-machines-layout\s*\{[^}]*transition\s*:\s*[^;}]*grid-template-columns/,
     );
-    expect(rows[0]).toBe('mt_1001');
-    expect(rows[1]).toBe('mt_1005');
-
-    const statusFilter = document.querySelector('[data-role="filter-status"]');
-    statusFilter.value = 'open';
-    statusFilter.dispatchEvent(new window.Event('change', { bubbles: true }));
-
-    const openRows = [...document.querySelectorAll('[data-ticket-row]')].map((row) =>
-      row.getAttribute('data-ticket-row'),
-    );
-    expect(openRows).toEqual(expect.arrayContaining(['mt_1001', 'mt_1003', 'mt_1005']));
-    expect(openRows).not.toContain('mt_1002');
-  });
-
-  it('muestra nombres legibles con el ID de auditoría en el título', () => {
-    const fault = document.querySelector('[data-fault-ticket="mt_1002"]');
-    expect(fault.textContent).toContain('Bruno Díaz');
-    expect(fault.textContent).toMatch(/\d+ d \d+ h \d+ min/);
-
-    const eventCell = document.querySelector('[data-ticket-row="mt_1002"] td:nth-child(6)');
-    expect(eventCell.getAttribute('title')).toBe('od_1002');
-    expect(eventCell.textContent).not.toContain('od_1002');
-
-    const sourceTicket = store.maintenanceTickets.find((ticket) => ticket.id === 'mt_1004');
-    const originCell = document.querySelector('[data-preventive-row="pmo_2001"] td:nth-child(6)');
-    expect(originCell.getAttribute('title')).toBe('mt_1004');
-    expect(originCell.textContent).toContain(sourceTicket.ticket_code);
-  });
-
-  it('toma una intervención, la resuelve y conserva el estado tras recargar', () => {
-    click('[data-take="mt_1001"]');
-    expect(document.querySelector('[data-role="take-form"]')).toBeTruthy();
-    fill('[data-role="take-form"]', 'technician_ext_hr_employee_id', 'ext_hr_tec_01');
-    submit('[data-role="take-form"]');
-
-    const taken = store.maintenanceTickets.find((t) => t.id === 'mt_1001');
-    expect(taken.ticket_status).toBe('in_progress');
-    expect(store.workCenterById('wc_solda').operational_status).toBe('fault');
-    expect(document.body.textContent).toContain('Ana Soto');
-    expect(document.body.textContent).toContain('Intervención iniciada');
-
-    click('[data-resolve="mt_1001"]');
-    expect(document.querySelector('[data-role="resolve-form"]')).toBeTruthy();
-    fill('[data-role="resolve-form"]', 'resolvedAt', '2030-01-01T10:00');
-    fill('[data-role="resolve-form"]', 'downtimeStartedAt', '2030-01-01T09:00');
-    fill('[data-role="resolve-form"]', 'downtimeEndedAt', '2030-01-01T10:00');
-    fill('[data-role="resolve-form"]', 'causeReasonId', 'dr_mecanico');
-    submit('[data-role="resolve-form"]');
-
-    expect(taken.ticket_status).toBe('resolved');
-    expect(taken.downtime_minutes).toBe(60);
-    expect(store.workCenterById('wc_solda').operational_status).toBe('available');
-    expect(document.body.textContent).toContain('Ticket resuelto');
-
-    expect(JSON.parse(storage.getItem(SNAPSHOT_KEY)).data.maintenanceTickets).toBeDefined();
-    const reloaded = new ManufacturingStore({ storage });
-    const persisted = reloaded.maintenanceTickets.find((t) => t.id === 'mt_1001');
-    expect(persisted.ticket_status).toBe('resolved');
-    expect(persisted.downtime_minutes).toBe(60);
-  });
-
-  it('muestra el error inline y no muta el ticket ante un cierre inválido', () => {
-    click('[data-resolve="mt_1002"]');
-    fill('[data-role="resolve-form"]', 'resolvedAt', '2030-01-01T10:00');
-    fill('[data-role="resolve-form"]', 'downtimeStartedAt', '2030-01-01T10:00');
-    fill('[data-role="resolve-form"]', 'downtimeEndedAt', '2030-01-01T09:00');
-    submit('[data-role="resolve-form"]');
-
-    const error = document.querySelector('[data-role="resolve-form"] [data-role="error"]');
-    expect(error.textContent).toMatch(/anterior/);
-    expect(store.maintenanceTickets.find((t) => t.id === 'mt_1002').ticket_status).toBe(
-      'in_progress',
+    expect(styles).toMatch(
+      /\.maintenance-machines-layout\.is-selected\s*\{[^}]*grid-template-columns\s*:\s*0\.85fr\s+1\.15fr/,
     );
   });
 
-  it('crea una orden preventiva y recorre sus transiciones', () => {
-    click('[data-preventive-create]');
-    expect(document.querySelector('[data-role="preventive-form"]')).toBeTruthy();
-    fill('[data-role="preventive-form"]', 'plannedDate', '2026-12-15');
-    fill('[data-role="preventive-form"]', 'title', 'Preventiva de prueba');
-    submit('[data-role="preventive-form"]');
-
-    const order = store.preventiveMaintenanceOrders.find((o) => o.title === 'Preventiva de prueba');
-    expect(order).toBeTruthy();
-    expect(order.status).toBe('planned');
-
-    click(`[data-preventive-action="start"][data-order="${order.id}"]`);
-    expect(order.status).toBe('in_progress');
-    click(`[data-preventive-action="complete"][data-order="${order.id}"]`);
-    expect(order.status).toBe('completed');
-    expect(order.completed_at).toBeTruthy();
-    expect(document.body.textContent).toContain('Orden preventiva completada');
+  it('define los colores exactos de la leyenda del mini-calendario', () => {
+    const styles = css();
+    expect(styles).toMatch(
+      /\.machine-calendar__legend-swatch--corrective\s*\{[^}]*background-color\s*:\s*#dc2626/,
+    );
+    expect(styles).toMatch(
+      /\.machine-calendar__legend-swatch--planned_use\s*\{[^}]*background-color\s*:\s*#2563eb/,
+    );
+    expect(styles).toMatch(
+      /\.machine-calendar__legend-swatch--preventive\s*\{[^}]*background-color\s*:\s*#7c3aed/,
+    );
   });
 });
