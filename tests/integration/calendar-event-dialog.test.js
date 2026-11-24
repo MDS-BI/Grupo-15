@@ -49,8 +49,8 @@ function eventOfKind(kind) {
   return event;
 }
 
-function render(event, role, onBack = vi.fn(), options = {}) {
-  const dialog = CalendarEventDialog({ event, role, store, onBack, ...options });
+function render(event, role, options = {}) {
+  const dialog = CalendarEventDialog({ event, role, store, ...options });
   document.body.appendChild(dialog);
   return dialog;
 }
@@ -169,20 +169,16 @@ describe('CalendarEventDialog - resolución de mantenciones (US-15)', () => {
 });
 
 describe('CalendarEventDialog (US-13)', () => {
-  it('muestra detalle de orden, horas editables y botón de volver', () => {
+  it('muestra detalle de orden, horas editables y cierre sin botón de volver', () => {
     const event = eventOfKind('order');
-    const onBack = vi.fn();
-    const dialog = render(event, 'planner', onBack);
+    const dialog = render(event, 'planner');
 
     expect(dialog.textContent).toContain(event.title);
     expect(dialog.querySelector('[data-dialog-time="start"]').value).toBe(event.start_time);
     expect(dialog.querySelector('[data-dialog-time="end"]').value).toBe(event.end_time);
     expect(dialog.querySelector('[data-dialog-save]')).toBeTruthy();
-
-    dialog
-      .querySelector('[data-role="event-back"]')
-      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
-    expect(onBack).toHaveBeenCalledOnce();
+    expect(dialog.querySelector('[data-role="event-back"]')).toBeNull();
+    expect(dialog.parentElement.querySelector('[data-role="event-dialog-close"]')).toBeTruthy();
   });
 
   it('muestra detalle de mantención en modo solo lectura', () => {
@@ -207,7 +203,7 @@ describe('CalendarEventDialog (US-13)', () => {
 
   it('operator ve el detalle en solo lectura', () => {
     const event = eventOfKind('order');
-    const dialog = render(event, 'operator', vi.fn(), { operatorId: 'emp_op_01' });
+    const dialog = render(event, 'operator', { operatorId: 'emp_op_01' });
 
     expect(dialog.textContent).toContain('Solo lectura');
     expect(dialog.querySelector('input, select, textarea, [data-dialog-save]')).toBeNull();
@@ -321,7 +317,7 @@ describe('Modales centrados del calendario (US-13 / AC-92)', () => {
     expect(document.querySelector('[data-role="day-menu-backdrop"]')).toBeNull();
   });
 
-  it('abre el detalle como modal en body, mantiene Volver y cierra con Escape y clic fuera', () => {
+  it('abre el detalle como modal en body sin Volver y cierra con ×, Escape y clic fuera', () => {
     mountPanel();
     openEventFromMenu();
     let backdrop = document.querySelector('[data-role="event-dialog-backdrop"]');
@@ -331,22 +327,26 @@ describe('Modales centrados del calendario (US-13 / AC-92)', () => {
     expect(backdrop.querySelector('[data-role="event-dialog"]').getAttribute('draggable')).toBe(
       'false',
     );
-    expect(backdrop.textContent).toContain('Volver a la lista del día');
+    expect(backdrop.textContent).not.toContain('Volver a la lista del día');
+    expect(backdrop.querySelector('[data-role="event-back"]')).toBeNull();
     expect(document.querySelector('.calendar-main [data-role="event-dialog"]')).toBeNull();
 
-    clickNode(backdrop.querySelector('[data-role="event-back"]'));
-    expect(document.querySelector('[data-role="day-menu-backdrop"]')).toBeTruthy();
+    clickNode(backdrop.querySelector('[data-role="event-dialog-close"]'));
     expect(document.querySelector('[data-role="event-dialog-backdrop"]')).toBeNull();
+    expect(document.querySelector('[data-role="day-menu-backdrop"]')).toBeNull();
 
+    openDayMenu();
     clickNode(document.querySelector('[data-role="day-menu"] [data-event-id]'));
     pressEscape();
     expect(document.querySelector('[data-role="event-dialog-backdrop"]')).toBeNull();
+    expect(document.querySelector('[data-role="day-menu-backdrop"]')).toBeNull();
 
     openDayMenu();
     clickNode(document.querySelector('[data-role="day-menu"] [data-event-id]'));
     backdrop = document.querySelector('[data-role="event-dialog-backdrop"]');
     clickNode(backdrop);
     expect(document.querySelector('[data-role="event-dialog-backdrop"]')).toBeNull();
+    expect(document.querySelector('[data-role="day-menu-backdrop"]')).toBeNull();
   });
 
   it('abre el popup de horario como modal en body y lo cierra por botón, Escape y clic fuera', () => {

@@ -21,14 +21,8 @@ export function RoleAdminPanel({ store } = {}) {
             <span>Usuario</span>
             <input type="text" name="username" autocomplete="off" data-role="admin-new-username" required />
           </label>
-          <label>
-            <span>Rol</span>
-            <select name="role" data-role="admin-new-role">
-              ${CANONICAL_ROLES.map(
-                (role) => `<option value="${role}">${escapeHtml(roleLabel(role))}</option>`,
-              ).join('')}
-            </select>
-          </label>
+          <div class="role-admin__role-rows" data-role="admin-role-rows"></div>
+          <button type="button" class="btn btn--tiny role-admin__add-role" data-role="admin-add-role" aria-label="Agregar rol">+</button>
           <button type="submit" class="btn btn--primary">Agregar</button>
         </form>
         <form class="stack-form" data-role="admin-assign-form">
@@ -55,7 +49,62 @@ export function RoleAdminPanel({ store } = {}) {
   const tablesHost = root.querySelector('[data-role="admin-tables"]');
   const userOptions = root.querySelector('[data-role="admin-user-options"]');
   const addForm = root.querySelector('[data-role="admin-add-form"]');
+  const roleRowsEl = root.querySelector('[data-role="admin-role-rows"]');
+  const addRoleButton = root.querySelector('[data-role="admin-add-role"]');
   const assignForm = root.querySelector('[data-role="admin-assign-form"]');
+
+  function roleOptions() {
+    return CANONICAL_ROLES.map(
+      (role) => `<option value="${role}">${escapeHtml(roleLabel(role))}</option>`,
+    ).join('');
+  }
+
+  function roleRowMarkup(index, removable) {
+    return `<label class="role-admin__role-row" data-role="admin-role-row">
+      <span>${index === 0 ? 'Rol' : `Rol ${index + 1}`}</span>
+      <span class="role-admin__role-control">
+        <select name="role" data-role="admin-new-role">${roleOptions()}</select>
+        ${
+          removable
+            ? '<button type="button" class="role-admin__remove-role" data-role="admin-remove-role" aria-label="Quitar rol">×</button>'
+            : ''
+        }
+      </span>
+    </label>`;
+  }
+
+  function roleValues() {
+    return [...roleRowsEl.querySelectorAll('[data-role="admin-new-role"]')].map(
+      (select) => select.value,
+    );
+  }
+
+  function renderRoleRows(count = 1, values = []) {
+    roleRowsEl.innerHTML = Array.from({ length: count }, (_, index) =>
+      roleRowMarkup(index, index > 0),
+    ).join('');
+    const selects = [...roleRowsEl.querySelectorAll('[data-role="admin-new-role"]')];
+    selects.forEach((select, index) => {
+      if (values[index]) select.value = values[index];
+    });
+    addRoleButton.disabled = count >= CANONICAL_ROLES.length;
+  }
+
+  addRoleButton.addEventListener('click', () => {
+    const count = roleRowsEl.querySelectorAll('[data-role="admin-role-row"]').length;
+    if (count < CANONICAL_ROLES.length) renderRoleRows(count + 1, roleValues());
+  });
+
+  roleRowsEl.addEventListener('click', (event) => {
+    if (!event.target.closest('[data-role="admin-remove-role"]')) return;
+    const rows = [...roleRowsEl.querySelectorAll('[data-role="admin-role-row"]')];
+    const row = event.target.closest('[data-role="admin-role-row"]');
+    const index = rows.indexOf(row);
+    if (index <= 0) return;
+    const values = roleValues();
+    values.splice(index, 1);
+    renderRoleRows(values.length, values);
+  });
 
   function renderTables() {
     tablesHost.innerHTML = CANONICAL_ROLES.map((role) => {
@@ -93,12 +142,15 @@ export function RoleAdminPanel({ store } = {}) {
   addForm.addEventListener('submit', (event) => {
     event.preventDefault();
     const username = addForm.querySelector('[data-role="admin-new-username"]').value;
-    const role = addForm.querySelector('[data-role="admin-new-role"]').value;
-    if (!String(username).trim()) return;
-    const row = store.addRoleUser(role, { username });
-    if (row) {
-      showToast(`Usuario agregado a ${roleLabel(role)}: ${row.username}`, { tone: 'success' });
+    const roles = [...new Set(roleValues().filter(Boolean))];
+    if (!String(username).trim() || roles.length === 0) return;
+    const created = store.createUserWithRoles(username, roles);
+    if (created.length) {
+      showToast(`Usuario agregado a ${roles.map(roleLabel).join(', ')}: ${created[0].username}`, {
+        tone: 'success',
+      });
       addForm.reset();
+      renderRoleRows(1);
       renderTables();
     }
   });
@@ -145,6 +197,7 @@ export function RoleAdminPanel({ store } = {}) {
     showToast(message, { tone: 'danger' });
   });
 
+  renderRoleRows(1);
   renderTables();
   return root;
 }

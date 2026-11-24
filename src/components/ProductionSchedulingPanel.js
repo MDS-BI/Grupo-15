@@ -1,12 +1,14 @@
 import { escapeHtml, el, formatLocalDate, orderStatusBadge, PRIORITY_LABEL } from './format.js';
 import { icon } from './icons.js';
 import { showToast } from './Toast.js';
+import { confirmDialog } from './ConfirmDialog.js';
 import { CalendarEventDialog } from './calendar/CalendarEventDialog.js';
 import {
   DEFAULT_CALENDAR_FILTER,
   canViewOrderDetails,
   filterCalendarEvents,
 } from '../domain/calendar-scheduling.js';
+import { canResolveScheduledMaintenance, isResolvedMaintenance } from '../domain/maintenance.js';
 
 const MENU_ROLES = new Set(['planner', 'plant_manager', 'supervisor']);
 const TRAY_ROLES = new Set(['planner', 'plant_manager']);
@@ -187,8 +189,7 @@ export function ProductionSchedulingPanel(store, options = {}) {
           </label>
         </div>
         <div class="executive-summary" data-role="executive-summary" hidden></div>
-        <div class="calendar-layout">
-          <aside class="pending-tray" data-role="pending-tray" hidden></aside>
+        <div class="calendar-layout" data-role="calendar-layout">
           <div class="calendar-main" data-role="calendar-main">
             <div class="calendar-weekdays">
               ${WEEKDAYS.map((day) => `<span>${day}</span>`).join('')}
@@ -198,6 +199,7 @@ export function ProductionSchedulingPanel(store, options = {}) {
               Clic derecho para salir del modo selección de horario.
             </p>
           </div>
+          <aside class="pending-tray" data-role="pending-tray" hidden></aside>
         </div>
         <div class="scheduling-focus-backdrop" data-role="focus-backdrop" hidden></div>
         <div class="scheduling-floating-card" data-role="floating-card" hidden>
@@ -206,48 +208,17 @@ export function ProductionSchedulingPanel(store, options = {}) {
         </div>
       </div>
       <article class="panel" id="list-view" data-role="list-view" hidden>
-        <div class="panel__body">
-          <div class="filter-row">
-            <label class="inline-field">Estado
-              <select data-role="filter-status">
-                <option value="">Abiertas</option>
-                <option value="planned">Planificada</option>
-                <option value="released">Liberada</option>
-                <option value="in_progress">En Proceso</option>
-                <option value="completed">Completada</option>
-                <option value="cancelled">Cancelada</option>
-              </select>
-            </label>
-            <label class="inline-field">Desde
-              <input type="date" data-role="filter-from" />
-            </label>
-            <label class="inline-field">Hasta
-              <input type="date" data-role="filter-to" />
-            </label>
-          </div>
-          <div class="table-wrap">
-            <table class="data-table">
-              <thead>
-                <tr><th>Orden</th><th>Producto</th><th>Estado</th><th>Prioridad</th><th>Inicio</th><th>Término</th><th></th></tr>
-              </thead>
-              <tbody data-role="rows"></tbody>
-            </table>
-          </div>
-          <p class="empty-note" data-role="empty" hidden>Sin órdenes para los filtros seleccionados.</p>
-        </div>
+        <div class="panel__body" data-role="list-content"></div>
       </article>
     </section>`);
 
   const calendarView = root.querySelector('[data-role="calendar-view"]');
   const listView = root.querySelector('[data-role="list-view"]');
-  const rowsEl = root.querySelector('[data-role="rows"]');
-  const emptyEl = root.querySelector('[data-role="empty"]');
-  const statusFilter = root.querySelector('[data-role="filter-status"]');
-  const fromFilter = root.querySelector('[data-role="filter-from"]');
-  const toFilter = root.querySelector('[data-role="filter-to"]');
+  const listContentEl = root.querySelector('[data-role="list-content"]');
   const monthLabelEl = root.querySelector('[data-month-label]');
   const kindFilter = root.querySelector('[data-role="calendar-filter"]');
   const executiveSummaryEl = root.querySelector('[data-role="executive-summary"]');
+  const layoutEl = root.querySelector('[data-role="calendar-layout"]');
   const trayEl = root.querySelector('[data-role="pending-tray"]');
   const mainEl = root.querySelector('[data-role="calendar-main"]');
   const gridEl = root.querySelector('[data-role="calendar-grid"]');
@@ -255,6 +226,8 @@ export function ProductionSchedulingPanel(store, options = {}) {
   const backdropEl = root.querySelector('[data-role="focus-backdrop"]');
   const floatingEl = root.querySelector('[data-role="floating-card"]');
   const filters = { status: '', dateFrom: '', dateTo: '' };
+  const maintenanceFilters = { search: '', status: 'todos' };
+  let listMode = null;
   let dayMenuModal = null;
   let popupModal = null;
   let eventModal = null;
@@ -351,7 +324,9 @@ export function ProductionSchedulingPanel(store, options = {}) {
   }
 
   function renderTray() {
-    if (!TRAY_ROLES.has(role)) {
+    const withTray = TRAY_ROLES.has(role);
+    layoutEl.classList.toggle('calendar-layout--with-tray', withTray);
+    if (!withTray) {
       trayEl.hidden = true;
       trayEl.innerHTML = '';
       return;
@@ -475,12 +450,24 @@ export function ProductionSchedulingPanel(store, options = {}) {
                 )
                 .join('')
             : '<p class="empty-note">Sin tareas para este día.</p>'
+        }
+        ${
+          role === 'supervisor'
+            ? '<button type="button" class="btn btn--tiny calendar-day-menu__supervision" data-role="supervision-shortcut">Ir a Supervisión de línea</button>'
+            : ''
         }`,
       onClose: () => {
         state.dayMenuDate = null;
+        state.selectedEventId = null;
         dayMenuModal = null;
       },
       onClick: (event, close) => {
+        const shortcut = event.target.closest('[data-role="supervision-shortcut"]');
+        if (shortcut) {
+          const location = modal.ownerDocument?.defaultView?.location || globalThis.location;
+          if (location) location.hash = '#/supervision';
+          return;
+        }
         const item = event.target.closest('[data-event-id]');
         if (!item) return;
         state.selectedEventId = item.dataset.eventId;
@@ -499,11 +486,6 @@ export function ProductionSchedulingPanel(store, options = {}) {
       role,
       store,
       operatorId,
-      onBack: () => {
-        state.selectedEventId = null;
-        state.dayMenuDate = event.start_date;
-        renderCalendar();
-      },
       onClose: () => {
         state.selectedEventId = null;
         state.dayMenuDate = null;
@@ -622,12 +604,129 @@ export function ProductionSchedulingPanel(store, options = {}) {
     renderPopup();
   }
 
+  function productionListMarkup() {
+    return `
+      <div class="filter-row">
+        <label class="inline-field">Estado
+          <select data-role="filter-status">
+            <option value="">Abiertas</option>
+            <option value="planned">Planificada</option>
+            <option value="released">Liberada</option>
+            <option value="in_progress">En Proceso</option>
+            <option value="completed">Completada</option>
+            <option value="cancelled">Cancelada</option>
+          </select>
+        </label>
+        <label class="inline-field">Desde
+          <input type="date" data-role="filter-from" />
+        </label>
+        <label class="inline-field">Hasta
+          <input type="date" data-role="filter-to" />
+        </label>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr><th>Orden</th><th>Producto</th><th>Estado</th><th>Prioridad</th><th>Inicio</th><th>Término</th><th></th></tr>
+          </thead>
+          <tbody data-role="rows"></tbody>
+        </table>
+      </div>
+      <p class="empty-note" data-role="empty" hidden>Sin órdenes para los filtros seleccionados.</p>`;
+  }
+
+  function maintenanceListMarkup() {
+    return `
+      <h2 data-role="maintenance-list-title">Mantenimientos activos</h2>
+      <div class="filter-row">
+        <label class="inline-field">Buscar
+          <input type="search" data-role="maintenance-list-search" aria-label="Buscar mantenciones" placeholder="Buscar mantención o máquina" />
+        </label>
+        <label class="inline-field">Vigencia
+          <select data-role="maintenance-list-status">
+            <option value="todos">Todos</option>
+            <option value="vigentes">Vigentes</option>
+            <option value="vencidos">Vencidos</option>
+          </select>
+        </label>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr><th>Mantención</th><th>Máquina</th><th>Vigencia</th><th>Inicio</th><th>Fecha visible</th><th></th></tr>
+          </thead>
+          <tbody data-role="maintenance-rows"></tbody>
+        </table>
+      </div>
+      <p class="empty-note" data-role="empty" hidden>Sin mantenciones activas para los filtros seleccionados.</p>`;
+  }
+
+  function ensureListMode(mode) {
+    if (listMode === mode) return;
+    listMode = mode;
+    listContentEl.innerHTML =
+      mode === 'maintenance' ? maintenanceListMarkup() : productionListMarkup();
+  }
+
+  function maintenanceSearchText(event) {
+    return [event.title, event.work_center_name, event.work_center_id, event.sourceId]
+      .filter(Boolean)
+      .join(' ');
+  }
+
+  function renderMaintenanceRows() {
+    const search = String(maintenanceFilters.search || '')
+      .trim()
+      .toLowerCase();
+    const events = typeof store.maintenanceFeed === 'function' ? store.maintenanceFeed() : [];
+    const active = events.filter((event) => !isResolvedMaintenance(event));
+    const filtered = active.filter((event) => {
+      if (maintenanceFilters.status === 'vigentes') return !event.is_overdue;
+      if (maintenanceFilters.status === 'vencidos') return Boolean(event.is_overdue);
+      return true;
+    });
+    const rows = filtered.filter((event) =>
+      maintenanceSearchText(event).toLowerCase().includes(search),
+    );
+    const tbody = listContentEl.querySelector('[data-role="maintenance-rows"]');
+    const empty = listContentEl.querySelector('[data-role="empty"]');
+    empty.hidden = rows.length > 0;
+    tbody.innerHTML = rows
+      .map((event) => {
+        const id = escapeHtml(event.id);
+        const canResolve = canResolveScheduledMaintenance(event);
+        return `<tr data-maintenance-row="${id}">
+          <td class="maint-code"><strong>${escapeHtml(event.title || event.sourceId || '—')}</strong></td>
+          <td>${escapeHtml(event.work_center_name || event.work_center_id || '—')}</td>
+          <td>${event.is_overdue ? 'Vencida' : 'Vigente'}</td>
+          <td class="maint-date">${escapeHtml(formatLocalDate(event.start_date || event.scheduled_start_date))}</td>
+          <td class="maint-date">${escapeHtml(
+            formatLocalDate(event.visible_end_date || event.end_date || event.scheduled_end_date),
+          )}</td>
+          <td class="row-actions">
+            <button type="button" class="btn btn--tiny btn--primary" data-resolve-scheduled="${id}" ${
+              canResolve ? '' : 'disabled'
+            }>Resolver</button>
+          </td>
+        </tr>`;
+      })
+      .join('');
+  }
+
   function renderRows() {
+    if (role === 'maintenance') {
+      ensureListMode('maintenance');
+      renderMaintenanceRows();
+      return;
+    }
+    ensureListMode('orders');
     const orders = store.ordersForScheduling({
       status: filters.status || null,
       dateFrom: filters.dateFrom || null,
       dateTo: filters.dateTo || null,
     });
+    const rowsEl = listContentEl.querySelector('[data-role="rows"]');
+    const emptyEl = listContentEl.querySelector('[data-role="empty"]');
     emptyEl.hidden = orders.length > 0;
     rowsEl.innerHTML = orders
       .map((order) => {
@@ -650,7 +749,25 @@ export function ProductionSchedulingPanel(store, options = {}) {
       .join('');
   }
 
+  async function resolveMaintenance(id) {
+    const confirmed = await confirmDialog({
+      title: 'Resolver mantención',
+      message: '¿Está seguro que quiere resolver esta mantención?',
+      confirmLabel: 'Resolver',
+    });
+    if (!confirmed) return;
+    try {
+      store.resolveScheduledMaintenance(id, { resolvedAt: new Date().toISOString() }, role);
+      showToast('Mantención resuelta', { tone: 'success' });
+      renderRows();
+      renderCalendar();
+    } catch (err) {
+      showToast(err.message, { tone: 'danger' });
+    }
+  }
+
   function saveListDates(orderId, clear = false) {
+    const rowsEl = listContentEl.querySelector('[data-role="rows"]');
     const startInput = rowsEl.querySelector(`[data-date="start"][data-order="${orderId}"]`);
     const endInput = rowsEl.querySelector(`[data-date="end"][data-order="${orderId}"]`);
     const errorEl = rowsEl.querySelector(`[data-error="${orderId}"]`);
@@ -727,7 +844,7 @@ export function ProductionSchedulingPanel(store, options = {}) {
     renderRows();
   }
 
-  root.addEventListener('click', (event) => {
+  root.addEventListener('click', async (event) => {
     const target = event.target;
     if (state.suppressDayClick) {
       state.suppressDayClick = false;
@@ -746,6 +863,11 @@ export function ProductionSchedulingPanel(store, options = {}) {
       state.dayMenuDate = null;
       state.selectedEventId = null;
       renderCalendar();
+      return;
+    }
+    const resolveButton = target.closest('[data-resolve-scheduled]');
+    if (resolveButton) {
+      await resolveMaintenance(resolveButton.dataset.resolveScheduled);
       return;
     }
     const eventButton = target.closest('[data-event-id]');
@@ -795,18 +917,28 @@ export function ProductionSchedulingPanel(store, options = {}) {
       renderCalendar();
       return;
     }
-    if (target === statusFilter) {
+    if (target.matches('[data-role="filter-status"]')) {
       filters.status = target.value;
       renderRows();
       return;
     }
-    if (target === fromFilter) {
+    if (target.matches('[data-role="filter-from"]')) {
       filters.dateFrom = target.value;
       renderRows();
       return;
     }
-    if (target === toFilter) {
+    if (target.matches('[data-role="filter-to"]')) {
       filters.dateTo = target.value;
+      renderRows();
+      return;
+    }
+    if (target.matches('[data-role="maintenance-list-search"]')) {
+      maintenanceFilters.search = target.value;
+      renderRows();
+      return;
+    }
+    if (target.matches('[data-role="maintenance-list-status"]')) {
+      maintenanceFilters.status = target.value;
       renderRows();
       return;
     }
@@ -833,6 +965,12 @@ export function ProductionSchedulingPanel(store, options = {}) {
         showToast(err.message, { tone: 'danger' });
       }
     }
+  });
+
+  root.addEventListener('input', (event) => {
+    if (!event.target.matches('[data-role="maintenance-list-search"]')) return;
+    maintenanceFilters.search = event.target.value;
+    renderRows();
   });
 
   root.addEventListener('mousemove', (event) => {

@@ -139,7 +139,7 @@ function currentCalendarMonth() {
  * @returns {HTMLElement}
  */
 export function MaintenancePanel(store, { role = 'maintenance' } = {}) {
-  let activeTab = 'machines';
+  let activeTab = 'maintenances';
   let selectedTicketId = null;
   let selectedMachineId = null;
   let calendarMonth = currentCalendarMonth();
@@ -158,18 +158,18 @@ export function MaintenancePanel(store, { role = 'maintenance' } = {}) {
       </header>
 
       <nav class="maintenance-tabs" role="tablist" aria-label="Secciones de mantenimiento">
-        <button type="button" class="maintenance-tabs__tab" role="tab" data-role="maintenance-tab" data-tab="machines" aria-selected="true">
+        <button type="button" class="maintenance-tabs__tab" role="tab" data-role="maintenance-tab" data-tab="maintenances" aria-selected="true">
+          <span class="maintenance-tabs__icon">${icon('scheduling')}</span><span>Mantenimientos</span>
+        </button>
+        <button type="button" class="maintenance-tabs__tab" role="tab" data-role="maintenance-tab" data-tab="machines" aria-selected="false">
           <span class="maintenance-tabs__icon">${icon('maintenance')}</span><span>Máquinas</span>
         </button>
         <button type="button" class="maintenance-tabs__tab" role="tab" data-role="maintenance-tab" data-tab="tickets" aria-selected="false">
           <span class="maintenance-tabs__icon">${icon('orders')}</span><span>Tickets</span>
         </button>
-        <button type="button" class="maintenance-tabs__tab" role="tab" data-role="maintenance-tab" data-tab="maintenances" aria-selected="false">
-          <span class="maintenance-tabs__icon">${icon('scheduling')}</span><span>Mantenimientos</span>
-        </button>
       </nav>
 
-      <div class="maintenance-tabpanel" data-role="maintenance-tabpanel" data-panel="machines" role="tabpanel">
+      <div class="maintenance-tabpanel" data-role="maintenance-tabpanel" data-panel="machines" role="tabpanel" hidden>
         <div class="maintenance-machines-layout" data-role="machines-layout">
           <section class="panel maintenance-machines-list" data-role="machines-list">
             <header class="panel__header">
@@ -195,12 +195,7 @@ export function MaintenancePanel(store, { role = 'maintenance' } = {}) {
             </header>
             <div class="panel__body">
               <div data-role="machine-alert" aria-live="polite"></div>
-              <div class="table-wrap">
-                <table class="data-table data-table--compact">
-                  <thead><tr><th>Máquina</th><th>Código</th><th>Sección</th><th>Estado</th><th>Frecuencia recomendada</th><th>Desgaste</th></tr></thead>
-                  <tbody data-role="machine-list"></tbody>
-                </table>
-              </div>
+              <div class="machine-list" data-role="machine-list"></div>
             </div>
           </section>
           <section class="panel maintenance-machine-detail" data-role="machine-detail" tabindex="-1" aria-live="polite"></section>
@@ -234,7 +229,7 @@ export function MaintenancePanel(store, { role = 'maintenance' } = {}) {
         <section class="panel maintenance-ticket-detail" data-role="ticket-detail"></section>
       </div>
 
-      <div class="maintenance-tabpanel" data-role="maintenance-tabpanel" data-panel="maintenances" role="tabpanel" hidden>
+      <div class="maintenance-tabpanel" data-role="maintenance-tabpanel" data-panel="maintenances" role="tabpanel">
         <section class="panel maintenance-block" data-role="maintenance-block-active">
           <header class="panel__header" data-role="maintenance-block-search" data-block="active">
             <h2>Mantenimientos activos</h2>
@@ -357,25 +352,18 @@ export function MaintenancePanel(store, { role = 'maintenance' } = {}) {
     machinesLayoutEl.classList.toggle('is-selected', Boolean(selectedMachineId));
 
     if (machines.length === 0) {
-      machineListEl.innerHTML = `<tr><td colspan="6" class="empty-cell">Sin máquinas para la búsqueda.</td></tr>`;
+      machineListEl.innerHTML = `<p class="empty-cell">Sin máquinas para la búsqueda.</p>`;
       return;
     }
     machineListEl.innerHTML = machines
       .map((wc) => {
-        const wear = deriveWearIndicator(store.maintenanceTickets, wc.id);
         const selected = wc.id === selectedMachineId;
-        return `<tr class="${selected ? 'is-selected' : ''}" data-role="machine-row" data-machine-id="${escapeHtml(
+        return `<div class="machine-row${selected ? ' is-selected' : ''}" data-role="machine-row" data-machine-id="${escapeHtml(
           wc.id,
         )}" data-center="${escapeHtml(wc.id)}" tabindex="0" aria-expanded="${selected}">
-          <td><strong>${escapeHtml(wc.name)}</strong></td>
-          <td class="maint-code">${escapeHtml(wc.code || '—')}</td>
-          <td>${escapeHtml(wc.station_type || '—')}</td>
-          <td>${operationalBadge(wc.operational_status)}</td>
-          <td>${frequencyControl(wc, canEditMaintenanceFrequency(role))}</td>
-          <td>${wearBadge(wear.wear_level)} · ${fmtNumber(wear.failure_count)} falla(s) · ${formatDurationLong(
-            wear.total_downtime_minutes,
-          )}</td>
-        </tr>`;
+          <span class="machine-row__name">${escapeHtml(wc.name)}</span>
+          <span class="machine-row__code">${escapeHtml(wc.code || '—')}</span>
+        </div>`;
       })
       .join('');
   }
@@ -468,35 +456,6 @@ export function MaintenancePanel(store, { role = 'maintenance' } = {}) {
         <strong data-role="machine-calendar-label">${escapeHtml(label)}</strong>
         <button type="button" class="btn btn--tiny" data-machine-calendar-nav="next" aria-label="Mes siguiente">›</button>
       </header>
-      <div class="table-wrap">
-        <table class="machine-calendar__grid">
-          <thead><tr>${calendar.columns
-            .map(
-              (column) =>
-                `<th class="machine-calendar__weekday" scope="col">${escapeHtml(column)}</th>`,
-            )
-            .join('')}</tr></thead>
-          <tbody>
-            ${calendar.weeks
-              .map(
-                (week) =>
-                  `<tr>${week
-                    .map(
-                      (cell) =>
-                        `<td class="machine-calendar__cell machine-calendar__cell--${escapeHtml(
-                          cell.status,
-                        )}${cell.inMonth ? '' : ' is-outside'}" data-machine-calendar-cell data-date="${escapeHtml(
-                          cell.date,
-                        )}" data-status="${escapeHtml(cell.status)}" title="${escapeHtml(
-                          cell.date,
-                        )}">${cell.day}</td>`,
-                    )
-                    .join('')}</tr>`,
-              )
-              .join('')}
-          </tbody>
-        </table>
-      </div>
       <div class="machine-calendar__legend">
         ${CALENDAR_LEGEND.map(
           ([status, labelText]) =>
@@ -504,6 +463,24 @@ export function MaintenancePanel(store, { role = 'maintenance' } = {}) {
               status,
             )}"></span>${escapeHtml(labelText)}</span>`,
         ).join('')}
+      </div>
+      <div class="machine-calendar__grid">
+        ${calendar.columns
+          .map((column) => `<div class="machine-calendar__weekday">${escapeHtml(column)}</div>`)
+          .join('')}
+        ${calendar.weeks
+          .flat()
+          .map(
+            (cell) =>
+              `<div class="machine-calendar__cell machine-calendar__cell--${escapeHtml(
+                cell.status,
+              )}${cell.inMonth ? '' : ' is-outside'}" data-machine-calendar-cell data-date="${escapeHtml(
+                cell.date,
+              )}" data-status="${escapeHtml(cell.status)}" title="${escapeHtml(
+                cell.date,
+              )}">${cell.day}</div>`,
+          )
+          .join('')}
       </div>`;
   }
 
@@ -531,7 +508,7 @@ export function MaintenancePanel(store, { role = 'maintenance' } = {}) {
     ticketListEl.innerHTML = tickets
       .map((ticket) => {
         const active = ticket.id === selectedTicketId ? 'is-selected' : '';
-        return `<tr class="${active}" data-ticket-row="${escapeHtml(ticket.id)}" tabindex="0" aria-expanded="${
+        return `<tr class="maintenance-ticket-row ${active}" data-ticket-row="${escapeHtml(ticket.id)}" tabindex="0" aria-expanded="${
           ticket.id === selectedTicketId
         }">
           <td class="maint-code"><strong>${escapeHtml(ticket.ticket_code)}</strong></td>

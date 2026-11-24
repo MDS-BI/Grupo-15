@@ -44,10 +44,10 @@ function detailRow(label, value) {
 }
 
 /**
- * @param {{event:Object, role?:string, store:Object, onBack?:Function, onClose?:Function}} options
+ * @param {{event:Object, role?:string, store:Object, onClose?:Function}} options
  * @returns {HTMLElement}
  */
-export function CalendarEventDialog({ event, role = 'planner', store, onBack, onClose } = {}) {
+export function CalendarEventDialog({ event, role = 'planner', store, onClose } = {}) {
   const isOrder = event?.kind === 'order';
   const isMaintenance = event?.kind === 'maintenance';
   const maintenanceResolved = isMaintenance && isResolvedMaintenance(event);
@@ -85,9 +85,13 @@ export function CalendarEventDialog({ event, role = 'planner', store, onBack, on
           <p class="calendar-dialog__kind">${icon(isOrder ? 'scheduling' : 'maintenance')} ${escapeHtml(kindLabel)}</p>
           <h2>${escapeHtml(event?.title || 'Sin tarea')}</h2>
         </div>
-        <button type="button" class="btn btn--tiny" data-role="event-back">Volver a la lista del día</button>
       </header>
       <div class="calendar-dialog__body">
+        ${
+          role === 'supervisor'
+            ? '<div class="calendar-dialog__supervision"><button type="button" class="btn btn--tiny" data-role="supervision-shortcut">Ir a Supervisión de línea</button></div>'
+            : ''
+        }
         <dl class="calendar-dialog__details">
           ${detailRow('Fecha', `${escapeHtml(formatLocalDate(event?.start_date))} al ${escapeHtml(formatLocalDate(event?.end_date))}`)}
           ${detailRow('Horario', `${escapeHtml(event?.start_time || '08:00')} - ${escapeHtml(event?.end_time || '16:00')}`)}
@@ -193,9 +197,17 @@ export function CalendarEventDialog({ event, role = 'planner', store, onBack, on
   document.body.appendChild(backdrop);
   document.addEventListener('keydown', onKeyDown);
 
-  root.querySelector('[data-role="event-back"]').addEventListener('click', () => {
-    close(onBack);
-  });
+  backdrop
+    .querySelector('[data-role="event-dialog-close"]')
+    .addEventListener('click', () => close(onClose));
+
+  const supervisionShortcut = root.querySelector('[data-role="supervision-shortcut"]');
+  if (supervisionShortcut) {
+    supervisionShortcut.addEventListener('click', () => {
+      const location = root.ownerDocument?.defaultView?.location || globalThis.location;
+      if (location) location.hash = '#/supervision';
+    });
+  }
 
   if (canResolveMaintenance) {
     const area = root.querySelector('[data-role="resolve-area"]');

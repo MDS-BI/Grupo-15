@@ -70,6 +70,59 @@ describe('Panel de administración de roles', () => {
     ).toBe(true);
   });
 
+  it('permite inscribir un usuario en hasta cinco roles únicos y reinicia el formulario', () => {
+    const form = document.querySelector('[data-role="admin-add-form"]');
+    const rows = () => [...form.querySelectorAll('[data-role="admin-role-row"]')];
+    const addRole = form.querySelector('[data-role="admin-add-role"]');
+
+    expect(rows()).toHaveLength(1);
+    expect(rows()[0].querySelector('label > span').textContent.trim()).toBe('Rol');
+    expect(addRole.textContent.trim()).toBe('+');
+
+    for (let index = 2; index <= 5; index += 1) {
+      addRole.click();
+      expect(rows()).toHaveLength(index);
+      expect(rows().at(-1).querySelector('label > span').textContent.trim()).toBe(`Rol ${index}`);
+    }
+    expect(addRole.disabled).toBe(true);
+
+    form.querySelector('[data-role="admin-new-username"]').value = '  Multi  ';
+    const values = ['planner', 'maintenance', 'operator', 'planner', 'supervisor'];
+    rows().forEach((row, index) => {
+      row.querySelector('[data-role="admin-new-role"]').value = values[index];
+    });
+    submit(form);
+
+    const expectedRoles = CANONICAL_ROLES.filter((role) => values.includes(role));
+    expect(store.rolesForUsername('multi')).toEqual(expectedRoles);
+    for (const role of expectedRoles) {
+      const row = store.roleUsersFor(role).find((entry) => entry.username === 'multi');
+      expect(row.password).toBe('multi');
+    }
+    expect(new ManufacturingStore({ storage }).rolesForUsername('multi')).toEqual(expectedRoles);
+    expect(document.querySelector('#toast-region').textContent).toContain('Usuario agregado');
+    expect(rows()).toHaveLength(1);
+    expect(form.querySelector('[data-role="admin-new-username"]').value).toBe('');
+    expect(addRole.disabled).toBe(false);
+  });
+
+  it('quita filas de roles adicionales sin dejar la última sin desplegable', () => {
+    const form = document.querySelector('[data-role="admin-add-form"]');
+    const addRole = form.querySelector('[data-role="admin-add-role"]');
+    addRole.click();
+    addRole.click();
+    expect(form.querySelectorAll('[data-role="admin-role-row"]')).toHaveLength(3);
+
+    const removeButtons = () => [...form.querySelectorAll('[data-role="admin-remove-role"]')];
+    expect(removeButtons()).toHaveLength(2);
+    removeButtons()[1].click();
+    expect(form.querySelectorAll('[data-role="admin-role-row"]')).toHaveLength(2);
+    removeButtons()[0].click();
+    expect(form.querySelectorAll('[data-role="admin-role-row"]')).toHaveLength(1);
+    expect(form.querySelector('[data-role="admin-remove-role"]')).toBeNull();
+    expect(addRole.disabled).toBe(false);
+  });
+
   it('asigna roles adicionales y persiste de inmediato', () => {
     const form = document.querySelector('[data-role="admin-assign-form"]');
     form.querySelector('[data-role="admin-existing-username"]').value = 'operador';

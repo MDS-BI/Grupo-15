@@ -291,7 +291,7 @@ describe('Calendario mensual por rol (US-13)', () => {
     expect(document.querySelector('[data-role="schedule-popup"]')).toBeNull();
   });
 
-  it('abre el menú diario por tarea y permite volver a la lista del día', () => {
+  it('abre el menú diario por tarea y cierra el detalle sin volver al menú', () => {
     mountScheduling('supervisor');
     const chip = document.querySelector('[data-event-kind]');
     expect(chip).toBeTruthy();
@@ -305,13 +305,14 @@ describe('Calendario mensual por rol (US-13)', () => {
     click(`[data-event-id="${eventId}"]`);
     const dialog = document.querySelector('[data-role="event-dialog"]');
     expect(dialog).toBeTruthy();
-    expect(dialog.textContent).toContain('Volver a la lista del día');
+    expect(dialog.textContent).not.toContain('Volver a la lista del día');
+    expect(dialog.querySelector('[data-role="event-back"]')).toBeNull();
     expect(
       dialog.querySelector('input, select, textarea, [data-schedule-save], [data-dialog-save]'),
     ).toBeNull();
 
-    click('[data-role="event-back"]');
-    expect(document.querySelector('[data-role="day-menu"]')).toBeTruthy();
+    click('[data-role="event-dialog-close"]');
+    expect(document.querySelector('[data-role="day-menu"]')).toBeNull();
     expect(document.querySelector('[data-role="event-dialog"]')).toBeNull();
   });
 
@@ -385,26 +386,35 @@ describe('Calendario mensual por rol (US-13)', () => {
 describe('Distribución ancha del calendario (US-13 / AC-91)', () => {
   const roles = ['plant_manager', 'planner', 'supervisor', 'operator', 'maintenance'];
 
-  it('sitúa la bandeja antes de .calendar-main y conserva su visibilidad por rol', () => {
+  it('sitúa la bandeja después de .calendar-main y conserva su visibilidad por rol', () => {
     for (const role of roles) {
       document.body.innerHTML = '';
       mountScheduling(role, { operatorId: 'emp_op_01' });
-      const children = [...document.querySelector('.calendar-layout').children];
+      const layout = document.querySelector('.calendar-layout');
+      const children = [...layout.children];
       const tray = children.find((node) => node.classList.contains('pending-tray'));
       const main = children.find((node) => node.classList.contains('calendar-main'));
+      const withTray = ['planner', 'plant_manager'].includes(role);
       expect(tray, `bandeja ausente para ${role}`).toBeTruthy();
       expect(main, `calendario ausente para ${role}`).toBeTruthy();
-      expect(children.indexOf(tray)).toBeLessThan(children.indexOf(main));
-      expect(tray.hidden).toBe(!['planner', 'plant_manager'].includes(role));
+      expect(children.indexOf(tray)).toBeGreaterThan(children.indexOf(main));
+      expect(tray.hidden).toBe(!withTray);
+      expect(layout.classList.contains('calendar-layout--with-tray')).toBe(withTray);
       expect(document.querySelectorAll('.calendar-day').length).toBeGreaterThan(27);
     }
   });
 
-  it('define .calendar-layout de una sola columna y .calendar-main al 100 %', () => {
+  it('define una columna sin bandeja, dos con bandeja y tarjetas verticales', () => {
     expect(cssRule('.calendar-layout')).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)/);
     expect(cssRule('.calendar-layout')).not.toMatch(/minmax\(\s*\d+px/);
+    expect(cssRule('.calendar-layout--with-tray')).toMatch(
+      /grid-template-columns:\s*minmax\(0,\s*1fr\)\s+280px/,
+    );
     expect(cssRule('.calendar-main')).toMatch(/width:\s*100%/);
     expect(cssRule('.pending-tray')).toMatch(/display:\s*flex/);
+    expect(cssRule('.pending-tray')).toMatch(/flex-direction:\s*column/);
+    expect(cssRule('.pending-tray__row')).toMatch(/border:\s*1px/);
+    expect(cssRule('.pending-tray__row')).toMatch(/border-radius:\s*\d+px/);
     expect(cssRule('.calendar-day')).toMatch(/min-height:\s*(?:9[6-9]|[1-9]\d{2,})px/);
   });
 });

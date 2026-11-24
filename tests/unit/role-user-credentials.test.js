@@ -108,6 +108,53 @@ describe('Baja de usuarios por rol', () => {
   });
 });
 
+describe('Alta de usuarios con roles múltiples', () => {
+  it('crea un usuario en todas las tablas válidas con dedupe, contraseña y persistencia única', () => {
+    const storage = memoryStorage();
+    const store = new ManufacturingStore({ storage });
+    const onChange = vi.fn();
+    store.addEventListener('change', onChange);
+
+    const created = store.createUserWithRoles('  Multi  ', [
+      'planner',
+      'planner',
+      'inventado',
+      'maintenance',
+      'operator',
+    ]);
+
+    const expectedRoles = ['planner', 'maintenance', 'operator'];
+    expect(created.map((row) => row.username)).toEqual(['multi', 'multi', 'multi']);
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect([...store.rolesForUsername('multi')].sort()).toEqual([...expectedRoles].sort());
+    for (const role of expectedRoles) {
+      const row = store.roleUsersFor(role).find((entry) => entry.username === 'multi');
+      expect(row.password).toBe('multi');
+    }
+
+    const snapshot = JSON.parse(storage.getItem(SNAPSHOT_KEY));
+    expect(snapshot.version).toBe(2);
+    const persisted = roleUsersFrom(storage);
+    for (const role of expectedRoles) {
+      expect(persisted[role].find((row) => row.username === 'multi').password).toBe('multi');
+    }
+    expect([...new ManufacturingStore({ storage }).rolesForUsername('multi')].sort()).toEqual(
+      [...expectedRoles].sort(),
+    );
+  });
+
+  it('no muta ni persiste cuando no hay usuario o no hay roles válidos', () => {
+    const storage = memoryStorage();
+    const store = new ManufacturingStore({ storage });
+    const before = storage.getItem(SNAPSHOT_KEY);
+
+    expect(store.createUserWithRoles('   ', ['planner'])).toEqual([]);
+    expect(store.createUserWithRoles('multi', ['inventado'])).toEqual([]);
+    expect(store.rolesForUsername('multi')).toEqual([]);
+    expect(storage.getItem(SNAPSHOT_KEY)).toBe(before);
+  });
+});
+
 describe('Cambio de contraseña persistente', () => {
   it('actualiza la credencial en todas las tablas del usuario y la acepta authenticate', () => {
     const storage = memoryStorage();

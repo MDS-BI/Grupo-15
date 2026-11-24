@@ -78,6 +78,15 @@ function currentMonthKey() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
+const cssText = readFileSync(resolve('src/styles/manufacturing.css'), 'utf8');
+
+function cssRule(selector) {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = cssText.match(new RegExp(`${escaped}\\s*\\{([^}]*)\\}`, 'm'));
+  expect(match, `Regla CSS no encontrada: ${selector}`).toBeTruthy();
+  return match[1];
+}
+
 function scheduleTicket(ticketId = 'mt_1001') {
   activateTab('tickets');
   click(`[data-schedule-ticket="${ticketId}"]`);
@@ -104,17 +113,48 @@ afterEach(() => {
 });
 
 describe('Panel de mantenimiento · cabecera y máquinas (T242, T266-T271)', () => {
-  it('elimina los filtros globales y conserva las tres subpestañas', () => {
+  it('elimina los filtros globales y ordena las subpestañas con Mantenimientos activa', () => {
     expect(document.querySelector('.maintenance-filters')).toBeNull();
     expect(document.querySelector('[data-role="filter-status"]')).toBeNull();
     expect(document.querySelector('[data-role="filter-priority"]')).toBeNull();
     expect(document.querySelector('[data-role="filter-work-center"]')).toBeNull();
     expect(document.querySelector('.view__header h1').textContent).toBe('Mantenimiento');
-    expect(
-      [...document.querySelectorAll('[data-role="maintenance-tab"]')].map((tab) =>
-        tab.textContent.trim(),
-      ),
-    ).toEqual(['Máquinas', 'Tickets', 'Mantenimientos']);
+    const tabs = [...document.querySelectorAll('[data-role="maintenance-tab"]')];
+    expect(tabs.map((tab) => tab.textContent.trim())).toEqual([
+      'Mantenimientos',
+      'Máquinas',
+      'Tickets',
+    ]);
+    expect(tabs.map((tab) => tab.getAttribute('aria-selected'))).toEqual([
+      'true',
+      'false',
+      'false',
+    ]);
+    expect(document.querySelector('[data-panel="maintenances"]').hidden).toBe(false);
+    expect(document.querySelector('[data-panel="machines"]').hidden).toBe(true);
+  });
+
+  it('muestra máquinas en filas compactas con detalle solo en el panel derecho', () => {
+    activateTab('machines');
+    const rows = [...document.querySelectorAll('[data-role="machine-row"]')];
+    expect(rows.length).toBeGreaterThan(1);
+    for (const row of rows) {
+      expect(row.querySelectorAll('td')).toHaveLength(0);
+      expect(row.querySelector('.machine-row__name').textContent.trim()).not.toBe('');
+      expect(row.querySelector('.machine-row__code').textContent.trim()).not.toBe('');
+      expect(row.textContent).not.toContain('Sección');
+      expect(row.textContent).not.toContain('Frecuencia recomendada');
+      expect(row.textContent).not.toContain('Desgaste');
+    }
+
+    selectMachine('wc_solda');
+    const detail = document.querySelector('.maintenance-machine-detail');
+    expect(detail.textContent).toContain('Estado operativo');
+    expect(detail.textContent).toContain('Desgaste');
+    expect(detail.textContent).toContain('Cada cuánto se recomienda mantención');
+    expect(cssRule('.machine-row:hover')).toMatch(/background-color:\s*#/);
+    expect(cssRule('.maintenance-ticket-row:hover')).toMatch(/background-color:\s*#/);
+    expect(cssRule('.machine-row:hover')).not.toMatch(/transform|width|height/);
   });
 
   it('muestra dos paneles con el detalle vacío y la alerta dentro de la lista', () => {

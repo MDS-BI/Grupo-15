@@ -2267,7 +2267,8 @@ button {
 }
 
 .role-select-card:hover {
-  border-color: var(--erp-accent);
+  background-color: #eef2f7;
+  border-color: #94a3b8;
   box-shadow: 0 0 0 1px rgba(15, 98, 254, 0.2);
 }
 
@@ -2543,6 +2544,11 @@ button {
   cursor: pointer;
   font: inherit;
   text-align: left;
+}
+
+.role-card:hover {
+  background-color: #eef2f7;
+  border-color: #94a3b8;
 }
 
 .role-card.is-active {
@@ -2910,7 +2916,7 @@ textarea:focus-visible,
 }
 
 .role-select-card:hover {
-  transform: translateY(-3px);
+  background-color: #eef2f7;
   box-shadow: 0 10px 24px rgba(16, 24, 40, 0.12);
 }
 
@@ -3237,11 +3243,16 @@ select:not([hidden]) {
   align-items: start;
 }
 
+.calendar-layout--with-tray {
+  grid-template-columns: minmax(0, 1fr) 280px;
+}
+
 .pending-tray {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 1rem;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 0.5rem;
   width: 100%;
   padding: 0.55rem 0.75rem;
   border: 1px solid var(--erp-border);
@@ -3264,8 +3275,10 @@ select:not([hidden]) {
 .pending-tray__row {
   display: grid;
   gap: 0.45rem;
-  padding: 0.6rem 0;
-  border-top: 1px solid var(--erp-border);
+  padding: 0.6rem;
+  border: 1px solid var(--erp-border);
+  border-radius: 10px;
+  background: var(--erp-surface);
 }
 
 .pending-tray__main {
@@ -3492,6 +3505,19 @@ select:not([hidden]) {
 .calendar-day-menu__item small {
   margin-left: auto;
   color: var(--erp-muted);
+}
+
+.calendar-day-menu__item:hover {
+  background-color: #e5e7eb;
+}
+
+.calendar-day-menu__supervision {
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+.calendar-dialog__supervision {
+  padding-bottom: 0.75rem;
 }
 
 .calendar-dialog {
@@ -4011,6 +4037,63 @@ select:not([hidden]) {
   color: #b91c1c;
 }
 
+.role-admin__role-rows {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.role-admin__role-row {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.role-admin__role-control {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.role-admin__role-control select {
+  flex: 1;
+}
+
+.role-admin__add-role {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 6px;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.role-admin__add-role:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.role-admin__remove-role {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--erp-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--erp-text-muted);
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+}
+
+.role-admin__remove-role:hover {
+  background: rgba(220, 38, 38, 0.12);
+  color: #b91c1c;
+}
+
 .modal__close {
   position: absolute;
   top: 0.35rem;
@@ -4084,33 +4167,6 @@ select:not([hidden]) {
   font-size: 0.78rem;
 }
 
-.calendar-layout {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.pending-tray {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 1rem;
-  width: 100%;
-  padding: 0.55rem 0.75rem;
-}
-
-.pending-tray__header {
-  margin-bottom: 0;
-}
-
-.pending-tray__row {
-  display: flex;
-  flex: 1 1 280px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  padding: 0.25rem 0;
-  border-top: 0;
-}
-
 .calendar-main {
   z-index: 50;
   background: #fff;
@@ -4167,6 +4223,35 @@ select:not([hidden]) {
   min-width: 0;
 }
 
+.machine-list {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.machine-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--erp-border);
+  border-radius: 8px;
+  background: var(--erp-surface);
+  cursor: pointer;
+}
+
+.machine-row:hover {
+  background-color: #e5e7eb;
+}
+
+.machine-row.is-selected {
+  background-color: #e5e7eb;
+}
+
+.maintenance-ticket-row:hover {
+  background-color: #e5e7eb;
+}
+
 .maintenance-machine-detail:empty {
   display: none;
 }
@@ -4179,6 +4264,10 @@ select:not([hidden]) {
   display: block;
 }
 
+.machine-calendar {
+  max-width: 520px;
+}
+
 .machine-calendar__header {
   display: flex;
   align-items: center;
@@ -4188,10 +4277,10 @@ select:not([hidden]) {
 }
 
 .machine-calendar__grid {
+  display: grid;
   width: 100%;
-  table-layout: fixed;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  border-collapse: collapse;
+  gap: 4px;
   text-align: center;
 }
 
@@ -4202,10 +4291,12 @@ select:not([hidden]) {
 }
 
 .machine-calendar__cell {
-  height: 34px;
-  border: 1px solid var(--erp-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 2.5 / 1;
+  border-radius: 8px;
   font-size: 0.78rem;
-  vertical-align: middle;
 }
 
 .machine-calendar__cell.is-outside {

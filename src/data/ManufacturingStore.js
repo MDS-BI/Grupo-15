@@ -2252,6 +2252,33 @@ export class ManufacturingStore extends EventTarget {
     return clone(row);
   }
 
+  createUserWithRoles(username, roles) {
+    const normalized = normalizedUsername(username);
+    const uniqueRoles = [...new Set(Array.isArray(roles) ? roles : [])].filter((role) =>
+      CANONICAL_ROLES.includes(role),
+    );
+    if (!normalized || uniqueRoles.length === 0) return [];
+
+    const createdAt = new Date().toISOString();
+    const rows = uniqueRoles.map((role) => {
+      const property = ROLE_USER_PROPERTIES[role];
+      const existing = this[property].find((row) => row.username === normalized);
+      if (existing) return clone(existing);
+      const row = {
+        id: makeId('ru'),
+        company_id: 'cmp_1',
+        username: normalized,
+        password: normalized,
+        created_at: createdAt,
+      };
+      this[property].push(row);
+      return clone(row);
+    });
+    this.#persist();
+    this.#emit();
+    return rows;
+  }
+
   assignRoleToUser(username, role) {
     const property = ROLE_USER_PROPERTIES[role];
     const normalized = normalizedUsername(username);
