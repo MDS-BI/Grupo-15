@@ -242,8 +242,8 @@ describe('ManufacturingStore - US-10 planificación', () => {
 
   it('resume y ordena las órdenes para calendarización', () => {
     expect(store.orderScheduleSummary('2026-11-01')).toEqual({
-      planned: 7,
-      unplanned: 0,
+      planned: 11,
+      unplanned: 2,
       overdue: 3,
     });
     const openOrders = store.ordersForScheduling();
@@ -251,6 +251,8 @@ describe('ManufacturingStore - US-10 planificación', () => {
     expect(openOrders.map((order) => order.id)).not.toContain('po_3006');
     expect(store.ordersForScheduling({ status: 'planned' }).map((order) => order.id)).toEqual([
       'po_3004',
+      'po_3012',
+      'po_3013',
     ]);
   });
 

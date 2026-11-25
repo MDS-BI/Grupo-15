@@ -67,4 +67,40 @@ describe('Fechas relativas de la demo', () => {
       }
     }
   });
+
+  it('mantiene el dataset semilla vigente con fechas relativas de FR-21', () => {
+    const currentMonth = relativeDay(0).slice(0, 7);
+    const startWindow = new Set(Array.from({ length: 13 }, (_, index) => relativeDay(index - 2)));
+    const currentStarts = productionOrders.filter(
+      (order) =>
+        order.planned_start_date &&
+        startWindow.has(order.planned_start_date) &&
+        order.planned_start_date.startsWith(currentMonth),
+    );
+    const undatedOrders = productionOrders.filter(
+      (order) =>
+        order.status === 'planned' &&
+        order.planned_start_date === null &&
+        order.planned_end_date === null,
+    );
+    const scheduledTickets = maintenanceTickets.filter(
+      (ticket) =>
+        ticket.ticket_status !== 'resolved' &&
+        ticket.scheduled_start_date >= relativeDay(0) &&
+        ticket.scheduled_start_date <= relativeDay(2) &&
+        ticket.scheduled_end_date <= relativeDay(5),
+    );
+    const upcomingPreventives = preventiveMaintenanceOrders.filter(
+      (order) =>
+        order.status === 'planned' &&
+        order.planned_date >= relativeDay(2) &&
+        order.planned_date <= relativeDay(8),
+    );
+
+    expect(productionOrders.length).toBeGreaterThanOrEqual(13);
+    expect(currentStarts.length).toBeGreaterThanOrEqual(4);
+    expect(undatedOrders.length).toBeGreaterThanOrEqual(2);
+    expect(scheduledTickets.length).toBeGreaterThanOrEqual(2);
+    expect(upcomingPreventives.length).toBeGreaterThanOrEqual(2);
+  });
 });

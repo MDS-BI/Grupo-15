@@ -196,7 +196,7 @@ describe('Panel de mantenimiento · cabecera y máquinas (T242, T266-T271)', () 
       [...document.querySelectorAll('[data-role="machine-row"]')].map(
         (row) => row.dataset.machineId,
       ),
-    ).toEqual(['wc_corte']);
+    ).toEqual(['wc_corte', 'wc_solda_2', 'wc_pintura']);
   });
 
   it('selecciona, expande el detalle consolidado y restaura el estado al deseleccionar', async () => {

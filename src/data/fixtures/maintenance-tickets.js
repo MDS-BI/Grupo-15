@@ -3,7 +3,7 @@
  * causas. Ver data-model.md §3.19 y contracts/maintenance.md §2.
  */
 
-import { relativeTimestamp } from './demo-dates.js';
+import { relativeDay, relativeTimestamp } from './demo-dates.js';
 
 export const technicians = [
   { ext_hr_employee_id: 'ext_hr_tec_01', name: 'Ana Soto', specialty: 'Mecánica' },
@@ -172,5 +172,53 @@ export const maintenanceTickets = [
     cause_reason_id: 'dr_calibracion',
     resolution_notes: 'Recalibración del sensor.',
     created_at: relativeTimestamp(-28, '12:45'),
+  },
+  {
+    id: 'mt_1008',
+    company_id: 'cmp_1',
+    ticket_code: 'MTO-1008',
+    work_center_id: 'wc_pintura',
+    po_operation_id: null,
+    operation_delay_id: null,
+    reported_by: 'emp_op_05',
+    description: 'Obstrucción crítica en la boquilla de pintura.',
+    priority: 'urgent',
+    ticket_status: 'in_progress',
+    escalated_to_maint: true,
+    technician_ext_hr_employee_id: 'ext_hr_tec_01',
+    intervention_started_at: relativeTimestamp(0, '08:00'),
+    resolved_at: null,
+    downtime_started_at: relativeTimestamp(0, '08:00'),
+    downtime_ended_at: null,
+    downtime_minutes: null,
+    cause_reason_id: null,
+    resolution_notes: null,
+    scheduled_start_date: relativeDay(0),
+    scheduled_end_date: relativeDay(2),
+    created_at: relativeTimestamp(0, '07:30'),
+  },
+  {
+    id: 'mt_1009',
+    company_id: 'cmp_1',
+    ticket_code: 'MTO-1009',
+    work_center_id: 'wc_solda_2',
+    po_operation_id: null,
+    operation_delay_id: null,
+    reported_by: 'emp_op_05',
+    description: 'Revisión programada del cabezal auxiliar.',
+    priority: 'normal',
+    ticket_status: 'in_progress',
+    escalated_to_maint: true,
+    technician_ext_hr_employee_id: 'ext_hr_tec_03',
+    intervention_started_at: relativeTimestamp(1, '08:00'),
+    resolved_at: null,
+    downtime_started_at: relativeTimestamp(1, '08:00'),
+    downtime_ended_at: null,
+    downtime_minutes: null,
+    cause_reason_id: null,
+    resolution_notes: null,
+    scheduled_start_date: relativeDay(1),
+    scheduled_end_date: relativeDay(5),
+    created_at: relativeTimestamp(1, '07:30'),
   },
 ];

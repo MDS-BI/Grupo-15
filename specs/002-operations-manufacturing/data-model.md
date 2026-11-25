@@ -1,6 +1,6 @@
 # Modelo de Datos: Módulo de Operaciones / Manufactura (ERP)
 
-**Rama**: `002-operations-manufacturing` | **Fecha**: 2026-10-21 | **Actualizado**: 2026-11-18
+**Rama**: `012-consolidate-manufacturing-spec` | **Fecha**: 2026-10-21 | **Actualizado**: 2026-11-24
 **Fuente base**: `erp_data_model.md` — Módulo 7: Operaciones / Manufactura e integraciones cruzadas.
 **Documento relacionado**: [plan.md](plan.md)
 
@@ -470,7 +470,7 @@ Rol funcional: **cuenta demo del rol Jefa/Plant Manager**. Sustituye a la cuenta
 | id | uuid | PK | No | — |
 | company_id | uuid | FK → companies.id | No | — |
 | username | string | — | No | minúsculas, único en esta tabla; `jefa`, `test` en la demo |
-| password | string | — | No | demo-only: igual a `username` (`jefa`, `test`) |
+| password | string | — | No | valor inicial = `username`; actualizable con `changeUserPassword` (`jefa`, `test`) |
 | display_name | string | — | Sí | nombre visible solo para este rol |
 | created_at | timestamp | — | No | — |
 
@@ -483,7 +483,7 @@ Rol funcional: **cuenta demo del rol Supervisor/a**. Misma estructura que §3.23
 | id | uuid | PK | No | — |
 | company_id | uuid | FK → companies.id | No | — |
 | username | string | — | No | minúsculas, único en esta tabla |
-| password | string | — | No | demo-only: igual a `username` |
+| password | string | — | No | valor inicial = `username`; actualizable con `changeUserPassword` |
 | display_name | string | — | Sí | nombre visible para plant_manager y supervisor |
 | created_at | timestamp | — | No | — |
 
@@ -496,7 +496,7 @@ Rol funcional: **cuenta demo del rol Planificador/a**. Misma estructura que §3.
 | id | uuid | PK | No | — |
 | company_id | uuid | FK → companies.id | No | — |
 | username | string | — | No | minúsculas, único en esta tabla |
-| password | string | — | No | demo-only: igual a `username` |
+| password | string | — | No | valor inicial = `username`; actualizable con `changeUserPassword` |
 | display_name | string | — | Sí | — |
 | created_at | timestamp | — | No | — |
 
@@ -509,7 +509,7 @@ Rol funcional: **cuenta demo del rol Operador/a**. Misma estructura que §3.23; 
 | id | uuid | PK | No | — |
 | company_id | uuid | FK → companies.id | No | — |
 | username | string | — | No | minúsculas, único en esta tabla |
-| password | string | — | No | demo-only: igual a `username` |
+| password | string | — | No | valor inicial = `username`; actualizable con `changeUserPassword` |
 | display_name | string | — | Sí | — |
 | created_at | timestamp | — | No | — |
 
@@ -522,18 +522,22 @@ Rol funcional: **cuenta demo del rol Encargado/a de Mantenimiento**. Misma estru
 | id | uuid | PK | No | — |
 | company_id | uuid | FK → companies.id | No | — |
 | username | string | — | No | minúsculas, único en esta tabla |
-| password | string | — | No | demo-only: igual a `username` |
+| password | string | — | No | valor inicial = `username`; actualizable con `changeUserPassword` |
 | display_name | string | — | Sí | visible solo para `maintenance` y `plant_manager` |
 | created_at | timestamp | — | No | — |
 
-**Reglas de las cinco tablas de roles (AC-47 a AC-52)**
+**Reglas de las cinco tablas de roles (AC-47 a AC-52, AC-88 a AC-90, AC-117 a AC-118)**
 - Un mismo `username` puede existir en varias tablas; el conjunto de roles asignados es la unión de las tablas donde aparece.
-- Credenciales demo: `jefa/jefa`, `supervisor/supervisor`, `planificador/planificador`, `operador/operador`, `mantenimiento/mantenimiento`; más `test/test` en las cinco tablas y `doble/doble` solo en `role_users_operator` y `role_users_maintenance`. No existe `usuario`.
-- `authenticate` recorre las cinco tablas, acepta solo pares presentes y usa contraseña igual al `username`.
+- Credenciales demo iniciales: `jefa/jefa`, `supervisor/supervisor`, `planificador/planificador`, `operador/operador`, `mantenimiento/mantenimiento`; más `test/test` en las cinco tablas y `doble/doble` solo en `role_users_operator` y `role_users_maintenance`. No existe `usuario`.
+- `authenticate` recorre las cinco tablas y acepta solo pares presentes cuya contraseña vigente coincida; la contraseña inicial es el `username`, pero puede haber sido cambiada con `changeUserPassword`.
+- `addRoleUser(role, { username })` crea, si falta, una fila en una sola tabla con `password = username`, `company_id = 'cmp_1'`, `id` prefijado `ru` y `created_at` ISO; deduplica por `username` dentro de esa tabla y persiste en `erp.manufacturing.v2`.
+- `createUserWithRoles(username, roles)` (alta multi-rol, AC-117/AC-118) normaliza el usuario a minúsculas, conserva como máximo los cinco roles canónicos únicos e ignorando duplicados o valores inválidos, crea una fila por cada tabla seleccionada con la misma contraseña inicial, persiste una sola vez y emite `change`; el formulario vuelve a una sola fila de rol tras el toast de confirmación.
+- `removeRoleUser(role, username)` (baja confirmada, AC-88) normaliza el usuario, elimina únicamente la fila de la tabla indicada, persiste y emite `change`. Devuelve `{ ok: true, role, username, removed }` o `{ ok: false, reason }` con `invalid-input`, `user-not-found` o `last-plant-manager`; este último motivo impide dejar `role_users_plant_manager` vacía y no muta ninguna tabla. Cancelar o cerrar `ConfirmDialog.js` tampoco muta el snapshot.
+- `changeUserPassword(username, currentPassword, newPassword)` (AC-90) normaliza el usuario, exige contraseña actual válida y nueva no vacía (después de recortar espacios), actualiza `password` en **todas** las tablas donde aparezca el usuario, persiste y emite un solo `change`. Ante usuario inexistente, contraseña actual inválida o nueva vacía devuelve `{ ok: false, reason }` con `user-not-found`, `invalid-current-password` o `empty-password` sin mutar datos. El cambio es válido para cualquier rol activo y se conserva tras logout y recarga.
 - El `<select data-role="role-select">` de la cabecera es el único selector: muestra solo roles asignados, se oculta con un solo rol y no se duplica en `#/roles` ni en otros paneles; el módulo activo se resuelve con `MODULE_ACCESS[activeRole]`.
-- `MODULE_ACCESS` (AC-51): supervisor pierde `orders`; operator queda exactamente `['operator', 'scheduling', 'roles']` y en scheduling solo ve el Calendario Mensual sin pestaña “Listado”; maintenance queda exactamente `['maintenance', 'scheduling']`.
+- `MODULE_ACCESS` (AC-51): supervisor pierde `orders`; operator queda exactamente `['operator', 'scheduling', 'roles']` y en scheduling solo ve el Calendario Mensual sin pestaña “Listado”; maintenance queda exactamente `['maintenance', 'scheduling']` y su “Listado” muestra “Mantenimientos activos”.
 - Los nombres de `hr_employees` son visibles solo para `supervisor` y `plant_manager`; los demás roles ven iniciales o “[Rol]”. Los nombres de técnicos son visibles solo para `maintenance` y `plant_manager`; los demás ven máquina + duración.
-- Las tablas se restauran con `resetDemoData()` y se persisten en `erp.manufacturing.v2`.
+- Las tablas se restauran con `resetDemoData()` y se persisten en `erp.manufacturing.v2`; la restauración reconstruye además todas las credenciales iniciales y el dataset de FR-21 con fechas relativas.
 
 ### 3.28 `order_stations` — Dotación por orden (US-14)
 
@@ -1097,3 +1101,6 @@ erDiagram
 - Una mantención resuelta/completada es inmutable: `resolveScheduledMaintenance` falla si el evento ya está cerrado y `deleteResolvedMaintenance` solo opera desde “Históricos” con rol `maintenance`.
 - Programar desde ticket pasa el ticket a `in_progress` y la máquina a `fault`; una preventiva nunca se resuelve por vencimiento del plazo (AC-69/AC-72).
 - `calendarState`, `focusOrderId` y las fechas visibles vencidas son derivados/transitorios: no se persisten en `erp.manufacturing.v2`.
+- `createUserWithRoles` admite como máximo cinco roles canónicos únicos; la contraseña inicial es siempre el `username` y el alta se persiste una sola vez.
+- `removeRoleUser` elimina una sola tabla y rechaza `last-plant-manager` sin mutar el snapshot; `changeUserPassword` actualiza todas las tablas que comparten `username` y valida la credencial anterior antes de persistir (AC-88/AC-90).
+- FR-21/US-16: `createFixtureSnapshot()` y `resetDemoData()` deben usar `demo-dates.js` para fechas relativas y reconstruir sin huérfanos ni duplicados el dataset completo (maestros, BOM de 4 niveles, 6 centros, 11 RR.HH., ≥ 10 órdenes con 2 sin fechas, ≥ 7 tickets con 2 vigentes, 4 preventivas con 2 vigentes y las 7 credenciales exactas). AC-120 a AC-126 permanecen Pendiente hasta su verificación.

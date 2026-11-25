@@ -144,10 +144,10 @@ describe('Panel de desempeño de planta (US-08)', () => {
 describe('Planificación de producción (US-10)', () => {
   it('filtra, guarda fechas y muestra errores de rango', () => {
     document.body.appendChild(ProductionSchedulingPanel(store));
-    expect(document.querySelector('[data-summary="planned"]').textContent).toBe('Planificadas: 7');
+    expect(document.querySelector('[data-summary="planned"]').textContent).toBe('Planificadas: 11');
 
     change('[data-role="filter-status"]', 'planned');
-    expect(document.querySelectorAll('tr[data-order]')).toHaveLength(1);
+    expect(document.querySelectorAll('tr[data-order]')).toHaveLength(3);
 
     fill('[data-date="start"][data-order="po_3004"]', '2026-11-01');
     fill('[data-date="end"][data-order="po_3004"]', '2026-11-10');
@@ -428,7 +428,7 @@ describe('Balance de líneas (US-11)', () => {
     expect(document.querySelectorAll('[data-wc].is-bottleneck')).toHaveLength(1);
     expect(document.querySelector('[data-bottleneck]').textContent).toContain('Cuello de botella:');
     expect(document.querySelector('[data-unscheduled]').textContent).toContain(
-      'Órdenes sin fechas excluidas: 0',
+      'Órdenes sin fechas excluidas: 2',
     );
 
     change('[data-role="order-select"]', 'po_3004');
@@ -478,7 +478,7 @@ describe('Balance de líneas (US-11)', () => {
     expect(dailyCell.querySelector('.bar__fill').style.width).toBe('100%');
     expect(document.querySelector('.balance-table .bar--over')).toBeNull();
     const armadoDailyCell = document.querySelectorAll('[data-wc="wc_armado"] td')[dailyIndex];
-    expect(armadoDailyCell.querySelector('.bar').classList.contains('bar--tight')).toBe(true);
+    expect(armadoDailyCell.querySelector('.bar').classList.contains('bar--bottleneck')).toBe(true);
     expect(armadoDailyCell.querySelector('.bar__label').className).toBe('bar__label');
     expect(document.querySelectorAll('.bar__fill').length).toBe(12);
     expect(document.querySelectorAll('.balance-chart__fill').length).toBe(6);

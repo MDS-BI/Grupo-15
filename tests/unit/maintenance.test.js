@@ -227,7 +227,7 @@ describe('US-15 - mantenimiento programado en el store', () => {
   it('acorta la fecha visible de una correctiva resuelta antes del plazo', () => {
     const store = new ManufacturingStore({ storage: memoryStorage() });
     store.scheduleMaintenanceFromTicket(
-      'mt_1003',
+      'mt_1001',
       {
         technician_ext_hr_employee_id: 'ext_hr_tec_03',
         scheduled_start_date: relativeDay(0),
@@ -236,9 +236,9 @@ describe('US-15 - mantenimiento programado en el store', () => {
       'maintenance',
     );
     const resolvedAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-    store.resolveScheduledMaintenance('maintenance:mt_1003', { resolvedAt }, 'maintenance');
+    store.resolveScheduledMaintenance('maintenance:mt_1001', { resolvedAt }, 'maintenance');
 
-    const event = store.maintenanceFeed().find((row) => row.sourceId === 'mt_1003');
+    const event = store.maintenanceFeed().find((row) => row.sourceId === 'mt_1001');
     expect(event.status).toBe('resolved');
     expect(event.visible_end_date).toBe(localIsoDate(resolvedAt));
   });

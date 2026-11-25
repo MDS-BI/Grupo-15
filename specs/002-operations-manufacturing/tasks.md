@@ -968,3 +968,43 @@ T278 trazabilidad AC-88–AC-103 en specs/002-operations-manufacturing/spec.md
 - [X] T308 [P] Verificar trazabilidad AC-104–AC-119 y SC-21–SC-29 en `specs/002-operations-manufacturing/spec.md` y `specs/002-operations-manufacturing/checklists/requirements.md`, reportando 30 tareas nuevas, 8 de US-12, 12 de US-13, 8 de US-15 y 2 de cierre.
 
 **Punto de control**: la Fase 31 cierra los 5 incisos de FR-20 con pruebas jsdom por historia antes de la implementación, mantiene Fases 1–30 intactas y deja los IDs T279–T308 listos para marcar `[X]` tras la verificación final.
+
+---
+
+## Fase 32: Consolidación final de README, dataset semilla y compuertas (2026-11-25)
+
+**Objetivo**: dejar la documentación de ingreso/roles alineada con el código vigente, completar el dataset semilla de FR-21 sin alterar los cálculos ni los escenarios de US-11, y ejecutar las cuatro compuertas del proyecto en verde.
+
+**Dependencias**: mantiene intactas las Fases 1–31, `package.json`, `vitest.config.mjs`, las reglas de `src/domain/access-control.js` y el período fijo de US-11 (`2026-10-01` a `2026-10-31`). Toda fecha nueva se calcula con `src/data/fixtures/demo-dates.js`. Al ser una fase final transversal, las tareas no usan etiqueta `[Story]`.
+
+### Documentación — README
+
+- [X] T309 Reemplazar en `README.md` la tabla de credenciales y el párrafo de ingreso por las 7 cuentas vigentes con contraseña igual al usuario: `jefa/jefa` (`plant_manager`), `supervisor/supervisor`, `planificador/planificador`, `operador/operador`, `mantenimiento/mantenimiento`, `test/test` (5 roles) y `doble/doble` (`operator` + `maintenance`); eliminar `jefa.planta`, `usuario` y las contraseñas `Op3rador2026`, `Sup3rvisor2026`, `Pl4nificador2026` y `Pl4nta2026`.
+- [X] T310 Reemplazar en `README.md` la tabla de roles y módulos por los 5 roles reales derivados de `src/domain/access-control.js` y las etiquetas de `src/manufacturing-main.js`: Jefa de Planta (Panel, BOM, Órdenes, Estación, Supervisión, Planta, Planificación, Balance, Mantenimiento, Roles y Configurar roles), Supervisor (Panel, Estación, Supervisión, Planta, Planificación, Mantenimiento y Roles), Planificador (Panel, BOM, Órdenes, Planta, Planificación, Balance y Roles), Operador de Máquina (Estación, Planificación y Roles) y Encargado de Mantenimiento (Planificación y Mantenimiento).
+- [X] T311 Reescribir en `README.md` la explicación de acceso por rol: la pestaña **Roles** muestra las tarjetas de los roles asignados al usuario y permite cambiar el rol efectivo tras confirmación; la pestaña **Configurar roles** (`#/admin-roles`) solo está habilitada para el rol efectivo `plant_manager` y permite altas de hasta 5 roles y bajas; **Ver como** aparece en el menú de usuario solo para cuentas con más de un rol asignado (`test` y `doble`), no solo para Jefa de Planta.
+- [X] T312 Añadir en `README.md` una sección de cambio de contraseña que documente el menú **Cambiar contraseña**, los campos actual/nueva/confirmación, las validaciones de `src/components/ChangePasswordDialog.js`, la actualización de todas las filas del usuario en `src/data/ManufacturingStore.js` y la persistencia en `erp.manufacturing.v2`.
+- [X] T313 Añadir en `README.md` una nota de alcance que declare `specs/002-operations-manufacturing/` como único MVP activo y `specs/001-erp-base-module/` como histórico/prohibido, sin botones **Documentos**, **Entidades** ni **Módulo Base ERP** y sin `src/storage.js` ni `src/module-config.js`; ajustar la sección **Deuda conocida** para conservar solo el contexto histórico de las suites excluidas.
+- [X] T314 Auditar `README.md` para eliminar restos de documentación antigua (`Op3rador2026`, `Sup3rvisor2026`, `Pl4nificador2026`, `Pl4nta2026`, `jefa.planta`, cuenta `usuario`, ruta `#/admin-roles`, etiqueta **Datos de roles**, botón **Entrar como…** y afirmación de que solo Jefa de Planta puede usar **Ver como**), conservando únicamente las menciones históricas/prohibidas de `specs/001-erp-base-module/`.
+
+### Datos semilla — FR-21 / AC-123 a AC-125
+
+- [X] T315 Agregar en `src/data/fixtures/production-orders.js` cuatro órdenes vigentes `po_3008` a `po_3011` con `planned_start_date` en `relativeDay(-2)`, `relativeDay(-1)`, `relativeDay(0)` y `relativeDay(+1)`, `planned_end_date` entre el inicio y `relativeDay(+10)`, estados `in_progress`/`released`, rutas `rt_bici` o `rt_rueda` y cantidades pequeñas, verificando que las 4 fechas caigan en el mes actual y sin solapamiento con el período fijo de US-11.
+- [X] T316 Agregar en `src/data/fixtures/production-orders.js` las operaciones congeladas `poo_3008_*` a `poo_3011_*` para las órdenes de T315, calculando `planned_time_minutes` como `setup_time_minutes + run_time_per_unit_minutes × quantity_planned` desde `src/data/fixtures/routings.js`, sin centros `wc_solda` ni `wc_pintura`.
+- [X] T317 Agregar en `src/data/fixtures/production-orders.js` dos órdenes `planned` `po_3012` y `po_3013` con `planned_start_date: null` y `planned_end_date: null`, sin operaciones congeladas, para que `pendingSchedulingOrders()` muestre al menos 2 tarjetas arrastrables en **Pendiente de horario** desde el primer arranque.
+- [X] T318 Agregar en `src/data/fixtures/production-orders.js` las operaciones congeladas `poo_3007_1` a `poo_3007_3` de `rt_cuadro` para la orden `po_3007`, con cargas `1920`, `6865` y `3070` minutos que preserven exactamente los `8.690 min` de `wc_solda`, el cuello de botella y las dos órdenes del popover de US-11.
+- [X] T319 [P] Agregar en `src/data/fixtures/maintenance-tickets.js` dos tickets `mt_1008` y `mt_1009` con `scheduled_start_date` entre `relativeDay(0)` y `relativeDay(+2)` y `scheduled_end_date` hasta `relativeDay(+5)`, prioridades `urgent`/`normal`, estado `in_progress` con técnico e `intervention_started_at`, en centros distintos de `wc_solda` y sin otra intervención activa, con `operation_delay_id: null` y sin modificar los tickets resueltos que alimentan el indicador de desgaste.
+- [X] T320 [P] Ajustar en `src/data/fixtures/preventive-maintenance-orders.js` la fecha de `pmo_2001` a `relativeDay(-8)` y agregar `pmo_2003` y `pmo_2004` con `planned_date` en `relativeDay(+2)` y `relativeDay(+4)`, estado `planned`, `source_ticket_id: null` y centros de trabajo distintos, completando 4 preventivas: 1 vencida, 2 vigentes y 1 histórica.
+
+### Pruebas de regresión del dataset
+
+- [X] T321 Ampliar `tests/unit/demo-dates.test.js` con aserciones de FR-21 para al menos 13 órdenes, al menos 4 fechas de inicio entre `relativeDay(-2)` y `relativeDay(+10)` en el mes actual, al menos 2 órdenes `planned` sin fechas, al menos 2 tickets activos programados en la ventana actual y al menos 2 preventivas futuras en `relativeDay(+2)` a `relativeDay(+8)`, sin usar fechas fijas de calendario.
+- [X] T322 Actualizar `tests/integration/plant-scheduling-panels.test.js` para esperar `Órdenes sin fechas excluidas: 2` como consecuencia de T317, conservando sin cambios las aserciones de `8.690 min`, `144,8 h`, cuello de botella único, dos órdenes en el popover de soldadura y estado `normal` de corte.
+
+### Compuertas finales
+
+- [X] T323 Ejecutar `npm test -- --run` desde `package.json` y confirmar que las 42 suites y las 297 pruebas existentes, más las nuevas de Fase 32, terminan al 100 % en verde.
+- [X] T324 Ejecutar `npm run lint` desde `package.json` y confirmar que no aparezcan errores de ESLint en `README.md`, fixtures ni pruebas de Fase 32.
+- [X] T325 Ejecutar `npm run format:check` desde `package.json` y confirmar que todos los archivos modificados cumplan Prettier.
+- [X] T326 Ejecutar `npm run build` desde `package.json` y confirmar que el build de producción termine sin errores ni advertencias bloqueantes.
+
+**Punto de control**: la Fase 32 deja 18 tareas nuevas (`T309`–`T326`), mantiene Fases 1–31 intactas, documenta el MVP vigente, completa AC-123 a AC-125 sin alterar US-11 y cierra solo cuando las cuatro compuertas (`npm test -- --run`, `npm run lint`, `npm run format:check` y `npm run build`) estén en verde.

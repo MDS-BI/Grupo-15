@@ -111,7 +111,7 @@ describe('ManufacturingStore', () => {
 
   it('calcula KPIs y carga por centro de trabajo', () => {
     const kpis = store.kpis();
-    expect(kpis.totalOrders).toBe(7);
+    expect(kpis.totalOrders).toBe(13);
     expect(kpis.activeOrders).toBeGreaterThanOrEqual(3);
     const loads = store.workCenterLoads();
     expect(loads.length).toBe(6);

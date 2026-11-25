@@ -1,6 +1,6 @@
 # Implementation Plan: Operations & Manufacturing Module (ERP)
 
-**Branch**: `002-operations-manufacturing` | **Date**: 2026-10-21 | **Updated**: 2026-11-19
+**Branch**: `012-consolidate-manufacturing-spec` | **Date**: 2026-10-21 | **Updated**: 2026-11-24
 **Spec**: `specs/002-operations-manufacturing/spec.md`
 **Input**: Feature specification and data contracts derived from `erp_data_model.md` (Module 7: Operations / Manufacturing) and `specs/002-operations-manufacturing/data-model.md`
 **Methodology**: Spec-Driven Development (Spec-Kit)
@@ -44,15 +44,13 @@ The data model remains the single source of truth (`data-model.md`); the UI is a
 
 | Persona | Responsibilities | Primary Entities Owned |
 |---|---|---|
-| **Production Planner** | Oversees capacity; creates and versions BOMs and routings; schedules, prioritizes, and dispatches production orders; monitors shop-floor load. | `bill_of_materials`, `bom_components`, `work_centers`, `routings`, `routing_operations`, `production_orders` |
-| **Plant Manager (Jefa de Planta)** | Monitors plant-wide load, OEE, accumulated downtimes and fulfillment; configures thresholds, reschedules/cancels orders, exports reports and applies simulated role permissions. | `production_orders`, `threshold_settings`, `role_permissions` |
-| **Machine Operator** | Starts/finishes the active operation, logs justified delays, counts pieces per shift, and sees cumulative progress. | `production_shifts`, `operation_delays`, `delay_reasons`, `production_order_operations` (progress fields) |
-| **Line Supervisor** | Monitors the live traffic light, assigns operators to work centers per shift, validates shift closures and escalates incidents to maintenance. | `shift_assignments`, `production_shifts`, `maintenance_tickets` |
-| **Shop Floor Operator** | Updates operation progress; registers consumed materials; logs completed batches, scrap, and output; marks operations complete. | `production_order_operations`, `material_consumption`, `production_output` |
-| **Maintenance Manager** | Handles escalated fault tickets, assigns technicians, logs downtime, schedules preventive orders and restores work-center availability. | `maintenance_tickets`, `preventive_maintenance_orders` |
-| **Production Engineer** | Analyzes standard times, projected load, utilization and bottlenecks to balance the line. | `work_centers`, `routing_operations`, `production_orders` |
+| **Jefa de Planta (`plant_manager`)** | Monitors plant-wide load, OEE, accumulated downtimes and fulfillment; configures thresholds; reschedules/cancels orders; exports reports; manages users and role assignments; reviews calendar summaries and sets priority/critical urgency. | `production_orders`, `threshold_settings`, `role_permissions`, `role_users_*` |
+| **Supervisor/a de Operaciones/Línea (`supervisor`)** | Monitors the live traffic light, assigns operators per shift, validates shift closures, escalates incidents to maintenance, edits stations and staffing derived from BOM, and opens line supervision directly from calendar summaries. | `shift_assignments`, `production_shifts`, `order_stations`, `maintenance_tickets` |
+| **Planificador/a (`planner`)** | Oversees capacity; creates and versions BOMs and routings; schedules, prioritizes and dispatches production orders; analyzes standard times, load, utilization and bottlenecks; uses the monthly calendar drag/range flow. | `bill_of_materials`, `bom_components`, `work_centers`, `routings`, `routing_operations`, `production_orders` |
+| **Operador/a (`operator`)** | Starts/finishes the active operation, logs justified delays, counts pieces per shift, updates cumulative progress, registers consumed materials and logs finished output/scrap. | `production_shifts`, `operation_delays`, `delay_reasons`, `production_order_operations`, `material_consumption`, `production_output` |
+| **Encargado/a de Mantenimiento (`maintenance`)** | Handles escalated fault tickets, assigns technicians, logs downtime, schedules preventive orders, restores work-center availability, resolves scheduled maintenance and reviews the machine mini-calendar and active-maintenance list. | `maintenance_tickets`, `preventive_maintenance_orders`, `work_centers` |
 
-> **Demo role mapping**: the selectable roles are only `Jefa de Planta`, `Supervisor de Operaciones/Línea`, `Planificador` and `Operador`. Maintenance and Production Engineer responsibilities are exercised from `Jefa de Planta`/`Supervisor` and `Planificador` respectively; no extra credentials are created.
+> **Demo role mapping**: the canonical and selectable roles are exactly the five above. `test/test` has all five, `doble/doble` has `operator` and `maintenance`, and each named demo account has one role; `usuario` does not exist. Maintenance and line-balancing responsibilities are no longer folded into other personas.
 
 ### 1.4 Integration Boundaries
 
@@ -934,11 +932,11 @@ No hay violaciones que requieran justificación adicional.
 
 # 11. Plan Técnico Incremental — US-12 a US-15 (snapshot `erp.manufacturing.v2`)
 
-**Alcance**: FR-14 a FR-18, historias US-12 a US-15 y criterios AC-47 a AC-76 de `spec.md`. Esta sección es aditiva: no reemplaza el plan Fase 1 a Fase 24 ni las secciones 1 a 10.
+**Alcance**: FR-14 a FR-21, historias US-12 a US-16 y criterios AC-47 a AC-126 de `spec.md`. Esta sección es aditiva: no reemplaza el plan Fase 1 a Fase 30 ni las secciones 1 a 10.
 
 ## 11.1 Aislamiento y compatibilidad con `main`
 
-- Las Fases 1 a 24 de `tasks.md` permanecen sin cambios. Las tareas de US-12 a US-15 se generarán como Fases 25 a 28 cuando se ejecute `/speckit.tasks`; este documento solo prepara la entrada técnica.
+- Las Fases 1 a 30 de `tasks.md` permanecen sin cambios. Las tareas T001 a T308 de US-12 a US-15 ya están ejecutadas en Fases 25 a 31; FR-21/US-16 queda registrado como entrada técnica pendiente para la siguiente generación de tareas.
 - No se modifica `package.json` (nombre de paquete), no se agregan dependencias externas y no se edita `vitest.config.mjs`.
 - No se agregan elementos de `001-erp-base-module` a `index.html`; se conservan los IDs de ruta existentes: `dashboard`, `bom`, `orders`, `operator`, `supervision`, `plant`, `scheduling`, `line-balance`, `maintenance`, `roles`, `admin-roles`.
 - Se conservan las mejoras ya presentes en `main`: tipografía `@fontsource-variable/inter`, menú drawer, `icons.js`, `ConfirmDialog.js`, `Toast.js`, `labels.js`, `demo-dates.js`, `capacity.js`, balance de líneas US-11 y botón “Reiniciar datos de demo” de Jefa de Planta.
@@ -1012,7 +1010,7 @@ Mantenimiento (tickets + preventivas) ──> calendario unificado ──> 3 blo
 
 ### 11.5.2 Store (`ManufacturingStore`)
 
-- Roles: `roleUsersFor(role)`, `rolesForUsername(username)`, `addRoleUser(role, { username })`, `assignRoleToUser(username, role)`. Todas emiten `change` y persisten en `v2`.
+- Roles: `roleUsersFor(role)`, `rolesForUsername(username)`, `addRoleUser(role, { username })`, `assignRoleToUser(username, role)`, `createUserWithRoles(username, roles)`, `removeRoleUser(role, username)` y `changeUserPassword(username, currentPassword, newPassword)`. Todas emiten `change` y persisten en `v2`; las altas multi-rol deduplican roles válidos, la baja rechaza quitar el último `plant_manager` y el cambio de credencial actualiza todas las tablas donde figure el usuario.
 - Calendario: `pendingSchedulingOrders()`, `calendarEventsForMonth(month)`, `scheduleOrderRange(orderId, { startDate, endDate, startTime, endTime })`, `setOrderPriority(orderId, priority)`, `setCriticalUrgent(orderId, flag)`.
 - Estaciones: `ensureBomStationsForOrder(orderId)`, `orderStationsFor(orderId)`, `setOrderStationStaffing(orderId, stations)`; `releaseProductionOrder` invoca `ensureBomStationsForOrder` de forma idempotente, sin alterar `production_order_operations`.
 - Mantenimiento: `maintenanceFeed()`, `scheduleMaintenanceFromTicket(ticketId, payload)` (pasa ticket a `in_progress` y máquina a `fault`), `schedulePreventiveMaintenance(orderId, payload)`, `setRecommendedMaintenanceFrequency(workCenterId, days)` (solo `maintenance`/`plant_manager`), `resolveScheduledMaintenance(id, { resolvedAt })`, `deleteResolvedMaintenance(id)`. Solo `maintenance` resuelve/reprograma/elimina; la resolución calcula inactividad automáticamente y bloquea cualquier edición posterior.
@@ -1020,13 +1018,13 @@ Mantenimiento (tickets + preventivas) ──> calendario unificado ──> 3 blo
 
 ### 11.5.3 UI
 
-- `src/components/RoleAdminPanel.js` (nuevo): reemplaza `adminRolesView()` en `#/admin-roles` (exclusivo de `plant_manager`), muestra las cinco tablas y persiste altas de usuario/rol con `showToast`; tras logout/login aparecen en el menú superior y en `#/roles`.
-- `src/manufacturing-main.js`: `loadRole()` / `persistRole()` usan solo roles asignados; el `<select data-role="role-select">` de la cabecera es el único selector (sin duplicados en otros paneles) y se oculta con un solo rol.
-- `src/components/ProductionSchedulingPanel.js`: vista “Calendario” con grid CSS mensual, filtro `"Ambos" | "Solo Órdenes de Trabajo" | "Solo Mantenciones"`, bandeja “Pendiente de horario” solo para planner/jefa, foco `.scheduling-focus-backdrop` + `.scheduling-floating-card` siguiendo el cursor, arrastre `.calendar-day--drag-range` y menú por día para planner/jefa/supervisor. El mes se recuerda entre pestañas y vuelve al actual al cambiar de identidad o recargar. La vista “Listado” se oculta para operator.
-- `src/components/calendar/CalendarEventDialog.js` (nuevo): detalle de orden o mantención con botón “Volver a la lista del día”; según rol ofrece reprogramación, “Editar estaciones y trabajadores”, “Resolver” o borrado histórico.
+- `src/components/RoleAccessPanel.js` / `src/components/RoleAdminPanel.js`: `#/roles` presenta las subpestañas “Roles” y “Configurar roles”; la segunda se monta solo con rol activo `plant_manager`, integra las cinco tablas, altas multi-rol y bajas confirmadas, y `#/admin-roles` abre directamente esa subpestaña. `ChangePasswordDialog.js` se abre desde el menú de usuario para cualquier identidad autenticada.
+- `src/manufacturing-main.js`: `loadRole()` / `persistRole()` usan solo roles asignados; el `<select data-role="role-select">` de la cabecera es el único selector (sin duplicados en otros paneles), se oculta con un solo rol y el menú incluye “Cambiar contraseña”.
+- `src/components/ProductionSchedulingPanel.js`: vista “Calendario” con grid CSS mensual, filtro `"Ambos" | "Solo Órdenes de Trabajo" | "Solo Mantenciones"` y bandeja vertical derecha solo para planner/jefa (`.calendar-layout--with-tray`); sin bandeja el calendario ocupa el 100 % del ancho. Incluye foco `.scheduling-focus-backdrop` + `.scheduling-floating-card`, arrastre `.calendar-day--drag-range`, menú por día, botón “Ir a Supervisión de línea” para supervisor y “Listado” con “Mantenimientos activos” para `maintenance`. La vista “Listado” se oculta para operator. El mes se recuerda entre pestañas y vuelve al actual al cambiar de identidad o recargar.
+- `src/components/calendar/CalendarEventDialog.js`: modal centrado con cierre exclusivo “×” (sin “Volver a la lista del día”) que limpia `selectedEventId` y `dayMenuDate`; según rol ofrece reprogramación, “Editar estaciones y trabajadores”, “Resolver”, borrado histórico o acceso a supervisión.
 - `src/components/SupervisorLinePanel.js`: botón “Editar estaciones y trabajadores” redirige a `#/supervision`, abre el editor de esa orden con “Secuencia <N>”, título explicativo, cantidad de trabajadores y altas/bajas persistentes; `#/orders` conserva buscador/filtro de prioridad sin controles de dotación.
-- `src/components/MaintenancePanel.js`: tres subpestañas exactas —“Máquinas”, “Tickets”, “Mantenimientos”—; “Mantenimientos” usa los bloques “Activos”, “No resueltos por vencimiento” e “Históricos”, los tres con buscador por máquina/código y sincronizados con el calendario.
-- Solo `maintenance` resuelve/reprograma/elimina mantenciones; `plant_manager` también edita “Cada cuánto se recomienda mantención” en Máquinas. Toda acción usa `format.js`, `labels.js`, `icons.js`, `Toast.js` y `ConfirmDialog.js` existentes.
+- `src/components/MaintenancePanel.js`: subpestañas exactas —“Mantenimientos” (activa por defecto), “Máquinas”, “Tickets”—; Máquinas usa filas compactas “nombre · código” con detalle a la derecha y mini-calendario ≤ 520 px; Mantenimientos tiene exactamente dos listas (“Mantenimientos activos” con filtro Todos/Vigentes/Vencidos y “Mantenimientos históricos”) sincronizadas con el calendario; Tickets conserva solo “Programar mantención”.
+- Solo `maintenance` resuelve/reprograma/elimina mantenciones; `plant_manager` también edita “Cada cuánto se recomienda mantención” en Máquinas. Toda acción usa `format.js`, `labels.js`, `icons.js`, `Toast.js` y `ConfirmDialog.js` existentes, con hover uniforme en bloques seleccionables.
 
 ## 11.6 Persistencia y migración
 
@@ -1039,14 +1037,14 @@ Mantenimiento (tickets + preventivas) ──> calendario unificado ──> 3 blo
 
 - Unitarias: `role-access`, `access-control` extendido, `deriveBomStations`, `calendar-scheduling`, `maintenance` (cálculo de inactividad, vencimientos, inmutabilidad) y validación de `HH:mm`.
 - Integración jsdom: login con las cinco cuentas, selector restringido, panel de roles, arrastre y menú diario del calendario, editor de estaciones desde orden y flujo completo de las tres pestañas de mantenimiento.
-- Regresión: todas las pruebas actuales de Fases 1 a 24 deben seguir pasando sin cambios en `vitest.config.mjs`; se ejecuta `npm test` al final de cada fase nueva.
+- Regresión: todas las pruebas actuales de Fases 1 a 30 deben seguir pasando sin cambios en `vitest.config.mjs`; se ejecuta `npm test` al final de cada incremento.
 
 ## 11.8 Constitution Check — reevaluación post-diseño
 
 | Principio | Evaluación |
 | --- | --- |
 | Code Quality / Single source of truth | Todas las reglas de roles, fechas, capacidad y estaciones viven en `src/domain`; los paneles solo consumen APIs puras y del store. |
-| Test-First | Cada fase 25 a 28 comienza con tests unitarios y de integración; la cobertura incluye AC-47 a AC-76. |
+| Test-First | Cada fase 25 a 31 comienza con tests unitarios y de integración; la cobertura vigente incluye AC-47 a AC-119. FR-21/AC-120 a AC-126 se cubrirán cuando se implemente el dataset enriquecido. |
 | UX Consistency | Se reutilizan `format.js`, `labels.js`, `icons.js`, `Toast.js` y `ConfirmDialog.js`; estados vacíos, error y carga siguen los patrones existentes. |
 | Performance / Reliability | El calendario calcula eventos una sola vez por mes y filtro; el drag no escribe en `localStorage` hasta soltar; la persistencia sigue siendo síncrona y acotada a `v2`. |
 | Simplicity | No hay frameworks, dependencias ni `v3`; se usa CSS Grid y estado transitorio en memoria. |
@@ -1061,9 +1059,9 @@ Mantenimiento (tickets + preventivas) ──> calendario unificado ──> 3 blo
 | Confundir estación con operario | `deriveBomStations` devuelve `work_center_id`; los operarios viven en `operator_ext_hr_employee_ids` y en `shift_assignments` sin sobreescribirlos. |
 | Fechas vencidas que desaparecen del calendario | `effectiveMaintenanceEnd` eleva la fecha visible a “hoy” para activos vencidos; la fecha original no se altera. |
 | Resolución tardía sin inactividad correcta | `computeCorrectiveDowntime` usa `intervention_started_at` o `scheduled_start_date` y el `resolvedAt` editable del popup. |
-| Regresión visual de Fases 1 a 24 | Cambios aditivos, sin editar `tasks.md` ni estilos base; se revisa diff contra `main`. |
+| Regresión visual de Fases 1 a 30 | Cambios aditivos, sin editar tareas ejecutadas ni estilos base; se revisa diff contra `main`. |
 
-## 11.10 Fases 25 a 28 propuestas (entrada futura para `/speckit.tasks`)
+## 11.10 Fases 25 a 28 ejecutadas (antecedente técnico para `/speckit.tasks`)
 
 | Fase | Objetivo | Entregable principal |
 | --- | --- | --- |
@@ -1071,6 +1069,15 @@ Mantenimiento (tickets + preventivas) ──> calendario unificado ──> 3 blo
 | 26 | US-13: calendario, bandeja de pendientes, selección por rangos, foco y menú diario | Extensión de `ProductionSchedulingPanel.js`, `CalendarEventDialog.js`, `calendar-scheduling.js`, tests AC-53 a AC-62. |
 | 27 | US-14: derivación BOM, estaciones por orden y edición desde supervisión | `deriveBomStations`, `order_stations`, editor en `SupervisorLinePanel.js`, tests AC-63 a AC-66. |
 | 28 | US-15 y FR-18: tres pestañas, programación desde ticket, sincronización, resolución, inmutabilidad y regresión de `main` | Refactor aditivo de `MaintenancePanel.js`, reglas de mantenimiento programado, tests AC-67 a AC-76. |
+
+### 11.10.1 Resumen técnico de Fases 29 a 31 (FR-19 a FR-21)
+
+| Fase | Objetivo | Entregable técnico y criterios |
+| --- | --- | --- |
+| 29 | FR-19/US-12/US-13: jerarquía estricta de capas y unificación de Roles | En `src/styles/manufacturing.css`, `thead th` sticky en `z-index: 1`, barra superior 20, lateral 30, modo foco 40/50/60, `.modal-backdrop`/`.modal` 1000/1001, `ConfirmDialog` 1100 y toasts 1200, sin contextos de apilamiento en `.view`, `.content` o `.panel`. `#/roles` queda como única entrada con subpestañas “Roles” y “Configurar roles”; tarjetas filtradas por identidad, cambio de rol confirmado y `#/admin-roles` como enlace profundo solo para `plant_manager`. AC-77 a AC-87. |
+| 30 | FR-18/US-12/US-13/US-15: baja de usuarios, cambio de contraseña, calendario real y mantenimiento consolidado | `removeRoleUser` y `changeUserPassword` persisten en `v2`, con rechazo al quitar al último `plant_manager` y actualización de credencial en todas las tablas del usuario. `ChangePasswordDialog.js` se abre desde el menú superior. El calendario usa modales centrados, arrastre con `mousedown`/`mouseenter`/`mouseup` y capas 40/50/60. Mantenimiento elimina filtros globales, adopta dos paneles, mini-calendario informativo, Tickets con una sola acción y dos listas de mantenimientos. AC-88 a AC-103. |
+| 31 | FR-20/US-12/US-13/US-15: ajustes finales de interfaz y usabilidad | Hover uniforme en filas y tarjetas; Mantenimiento abre en “Mantenimientos” con el orden “Mantenimientos”, “Máquinas”, “Tickets”, filas compactas “nombre · código” y mini-calendario ≤ 520 px con leyenda arriba/al lado y celdas `aspect-ratio: 2.5 / 1`. Planificación muestra “Mantenimientos activos” para `maintenance`, bandeja vertical derecha `.calendar-layout--with-tray` para planner/jefa y calendario al 100 % para los demás roles; ventanas centradas cerradas solo con “×”, acceso directo de supervisor a `#/supervision` y alta multi-rol con hasta cinco filas. AC-104 a AC-119. |
+| Pendiente | FR-21/US-16: dataset semilla de demostración | Incorporar en `createFixtureSnapshot()` y `resetDemoData()` el dataset descrito en `spec.md`: fechas relativas vía `demo-dates.js`, 6 centros, 11 RR.HH., ≥ 10 órdenes con 2 sin fechas, ≥ 7 tickets con 2 vigentes, 4 preventivas con 2 vigentes y las 7 cuentas demo exactas. AC-120 a AC-126 permanecen **Pendiente** hasta su implementación y validación; no se han ejecutado tareas T309 en adelante. |
 
 ## 11.11 Trazabilidad de criterios
 
@@ -1081,6 +1088,13 @@ Mantenimiento (tickets + preventivas) ──> calendario unificado ──> 3 blo
 | AC-63 a AC-66 | US-14 | `data-model.md` 3.28, `contracts/order-scheduling.md` 12, `plan.md` 11.5.1/11.10 Fase 27. |
 | AC-67 a AC-75 | US-15 | `data-model.md` 3.19/3.20, `contracts/maintenance.md` 8 a 13, `plan.md` 11.5.2/11.10 Fase 28. |
 | AC-76 | FR-18 | `plan.md` 11.1 y 11.8; regresión de mejoras de `main`, rutas y configuración. |
+| AC-77 a AC-78 | FR-19 | `plan.md` 11.5.3/11.10.1 Fase 29; escala `z-index` en `src/styles/manufacturing.css`. |
+| AC-79 a AC-87 | US-13 / US-12 / FR-13 | `plan.md` 11.5.3/11.10.1 Fase 29; `RoleAccessPanel.js`, pestañas de calendario y tarjetas filtradas. |
+| AC-88 a AC-90 | US-12 | `data-model.md` 3.23 a 3.27, `plan.md` 11.5.2/11.10.1 Fase 30; `removeRoleUser`, `changeUserPassword` y `ChangePasswordDialog.js`. |
+| AC-91 a AC-95 | US-13 | `plan.md` 11.5.3/11.10.1 Fase 30; modales centrados y arrastre de rango. |
+| AC-96 a AC-103 | US-15 / FR-18 | `plan.md` 11.5.3/11.10.1 Fase 30; dos paneles, mini-calendario, Tickets y dos listas. |
+| AC-104 a AC-119 | FR-20 | `plan.md` 11.5.3/11.10.1 Fase 31; hover, orden de pestañas, bandeja vertical, cierre con `×`, acceso a supervisión y alta multi-rol. |
+| AC-120 a AC-126 | FR-21 / US-16 | `spec.md` FR-21; `plan.md` 11.10.1 fila Pendiente; dataset semilla de `demo-dates.js` y `createFixtureSnapshot()`. |
 
 ## 11.12 Complexity Tracking
 
