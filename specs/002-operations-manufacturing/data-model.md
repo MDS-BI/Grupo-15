@@ -1,6 +1,6 @@
 # Modelo de Datos: Módulo de Operaciones / Manufactura (ERP)
 
-**Rama**: `012-consolidate-manufacturing-spec` | **Fecha**: 2026-10-21 | **Actualizado**: 2026-11-24
+**Rama**: `main` (sin creación de rama ni carpeta nueva) | **Fecha**: 2026-10-21 | **Actualizado**: 2026-11-26
 **Fuente base**: `erp_data_model.md` — Módulo 7: Operaciones / Manufactura e integraciones cruzadas.
 **Documento relacionado**: [plan.md](plan.md)
 
@@ -31,7 +31,7 @@ El Módulo de Operaciones / Manufactura modela el ciclo **planificado → ejecut
 | **Ejecución transaccional** | `production_orders`, `production_order_operations`, `production_shifts`, `operation_delays`, `material_consumption`, `production_output` | Qué se *ordenó* y qué *ocurrió realmente* en el piso de planta. |
 | **Catálogo de apoyo** | `delay_reasons` | Motivos reutilizables para justificar atrasos (predefinidos y personalizados). |
 | **Mantenimiento** | `maintenance_tickets`, `preventive_maintenance_orders` | Correctivos escalados desde piso y plan preventivo derivado del historial y desgaste de las máquinas. |
-| **Configuración local** | `threshold_settings`, `role_permissions` | Umbrales de alarma y matriz rol×acción simulada del panel de planta (US-08). |
+| **Configuración local** | `threshold_settings`, `role_permissions` | Umbrales de alarma y matriz rol×módulo×acción vigente (FR-22), aplicada en UI y store. |
 
 **Pináculo de integración planificado ↔ ejecutado:**
 
@@ -445,101 +445,127 @@ Rol funcional: **umbral crítico** por indicador de planta. Alimenta las alarmas
 
 ### 3.22 `role_permissions` — Manufactura (configuración local, US-08)
 
-Rol funcional: **matriz rol×acción** simulada para el selector de rol del panel. La UI oculta o bloquea acciones no permitidas; no existe autenticación real.
+Rol funcional: **matriz rol×módulo×acción** definida en FR-22. La UI oculta las celdas `—` y el store las rechaza antes de persistir; el rol se resuelve únicamente en el login.
 
 | Columna | Tipo | PK/FK | Nullable | Restricciones |
 |---|---|---|---|---|
 | id | uuid | PK | No | — |
 | company_id | uuid | FK → companies.id | No | — |
-| role | enum | — | No | `plant_manager` \| `supervisor` \| `planner` \| `operator` \| `maintenance`; único por empresa (US-12 agrega `maintenance`) |
-| action | enum | — | No | `view_plant_panel` \| `set_threshold` \| `change_priority` \| `cancel_order` \| `export_report` \| `view_technician_names`; único por rol |
-| allowed | boolean | — | No | `default false`; define si la acción está habilitada |
+| role | enum | — | No | `plant_manager` \| `planner` \| `production_engineer` \| `supervisor` \| `operator` \| `maintenance` |
+| module | enum | — | No | `dashboard` \| `bom` \| `orders` \| `operator` \| `supervision` \| `scheduling` \| `line_balance` \| `maintenance` \| `roles` |
+| action | enum | — | No | `view` \| `create` \| `edit` \| `approve_close` \| `export` \| `configure_thresholds` |
+| allowed | boolean | — | No | `default false`; `true` equivale a `Sí` en FR-22 |
 | updated_at | timestamp | — | No | marca de la última configuración |
 
 **Reglas**
-- `(company_id, role, action)` es único.
-- `plant_manager` tiene permitidas todas las acciones; `supervisor` puede `view_plant_panel`, `change_priority` y `export_report`; `planner` puede `view_plant_panel`, `change_priority` y `export_report`; `operator` solo `view_plant_panel`; `maintenance` puede `view_plant_panel` y `view_technician_names`. `supervisor` y `planner` no pueden `set_threshold` ni `cancel_order`.
-- La matriz es una simulación de UX: no sustituye controles de seguridad ni autenticación.
+- `(company_id, role, module, action)` es único; la matriz completa se reproduce en la sección FR-22 de `spec.md`.
+- `plant_manager` permite todas las acciones; solo `plant_manager` y `planner` pueden `create`/`edit`/`approve_close` en `orders`; solo `plant_manager` y `maintenance` pueden `approve_close` en `maintenance`; `operator` solo `view`/`create` en `operator` y `view`/`create` de incidentes en `maintenance`; `production_engineer` puede `create`/`edit` en `bom` y `line_balance`.
+- `configure_thresholds` solo es `true` para `plant_manager` en `dashboard`; `roles` solo es accesible para `plant_manager`.
+- La matriz no depende de un control de cambio de rol: "Ver como" solo previsualiza y no amplía permisos; cada mutación se valida contra el rol autenticado y, si hay previsualización, contra la intersección con el rol previsualizado.
 
 ### 3.23 `role_users_plant_manager` — Identidades demo (US-12)
 
-Rol funcional: **cuenta demo del rol Jefa/Plant Manager**. Sustituye a la cuenta genérica `usuario` del snapshot anterior.
+Rol funcional: **cuenta demo del rol Jefa de Planta (`plant_manager`, administrador)**. No existe la cuenta genérica `usuario`.
 
 | Columna | Tipo | PK/FK | Nullable | Restricciones |
 |---|---|---|---|---|
 | id | uuid | PK | No | — |
 | company_id | uuid | FK → companies.id | No | — |
-| username | string | — | No | minúsculas, único en esta tabla; `jefa`, `test` en la demo |
-| password | string | — | No | valor inicial = `username`; actualizable con `changeUserPassword` (`jefa`, `test`) |
-| display_name | string | — | Sí | nombre visible solo para este rol |
+| username | string | — | No | minúsculas, único en esta tabla; demo: `jefa.planta` |
+| password | string | — | No | demo: `ForjaPlanta26!`; actualizable con `changeUserPassword` |
+| display_name | string | — | Sí | demo: `Bárbara Ilicura Sotomayor` |
+| module_home | string | — | Sí | demo: `plant` (`#/plant`) |
 | created_at | timestamp | — | No | — |
 
 ### 3.24 `role_users_supervisor` — Identidades demo (US-12)
 
-Rol funcional: **cuenta demo del rol Supervisor/a**. Misma estructura que §3.23; `username = supervisor`.
+Rol funcional: **cuenta demo del rol Supervisor de Línea (`supervisor`)**.
 
 | Columna | Tipo | PK/FK | Nullable | Restricciones |
 |---|---|---|---|---|
 | id | uuid | PK | No | — |
 | company_id | uuid | FK → companies.id | No | — |
-| username | string | — | No | minúsculas, único en esta tabla |
-| password | string | — | No | valor inicial = `username`; actualizable con `changeUserPassword` |
-| display_name | string | — | Sí | nombre visible para plant_manager y supervisor |
+| username | string | — | No | minúsculas, único en esta tabla; demo: `supervisor.linea` |
+| password | string | — | No | demo: `TurnoLinea26!`; actualizable con `changeUserPassword` |
+| display_name | string | — | Sí | demo: `Cristóbal Zermeño Aravena` |
+| module_home | string | — | Sí | demo: `supervision` (`#/supervision`) |
 | created_at | timestamp | — | No | — |
 
 ### 3.25 `role_users_planner` — Identidades demo (US-12)
 
-Rol funcional: **cuenta demo del rol Planificador/a**. Misma estructura que §3.23; `username = planificador`.
+Rol funcional: **cuenta demo del rol Planificador (`planner`)**.
 
 | Columna | Tipo | PK/FK | Nullable | Restricciones |
 |---|---|---|---|---|
 | id | uuid | PK | No | — |
 | company_id | uuid | FK → companies.id | No | — |
-| username | string | — | No | minúsculas, único en esta tabla |
-| password | string | — | No | valor inicial = `username`; actualizable con `changeUserPassword` |
-| display_name | string | — | Sí | — |
+| username | string | — | No | minúsculas, único en esta tabla; demo: `planificador.ops` |
+| password | string | — | No | demo: `Calendario2026!`; actualizable con `changeUserPassword` |
+| display_name | string | — | Sí | demo: `Marisol Antihuala Cárcamo` |
+| module_home | string | — | Sí | demo: `scheduling` (`#/scheduling`) |
 | created_at | timestamp | — | No | — |
 
 ### 3.26 `role_users_operator` — Identidades demo (US-12)
 
-Rol funcional: **cuenta demo del rol Operador/a**. Misma estructura que §3.23; `username = operador`.
+Rol funcional: **cuenta demo del rol Operador (`operator`)**. Etiqueta visible canónica: `Operador`.
 
 | Columna | Tipo | PK/FK | Nullable | Restricciones |
 |---|---|---|---|---|
 | id | uuid | PK | No | — |
 | company_id | uuid | FK → companies.id | No | — |
-| username | string | — | No | minúsculas, único en esta tabla |
-| password | string | — | No | valor inicial = `username`; actualizable con `changeUserPassword` |
-| display_name | string | — | Sí | — |
+| username | string | — | No | minúsculas, único en esta tabla; demo: `operador.planta` |
+| password | string | — | No | demo: `Estacion2026!`; actualizable con `changeUserPassword` |
+| display_name | string | — | Sí | demo: `Yanis Cheuquemán Linco` |
+| module_home | string | — | Sí | demo: `operator` (`#/operator`) |
 | created_at | timestamp | — | No | — |
 
 ### 3.27 `role_users_maintenance` — Identidades demo (US-12)
 
-Rol funcional: **cuenta demo del rol Encargado/a de Mantenimiento**. Misma estructura que §3.23; la fixture usa `username = mantenimiento` y `password = mantenimiento`.
+Rol funcional: **cuenta demo del rol Encargado de Mantenimiento (`maintenance`)**.
 
 | Columna | Tipo | PK/FK | Nullable | Restricciones |
 |---|---|---|---|---|
 | id | uuid | PK | No | — |
 | company_id | uuid | FK → companies.id | No | — |
-| username | string | — | No | minúsculas, único en esta tabla |
-| password | string | — | No | valor inicial = `username`; actualizable con `changeUserPassword` |
-| display_name | string | — | Sí | visible solo para `maintenance` y `plant_manager` |
+| username | string | — | No | minúsculas, único en esta tabla; demo: `mantencion.mgr` |
+| password | string | — | No | demo: `TallerMaq26!`; actualizable con `changeUserPassword` |
+| display_name | string | — | Sí | demo: `Ruperto Espinoza Gaete`; visible solo para `maintenance` y `plant_manager` |
+| module_home | string | — | Sí | demo: `maintenance` (`#/maintenance`) |
 | created_at | timestamp | — | No | — |
 
-**Reglas de las cinco tablas de roles (AC-47 a AC-52, AC-88 a AC-90, AC-117 a AC-118)**
-- Un mismo `username` puede existir en varias tablas; el conjunto de roles asignados es la unión de las tablas donde aparece.
-- Credenciales demo iniciales: `jefa/jefa`, `supervisor/supervisor`, `planificador/planificador`, `operador/operador`, `mantenimiento/mantenimiento`; más `test/test` en las cinco tablas y `doble/doble` solo en `role_users_operator` y `role_users_maintenance`. No existe `usuario`.
-- `authenticate` recorre las cinco tablas y acepta solo pares presentes cuya contraseña vigente coincida; la contraseña inicial es el `username`, pero puede haber sido cambiada con `changeUserPassword`.
+### 3.28 `role_users_production_engineer` — Identidades demo (US-12)
+
+Rol funcional: **cuenta demo del rol Ingeniero de Producción (`production_engineer`)**.
+
+| Columna | Tipo | PK/FK | Nullable | Restricciones |
+|---|---|---|---|---|
+| id | uuid | PK | No | — |
+| company_id | uuid | FK → companies.id | No | — |
+| username | string | — | No | minúsculas, único en esta tabla; demo: `ingeniero.prod` |
+| password | string | — | No | demo: `RutaOptimal26!`; actualizable con `changeUserPassword` |
+| display_name | string | — | Sí | demo: `Efraín Troncoso Bustamante` |
+| module_home | string | — | Sí | demo: `line-balance` (`#/line-balance`) |
+| created_at | timestamp | — | No | — |
+
+**Reglas de las seis tablas de roles (AC-47 a AC-52, AC-82 a AC-90, AC-117 a AC-118, AC-127 a AC-132)**
+- Cada cuenta demo existe en una sola tabla; las cuentas `usuario`, `test` y `doble` no existen. Las seis credenciales demo son:
+  - `jefa.planta` / `ForjaPlanta26!` / `Bárbara Ilicura Sotomayor` / `#/plant`
+  - `planificador.ops` / `Calendario2026!` / `Marisol Antihuala Cárcamo` / `#/scheduling`
+  - `ingeniero.prod` / `RutaOptimal26!` / `Efraín Troncoso Bustamante` / `#/line-balance`
+  - `supervisor.linea` / `TurnoLinea26!` / `Cristóbal Zermeño Aravena` / `#/supervision`
+  - `operador.planta` / `Estacion2026!` / `Yanis Cheuquemán Linco` / `#/operator`
+  - `mantencion.mgr` / `TallerMaq26!` / `Ruperto Espinoza Gaete` / `#/maintenance`
+- `authenticate` busca la cuenta en la tabla de su único rol, valida la contraseña vigente (inicial o cambiada) y persiste `erp.manufacturing.role` con ese rol; no une roles ni deriva roles de otras tablas.
 - `addRoleUser(role, { username })` crea, si falta, una fila en una sola tabla con `password = username`, `company_id = 'cmp_1'`, `id` prefijado `ru` y `created_at` ISO; deduplica por `username` dentro de esa tabla y persiste en `erp.manufacturing.v2`.
-- `createUserWithRoles(username, roles)` (alta multi-rol, AC-117/AC-118) normaliza el usuario a minúsculas, conserva como máximo los cinco roles canónicos únicos e ignorando duplicados o valores inválidos, crea una fila por cada tabla seleccionada con la misma contraseña inicial, persiste una sola vez y emite `change`; el formulario vuelve a una sola fila de rol tras el toast de confirmación.
+- `createUserWithRoles(username, roles)` (alta multi-rol, AC-117/AC-118) normaliza el usuario a minúsculas, conserva como máximo los seis roles canónicos únicos e ignora duplicados o valores inválidos, crea una fila por cada tabla seleccionada con contraseña inicial igual al `username`, persiste una sola vez y emite `change`; el formulario vuelve a una sola fila de rol tras el toast de confirmación.
 - `removeRoleUser(role, username)` (baja confirmada, AC-88) normaliza el usuario, elimina únicamente la fila de la tabla indicada, persiste y emite `change`. Devuelve `{ ok: true, role, username, removed }` o `{ ok: false, reason }` con `invalid-input`, `user-not-found` o `last-plant-manager`; este último motivo impide dejar `role_users_plant_manager` vacía y no muta ninguna tabla. Cancelar o cerrar `ConfirmDialog.js` tampoco muta el snapshot.
 - `changeUserPassword(username, currentPassword, newPassword)` (AC-90) normaliza el usuario, exige contraseña actual válida y nueva no vacía (después de recortar espacios), actualiza `password` en **todas** las tablas donde aparezca el usuario, persiste y emite un solo `change`. Ante usuario inexistente, contraseña actual inválida o nueva vacía devuelve `{ ok: false, reason }` con `user-not-found`, `invalid-current-password` o `empty-password` sin mutar datos. El cambio es válido para cualquier rol activo y se conserva tras logout y recarga.
-- El `<select data-role="role-select">` de la cabecera es el único selector: muestra solo roles asignados, se oculta con un solo rol y no se duplica en `#/roles` ni en otros paneles; el módulo activo se resuelve con `MODULE_ACCESS[activeRole]`.
-- `MODULE_ACCESS` (AC-51): supervisor pierde `orders`; operator queda exactamente `['operator', 'scheduling', 'roles']` y en scheduling solo ve el Calendario Mensual sin pestaña “Listado”; maintenance queda exactamente `['maintenance', 'scheduling']` y su “Listado” muestra “Mantenimientos activos”.
+- No existe control de cambio de rol en la cabecera ni en los paneles: el módulo activo se resuelve con `MODULE_ACCESS[authenticatedRole]`; solo `plant_manager` puede iniciar "Ver como" desde el menú de usuario como previsualización temporal.
+- `MODULE_ACCESS` (AC-51): `production_engineer` accede a `dashboard`, `bom`, `line-balance` y `plant` solo lectura; supervisor pierde `orders`; operator queda exactamente `['operator', 'scheduling']` y en scheduling solo ve el Calendario Mensual sin pestaña “Listado”; maintenance queda exactamente `['maintenance', 'scheduling']` y su “Listado” muestra “Mantenimientos activos”; `roles` solo para `plant_manager`.
 - Los nombres de `hr_employees` son visibles solo para `supervisor` y `plant_manager`; los demás roles ven iniciales o “[Rol]”. Los nombres de técnicos son visibles solo para `maintenance` y `plant_manager`; los demás ven máquina + duración.
-- Las tablas se restauran con `resetDemoData()` y se persisten en `erp.manufacturing.v2`; la restauración reconstruye además todas las credenciales iniciales y el dataset de FR-21 con fechas relativas.
+- Las tablas se restauran con `resetDemoData()` y se persisten en `erp.manufacturing.v2`; la restauración reconstruye las credenciales iniciales y el dataset completo de la sección **Datos de demostración** de `spec.md` con fechas relativas.
 
-### 3.28 `order_stations` — Dotación por orden (US-14)
+### 3.29 `order_stations` — Dotación por orden (US-14)
 
 Rol funcional: **pre carga de estaciones/máquinas derivada de BOM/ruta** y dotación editable desde supervisión. Una estación equivale a un `work_center` existente, sin subdivisiones.
 
@@ -561,6 +587,23 @@ Rol funcional: **pre carga de estaciones/máquinas derivada de BOM/ruta** y dota
 - Añadir o quitar estaciones y operadores persiste en `erp.manufacturing.v2` y emite `change`; no altera `production_order_operations` ni `shift_assignments`.
 - El detalle diario muestra `Secuencia <N>` con título explicativo y cantidad de trabajadores, sin doble numeración `1., 2., 3.` en la misma fila (AC-64).
 - “Editar estaciones y trabajadores” (solo supervisor y plant_manager) redirige a `#/supervision` y abre esa orden en `SupervisorLinePanel.js`; `#/orders` conserva buscador y filtro de prioridad sin controles de dotación (AC-65/AC-66).
+
+### 3.30 Conjuntos de datos de demostración
+
+`createFixtureSnapshot()` y `resetDemoData()` construyen el dataset semilla y, bajo demanda, el dataset de volumen. Todas las fechas se derivan de `demo-dates.js` y se recalculan al reiniciar.
+
+| Conjunto | Reglas de contenido |
+|---|---|
+| Semilla | 1 empresa, 3 bodegas, 4 UoM y 13 productos: 4 terminados (`Bicicleta Urbana 700c`, `Bicicleta Cargo 700c`, `Cuadro Soldado`, `Rueda Armada`), 6 componentes/subensambles y 3 materias primas. |
+| BOM | 4 BOM vigentes, uno por producto terminado, con profundidad máxima 4 y sin ciclos; cada orden liberada/en curso congela su versión. |
+| Centros | 10 `work_centers`, uno (`Horno de Curado`) con `active = false`; estados `available`, `in_operation` y `fault` presentes en el arranque. El centro inactivo no admite programación nueva. |
+| Órdenes | 40 filas: 12 `planned` (4 sin fechas), 6 `released`, 6 `in_progress`, 14 `completed` y 2 `cancelled`, distribuidas 10/20/10 entre mes anterior/actual/siguiente. |
+| Turnos y atrasos | 5 turnos `completed` sin validar, 2 validados, 3 atrasos `open` (uno escalado) y 8 `closed` con marca de corrección. |
+| Tickets | 15 correctivos: 5 `open`, 5 `in_progress`, 5 `resolved`; 5 `urgent`, 5 `high`, 5 `normal`; al menos 2 activos programados entre hoy y `relativeDay(+10)`. |
+| Preventivas | 5: 1 vencida sin resolver, 2 vigentes entre `relativeDay(+2)` y `relativeDay(+8)`, 1 `in_progress` y 1 `completed`. |
+| RR.HH. | 12 empleados con nombres ficticios únicos: 6 operadores, 3 técnicos, 1 supervisora, 1 planificador y 1 jefa de planta. |
+| Cuentas | 6 filas, una por tabla de rol, con credenciales literales de la sección anterior. |
+| `demo-volume-500` | 500 órdenes deterministas (125 completed, 100 in_progress, 100 released, 125 planned, 50 cancelled) con BOM de 4 niveles; no se instala en el arranque ni en `resetDemoData()`, se genera explícitamente para SC-07. |
 
 ---
 
@@ -601,9 +644,9 @@ Rol funcional: **pre carga de estaciones/máquinas derivada de BOM/ruta** y dota
 | work_centers → preventive_maintenance_orders (`work_center_id`) | 1:N | plan preventivo por máquina |
 | maintenance_tickets → preventive_maintenance_orders (`source_ticket_id`) | 1:N (nullable) | tickets de desgaste que sustentan órdenes preventivas |
 | companies → threshold_settings | 1:N | configuración de umbrales por empresa (US-08) |
-| companies → role_permissions | 1:N | matriz rol×acción simulada por empresa (US-08) |
-| companies → role_users_* (cinco tablas) | 1:N por tabla | identidades demo separadas por rol (US-12) |
-| role_users_* ⟷ roles asignados | N:1 lógico | un `username` puede tener varios roles; la unión alimenta el selector |
+| companies → role_permissions | 1:N | matriz rol×módulo×acción vigente por empresa (FR-22) |
+| companies → role_users_* (seis tablas) | 1:N por tabla | identidades demo separadas por rol (US-12) |
+| role_users_* → rol autenticado | 1:1 lógico | cada cuenta demo resuelve un único rol en el login; no hay unión de roles |
 | production_orders → order_stations | 1:N | estaciones derivadas y dotación editable por orden (US-14) |
 | work_centers → order_stations | 1:N | una estación/máquina aparece en muchas órdenes |
 | hr_employees → order_stations (`operator_ext_hr_employee_ids`) | 1:N (puente de solo lectura) | operadores asignados por estación y orden |
@@ -671,6 +714,12 @@ erDiagram
 
     companies ||--o{ threshold_settings : "configures"
     companies ||--o{ role_permissions : "grants"
+    companies ||--o{ role_users_plant_manager : "authenticates"
+    companies ||--o{ role_users_planner : "authenticates"
+    companies ||--o{ role_users_production_engineer : "authenticates"
+    companies ||--o{ role_users_supervisor : "authenticates"
+    companies ||--o{ role_users_operator : "authenticates"
+    companies ||--o{ role_users_maintenance : "authenticates"
 
     companies {
         uuid id PK
@@ -868,6 +917,7 @@ erDiagram
         uuid id PK
         uuid company_id FK
         enum role
+        enum module
         enum action
         boolean allowed
         timestamp updated_at
@@ -878,6 +928,7 @@ erDiagram
         string username
         string password
         string display_name
+        string module_home
         timestamp created_at
     }
     role_users_supervisor {
@@ -886,6 +937,7 @@ erDiagram
         string username
         string password
         string display_name
+        string module_home
         timestamp created_at
     }
     role_users_planner {
@@ -894,6 +946,16 @@ erDiagram
         string username
         string password
         string display_name
+        string module_home
+        timestamp created_at
+    }
+    role_users_production_engineer {
+        uuid id PK
+        uuid company_id FK
+        string username
+        string password
+        string display_name
+        string module_home
         timestamp created_at
     }
     role_users_operator {
@@ -902,6 +964,7 @@ erDiagram
         string username
         string password
         string display_name
+        string module_home
         timestamp created_at
     }
     role_users_maintenance {
@@ -910,6 +973,7 @@ erDiagram
         string username
         string password
         string display_name
+        string module_home
         timestamp created_at
     }
     order_stations {
@@ -989,7 +1053,7 @@ erDiagram
 - `load` puede superar `1` para señalar sobrecarga; el panel debe destacarlo.
 - `capacity_minutes(work_center, period) = business_days(period) × capacity_per_day_minutes × efficiency_factor`; los días hábiles excluyen sábados y domingos.
 - Los estados de utilización son Normal (`[0, 0.75)`) en verde, Ajustada (`[0.75, 0.95)`) en ámbar y Cuello crítico / Sobrecarga (`[0.95, ∞)`) en rojo. No hay intervalo sin clasificar entre 94 % y 95 %. Si ningún centro llega al 95%, la vista muestra “Línea balanceada · Sin cuellos de botella críticos”.
-- Las reasignaciones sugeridas requieren el mismo `station_type` en origen y destino. La demo tiene 5 tipos y 6 estaciones físicas (Soldadura 1 y Soldadura 2).
+- Las reasignaciones sugeridas requieren el mismo `station_type` en origen y destino. La demo tiene 10 centros de trabajo; el ejemplo de balance usa 5 tipos y 2 estaciones de Soldadura (Soldadura 1 y Soldadura 2).
 - No existe `lineBalanceRequest`: la aceptación de una sugerencia es simulada, solo marca la fila en la vista y no escribe en `erp.manufacturing.v2`.
 - Los indicadores se calculan por centro de trabajo y período; nunca por operador.
 - `detectBottlenecks` devuelve una lista ordenada, no un ranking de personas.
@@ -998,7 +1062,9 @@ erDiagram
 
 | Variable derivada | Fuente | Significado en el negocio |
 |---|---|---|
-| `assigned_roles` | unión de las cinco tablas `role_users_*` | Roles disponibles para el selector; el módulo activo se resuelve con `MODULE_ACCESS`. |
+| `authenticated_role` | tabla `role_users_*` correspondiente a la cuenta del login | Único rol de la sesión; determina `MODULE_ACCESS`, la matriz FR-22 y el módulo de inicio. |
+| `preview_role` | "Ver como" de `plant_manager` | Rol previsualizado de forma temporal; no reemplaza la identidad ni amplía permisos. |
+| `permission_matrix` | `role_permissions` | Celda `(role, module, action)` consultada por UI y store antes de cada operación. |
 | `calendarState` | memoria de sesión | Mes, filtros, arrastre y foco; nunca se persisten en `erp.manufacturing.v2`. |
 | `pendingSchedulingOrders` | `production_orders.planned_start_date` / `planned_end_date` | Órdenes sin rango asignado o con rango inválido, visibles para supervisor/planner/jefa. |
 | `effectiveMaintenanceEnd` | `scheduled_end_date` + fecha actual + `resolved_at` | Fecha visible de vencimientos y resoluciones; no altera la fecha programada original. |
@@ -1053,7 +1119,7 @@ erDiagram
 
 ### 7.5 Privacidad por rol en US-12 a US-15
 
-- Nombres reales de `hr_employees`: solo `supervisor` y `plant_manager`; `operator`, `planner` y `maintenance` ven iniciales o “[Rol]”.
+- Nombres reales de `hr_employees`: solo `supervisor` y `plant_manager`; `planner`, `production_engineer`, `operator` y `maintenance` ven iniciales o “[Rol]”.
 - Nombres de técnicos de mantenimiento: solo `maintenance` y `plant_manager`; los demás roles ven máquina, estado y duración, nunca el nombre.
 - `display_name` de las tablas `role_users_*` es información demo y nunca se usa para evaluación de desempeño.
 - El editor de estaciones muestra operarios como dotación operativa; no genera rankings ni expone tiempos individuales.
@@ -1086,13 +1152,14 @@ erDiagram
 - `preventive_maintenance_orders` no reabre ni reemplaza su `source_ticket_id`; el ticket de origen se conserva como trazabilidad.
 - `production_orders.planned_end_date ≥ planned_start_date` cuando ambas existen; `updatePlannedDates` rechaza fechas no ISO y conserva el último valor válido.
 - `threshold_settings`: `(company_id, indicator)` único; `oee | load | fulfillment` ⇒ `threshold ∈ [0, 1]`; `downtime` ⇒ `threshold ≥ 0` y `comparison = gt`.
-- `role_permissions`: `(company_id, role, action)` único; `plant_manager` ⇒ todas las acciones permitidas; `supervisor` y `planner` ⇒ `view_plant_panel`, `change_priority`, `export_report`; `operator` ⇒ solo `view_plant_panel`.
+- `role_permissions`: `(company_id, role, module, action)` único; `plant_manager` ⇒ todas las celdas `Sí` de FR-22; el resto de roles sigue la matriz por módulo y acción, con `configure_thresholds` restringido a `plant_manager`.
 - Los valores de OEE, carga, utilización y cuello de botella son derivados y no se persisten en ninguna colección.
 - `work_centers.station_type` es obligatorio y limita las reasignaciones de US-11 a pares del mismo tipo; las confirmaciones de la vista no generan registros.
 - `work_centers.recommended_maintenance_frequency_days`, si existe, es entero ≥ 1 y solo lo editan `maintenance` y `plant_manager` (AC-68).
-- `role_users_*`: `username` en minúsculas y único por tabla; credenciales `jefa`, `supervisor`, `planificador`, `operador`, `mantenimiento`, `test` (cinco tablas) y `doble` (operator/maintenance); la cuenta `usuario` no existe.
-- `role_permissions.role` incluye `maintenance`; `maintenance` ⇒ `view_plant_panel` y `view_technician_names`, sin `set_threshold`, `cancel_order` ni `change_priority`.
-- `MODULE_ACCESS` (AC-51): supervisor sin `orders`; operator exactamente `['operator', 'scheduling', 'roles']` sin pestaña “Listado”; maintenance exactamente `['maintenance', 'scheduling']`.
+- `role_users_*`: `username` en minúsculas y único por tabla; una cuenta demo por rol con las credenciales literales de FR-13; no existen `usuario`, `test` ni `doble`.
+- `role_permissions.role` incluye los seis roles canónicos; `maintenance` ve y reporta incidentes, y solo `plant_manager` y `maintenance` toman/cierran tickets; solo `plant_manager` y `planner` liberan, reprograman o cancelan órdenes.
+- `MODULE_ACCESS` (AC-51): `production_engineer` con `dashboard`, `bom`, `line-balance` y `plant` solo lectura; supervisor sin `orders`; operator exactamente `['operator', 'scheduling']` sin pestaña “Listado”; maintenance exactamente `['maintenance', 'scheduling']`; `roles` solo para `plant_manager`.
+- Toda mutación del store comprueba `(authenticated_role, module, action)` en `role_permissions` antes de escribir y devuelve `{ ok: false, reason: 'permission-denied' }` si la celda no está permitida; la UI oculta la acción.
 - `production_orders.priority` incluye `urgent`; `is_critical_urgent` es booleano derivado de la marca explícita, no del valor de `priority`.
 - `scheduled_start_time` / `scheduled_end_time`: `HH:mm` válido, end > start; se aplican a cada día del rango seleccionado en el calendario.
 - `maintenance_tickets.scheduled_end_date ≥ scheduled_start_date`; un ticket sin ambas fechas no aparece en el calendario ni en “Activos”.
@@ -1101,6 +1168,6 @@ erDiagram
 - Una mantención resuelta/completada es inmutable: `resolveScheduledMaintenance` falla si el evento ya está cerrado y `deleteResolvedMaintenance` solo opera desde “Históricos” con rol `maintenance`.
 - Programar desde ticket pasa el ticket a `in_progress` y la máquina a `fault`; una preventiva nunca se resuelve por vencimiento del plazo (AC-69/AC-72).
 - `calendarState`, `focusOrderId` y las fechas visibles vencidas son derivados/transitorios: no se persisten en `erp.manufacturing.v2`.
-- `createUserWithRoles` admite como máximo cinco roles canónicos únicos; la contraseña inicial es siempre el `username` y el alta se persiste una sola vez.
+- `createUserWithRoles` admite como máximo seis roles canónicos únicos; la contraseña inicial es siempre el `username` y el alta se persiste una sola vez.
 - `removeRoleUser` elimina una sola tabla y rechaza `last-plant-manager` sin mutar el snapshot; `changeUserPassword` actualiza todas las tablas que comparten `username` y valida la credencial anterior antes de persistir (AC-88/AC-90).
-- FR-21/US-16: `createFixtureSnapshot()` y `resetDemoData()` deben usar `demo-dates.js` para fechas relativas y reconstruir sin huérfanos ni duplicados el dataset completo (maestros, BOM de 4 niveles, 6 centros, 11 RR.HH., ≥ 10 órdenes con 2 sin fechas, ≥ 7 tickets con 2 vigentes, 4 preventivas con 2 vigentes y las 7 credenciales exactas). AC-120 a AC-126 permanecen Pendiente hasta su verificación.
+- FR-21/US-16: `createFixtureSnapshot()` y `resetDemoData()` usan `demo-dates.js` para fechas relativas y reconstruyen sin huérfanos ni duplicados el dataset de la sección §3.30: 13 productos, 4 BOM de hasta 4 niveles, 10 centros con uno inactivo, 12 RR.HH., 40 órdenes (4 abiertas sin fechas), 5 turnos pendientes, 3 atrasos abiertos y 8 cerrados, 15 tickets, 5 preventivas y 6 credenciales exactas; `demo-volume-500` se genera solo bajo demanda. AC-120 a AC-126 y AC-133 a AC-135 permanecen Pendiente hasta su verificación.

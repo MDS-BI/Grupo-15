@@ -1,6 +1,6 @@
 # Inicio Rápido: Módulo de Operaciones / Manufactura (ERP)
 
-**Rama**: `012-consolidate-manufacturing-spec` | **Fecha**: 2026-11-03 | **Actualizado**: 2026-11-24
+**Rama**: `main` (sin creación de rama ni carpeta nueva) | **Fecha**: 2026-11-03 | **Actualizado**: 2026-11-26
 **Referencias**: [spec.md](spec.md), [plan.md](plan.md), [data-model.md](data-model.md), [contracts/operator-shift.md](contracts/operator-shift.md), [contracts/maintenance.md](contracts/maintenance.md), [contracts/plant-performance.md](contracts/plant-performance.md), [contracts/order-scheduling.md](contracts/order-scheduling.md), [contracts/line-balance.md](contracts/line-balance.md)
 
 ---
@@ -161,11 +161,12 @@ El módulo es frontend-only: no requiere backend ni variables de entorno. Los da
 1. Abra el **Panel de planta** y seleccione un período con órdenes y paradas.
 2. Confirme las tarjetas de **carga**, **OEE**, **paradas por motivo** y **cumplimiento**; los valores deben coincidir con el detalle por centro.
 3. Verifique que un centro con `load_ratio > 1` se marca como sobrecargado y que los centros desactivados aparecen, sin carga, marcados como inactivos.
-4. Ajuste un **umbral** (por ejemplo OEE `< 0.70`) y confirme que la alarma aparece o desaparece según el valor del período.
-5. Cambie el **rol simulado**:
-   - `operator` solo puede ver el panel;
-   - `planner` puede cambiar prioridad y exportar;
-   - `plant_manager` puede además ajustar umbrales y cancelar órdenes.
+4. Ingrese como `jefa.planta` / `ForjaPlanta26!`, ajuste un **umbral** (por ejemplo OEE `< 0.70`) y confirme que la alarma aparece o desaparece según el valor del período.
+5. Cierre sesión y verifique los permisos según la cuenta del login:
+   - `operador.planta` solo puede ver el panel;
+   - `planificador.ops` puede cambiar prioridad y exportar;
+   - `ingeniero.prod` ve el panel solo lectura;
+   - `jefa.planta` puede además ajustar umbrales y cancelar órdenes.
 6. Como `planner`, cambie la **prioridad** de una orden `planned` y confirme que se refleja en la tabla; intente con una orden `in_progress` y confirme el rechazo.
 7. Como `plant_manager`, **cancele** una orden: exija motivo, confirme y verifique que conserva sus operaciones y registros de ejecución.
 8. **Exporte** el reporte a PDF y Excel; ambos deben contener los indicadores del período y no incluir datos por operador.
@@ -244,7 +245,7 @@ El módulo es frontend-only: no requiere backend ni variables de entorno. Los da
 4. **Turno del operador** (60 s): en **Estación**, inicie, ajuste contadores, registre un atraso y finalice con confirmación.
 5. **Cierre y escalamiento** (40 s): valide el cierre en **Supervisión**; escale un incidente y confirme el ticket urgente y el estado *En fallo*.
 6. **Mantenimiento** (50 s): tome el ticket más antiguo, resuélvalo con marcas de parada y confirme que la máquina sale de *En fallo*.
-7. **Panel de planta** (40 s): revise carga/OEE/paradas, cambie el rol simulado, ajuste un umbral y cancele una orden con motivo.
+7. **Panel de planta** (40 s): ingrese como `jefa.planta`, revise carga/OEE/paradas, ajuste un umbral y cancele una orden con motivo.
 8. **Balance de líneas** (45 s): identifique el cuello crítico (≥ 95 %), confirme la reasignación simulada Soldadura 1 → Soldadura 2 y abra el detalle por orden.
 9. **Recarga** (20 s): recargue la página, confirme que turno, atrasos, asignaciones, umbrales y fechas persisten en `erp.manufacturing.v2`, y que el balance se recalcula sin dejar solicitudes registradas.
 
@@ -252,18 +253,29 @@ El módulo es frontend-only: no requiere backend ni variables de entorno. Los da
 
 ## 17. Cuentas, roles y acceso (US-12; FR-13/FR-19/FR-20)
 
-1. Limpie `localStorage` o use **Reiniciar datos de demo** como `jefa` para recuperar las credenciales iniciales. Ingrese con `jefa/jefa`, `supervisor/supervisor`, `planificador/planificador`, `operador/operador` o `mantenimiento/mantenimiento`; `usuario` debe fallar. También funcionan `test/test` (cinco roles) y `doble/doble` (`operator` y `maintenance`).
-2. El menú superior es el único lugar con **Cambiar contraseña**. Abra el modal, invalide una contraseña actual incorrecta y luego guarde una nueva con su confirmación; el cambio se aplica a todas las tablas donde figure el usuario, persiste en `erp.manufacturing.v2` y sigue vigente tras logout y recarga.
-3. El selector de rol de la cabecera muestra solo los roles asignados: cinco para `test`, dos para `doble` y ninguno para cuentas de un solo rol. No existe el botón lateral “Datos de roles” ni un selector duplicado. `#/admin-roles` abre “Configurar roles” dentro de `#/roles` solo cuando el rol activo es `plant_manager`.
-4. En **Roles** (`#/roles`) vea solo las tarjetas de los roles asignados, con “Rol efectivo” en la activa. Al presionar otra tarjeta aparece `ConfirmDialog.js` con “¿Deseas cambiar tu vista al rol <Nombre del rol>?”; cancelar conserva el rol activo.
-5. En **Configurar roles** confirme las cinco tablas. El botón “+” agrega filas “Rol 2” a “Rol 5”; al llegar a cinco se deshabilita, las filas extra se pueden quitar y **Agregar** crea el usuario en todos los roles elegidos con contraseña inicial igual al nombre de usuario, deduplica repeticiones, muestra un toast y vuelve a una sola fila. Cada chip permite **Quitar** (×) con confirmación; rechazar al último `plant_manager` no muta el snapshot.
-6. Verifique `MODULE_ACCESS`: supervisor no ve `orders`; operator ve exactamente `operator`, `scheduling`, `roles` y en Planificación solo **Calendario**; maintenance ve exactamente `maintenance`, `scheduling` y en **Listado** ve “Mantenimientos activos” en lugar de órdenes. Los IDs de ruta no cambian.
-7. Revise privacidad: `operator`/`planner` no ven nombres de `hr_employees` ni de técnicos; `supervisor` ve nombres de operarios; `maintenance` ve nombres de técnicos. Las ventanas, confirmaciones y toasts se imprimen por encima de encabezados sticky y barras fijas.
+1. Limpie `localStorage` o use **Reiniciar datos de demo** como `jefa.planta` para recuperar las credenciales iniciales. Ingrese con una y solo una de estas cuentas:
+
+   | Usuario | Contraseña | Persona | Módulo de inicio |
+   |---|---|---|---|
+   | `jefa.planta` | `ForjaPlanta26!` | Bárbara Ilicura Sotomayor | Panel de planta (`#/plant`) |
+   | `planificador.ops` | `Calendario2026!` | Marisol Antihuala Cárcamo | Planificación (`#/scheduling`) |
+   | `ingeniero.prod` | `RutaOptimal26!` | Efraín Troncoso Bustamante | Balance de líneas (`#/line-balance`) |
+   | `supervisor.linea` | `TurnoLinea26!` | Cristóbal Zermeño Aravena | Supervisión (`#/supervision`) |
+   | `operador.planta` | `Estacion2026!` | Yanis Cheuquemán Linco | Estación (`#/operator`) |
+   | `mantencion.mgr` | `TallerMaq26!` | Ruperto Espinoza Gaete | Mantenimiento (`#/maintenance`) |
+
+   `usuario`, `test` y `doble` deben fallar. Cada login abre directamente su módulo de inicio y no aparece ningún control de cambio de rol en la cabecera ni en los paneles.
+2. El menú superior es el único lugar con **Cambiar contraseña** y, solo para `jefa.planta`, **Ver como**. Pruebe una contraseña actual incorrecta, luego guarde una nueva con su confirmación; el cambio persiste en `erp.manufacturing.v2` y sigue vigente tras logout y recarga. "Ver como" solo previsualiza: cancele, confirme y vuelva a "Volver a mi rol" sin cambiar credenciales ni permisos.
+3. Verifique la matriz FR-22 con cada cuenta: el Operador solo ve y reporta incidentes en Mantenimiento; el Encargado de Mantenimiento y la Jefa toman/cierran tickets; Planificador y Jefa liberan, reprograman o cancelan órdenes; Ingeniero edita BOM, rutas y balance; solo la Jefa configura umbrales. Las acciones no permitidas no aparecen y, si se fuerzan por URL o desde la consola, el store devuelve `permission-denied` sin mutar el snapshot.
+4. La única página **Roles** (`#/roles`) aparece solo en la navegación de `jefa.planta` y muestra las seis tarjetas con la configuración integrada. `#/admin-roles` redirige a `#/roles` para la Jefa y es denegado para cualquier otra cuenta; no existe el botón “Datos de roles”.
+5. En la configuración confirme las seis tablas. El botón “+” agrega filas “Rol 2” a “Rol 6”; al llegar a seis se deshabilita, las filas extra se pueden quitar y **Agregar** crea el usuario en todos los roles elegidos con contraseña inicial igual al nombre de usuario, deduplica repeticiones, muestra un toast y vuelve a una sola fila. Cada chip permite **Quitar** (×) con confirmación; rechazar al último `plant_manager` no muta el snapshot.
+6. Verifique `MODULE_ACCESS`: `production_engineer` accede a `dashboard`, `bom`, `line-balance` y `plant` solo lectura; supervisor no ve `orders`; operator ve exactamente `operator` y `scheduling` y en Planificación solo **Calendario**; maintenance ve exactamente `maintenance` y `scheduling` y en **Listado** ve “Mantenimientos activos” en lugar de órdenes; `roles` solo para la Jefa. Los IDs de ruta no cambian.
+7. Revise privacidad: `operator`, `planner` y `production_engineer` no ven nombres de `hr_employees` ni de técnicos; `supervisor` ve nombres de operarios; `maintenance` ve nombres de técnicos. Las ventanas, confirmaciones y toasts se imprimen por encima de encabezados sticky y barras fijas.
 
 ## 18. Planificación y calendario (US-13; FR-19/FR-20)
 
 1. Abra **Planificación**: **Calendario** y **Listado** son pestañas integradas del mismo sistema visual; `operator` solo ve **Calendario** y `maintenance` ve el listado “Mantenimientos activos” con buscador, filtro Todos/Vigentes/Vencidos y **Resolver**, sin tabla de órdenes.
-2. El calendario abre en el mes actual, recuerda el mes entre pestañas y vuelve al actual al cambiar de usuario/rol, cerrar sesión o recargar. La cuadrícula usa siete columnas a todo el ancho, muestra títulos legibles y como máximo tres eventos por día con “+N más”.
+2. El calendario abre en el mes actual, recuerda el mes entre pestañas y vuelve al actual al cambiar de cuenta, cerrar sesión o recargar. La cuadrícula usa siete columnas a todo el ancho, muestra títulos legibles y como máximo tres eventos por día con “+N más”.
 3. El filtro inicia en **Ambos**; pruebe **Solo Órdenes de Trabajo** y **Solo Mantenciones** (tickets programados + preventivas).
 4. La bandeja vertical **Pendiente de horario** aparece a la derecha del calendario solo para planner y jefa (`.calendar-layout--with-tray`); para supervisor, operator y maintenance el calendario conserva el 100 % del ancho. Las tarjetas muestran borde, esquinas redondeadas, `% de avance` y urgencia/prioridad; solo jefa cambia prioridad y marca **Urgencia crítica**.
 5. Como planner, un clic en cualquier zona de una tarjeta de orden activa el modo foco: `.scheduling-focus-backdrop` queda en la capa 40, el calendario se eleva en la 50 con fondo blanco y `.scheduling-floating-card` sigue al cursor en la 60. Con `mousedown` + `mouseenter`/`mouseover` arrastre de lunes a miércoles: el rango se colorea en vivo; soltar en cualquier lugar del documento abre un modal centrado con `08:00`–`16:00` editables y el rango exacto; clic derecho cancela sin abrirlo.
@@ -295,11 +307,13 @@ El módulo es frontend-only: no requiere backend ni variables de entorno. Los da
 
 | AC | Verificación |
 |---|---|
-| AC-47 a AC-52 | §17: cinco roles, credenciales, tablas, selector único, `MODULE_ACCESS` y privacidad. |
+| AC-47 a AC-52 / AC-127 a AC-132 | §17: seis roles, cuentas literales, tablas, permisos del login, `MODULE_ACCESS` y privacidad. |
 | AC-53 a AC-62 | §18: mes, filtros, bandeja, foco, arrastre, menú diario, roles y resúmenes. |
 | AC-63 a AC-66 | §19: BOM/stations, `Secuencia <N>`, editor desde supervisión y `#/orders` intacto. |
 | AC-67 a AC-75 | §20: tres pestañas, Máquinas, Tickets, tres bloques, fechas, resolución e inmutabilidad. |
 | AC-76 | §22: mejoras de `main`, rutas, paquete y `vitest.config.mjs` intactos. |
+| AC-82 a AC-90 / AC-117 / AC-118 | §17:Roles único, "Ver como" de la Jefa, bajas, cambio de contraseña y alta multi-rol de hasta seis. |
+| AC-120 a AC-126 / AC-133 a AC-136 | §23: dataset semilla, permisos por acción, volumen de 500 órdenes y ausencia de elementos del template 001. |
 
 ## 22. Solución de problemas y regresión
 
@@ -308,3 +322,24 @@ El módulo es frontend-only: no requiere backend ni variables de entorno. Los da
 - Si las estaciones se duplican al liberar, revise la unicidad de `(production_order_id, work_center_id, sequence)` en `order_stations`.
 - Si un rol ve nombres que no debe, revise `visibleEmployeeNamesFor` / `visibleTechnicianNamesFor` en `src/domain/role-access.js`.
 - Ejecute `npm test` al terminar: las suites de Fases 1 a 24 deben pasar sin cambios en `vitest.config.mjs`, `package.json` ni `index.html`.
+
+---
+
+## 23. Datos de demostración y permisos (FR-21/FR-22/FR-23)
+
+1. Use **Reiniciar datos de demo** como `jefa.planta` y confirme el dataset semilla de `spec.md`:
+   - 13 productos, de ellos 4 bienes terminados (`Bicicleta Urbana 700c`, `Bicicleta Cargo 700c`, `Cuadro Soldado`, `Rueda Armada`) con BOM de hasta 4 niveles;
+   - 10 centros de trabajo con `Horno de Curado` inactivo y sin programación nueva;
+   - 40 órdenes en los meses anterior, actual y siguiente y en los cinco estados; 4 órdenes `planned` sin fechas aparecen en la bandeja "Pendiente de horario";
+   - 5 turnos pendientes de validar, 2 validados, 3 atrasos abiertos (uno escalado) y 8 cerrados;
+   - 15 tickets con 5 `open`, 5 `in_progress`, 5 `resolved` y 5 de cada prioridad; 3 tickets programados en el mes actual;
+   - 5 preventivas (1 vencida, 2 vigentes, 1 en curso, 1 completada) y 12 empleados de RR.HH. con nombres únicos;
+   - 6 cuentas, una por rol, con las credenciales literales de §17.
+2. Verifique las reglas de permisos alineadas con FR-22:
+   - `operador.planta` no ve acciones de edición/cierre en Mantenimiento y solo puede reportar incidentes;
+   - `mantencion.mgr` y `jefa.planta` toman y cierran tickets;
+   - `planificador.ops` y `jefa.planta` liberan, reprograman y cancelan órdenes;
+   - `ingeniero.prod` edita BOM, rutas y balance, sin operar sobre órdenes ni umbrales.
+3. Fuerce una acción denegada por URL o por consola y confirme que no hay mutación ni toast de éxito; el store devuelve `permission-denied`.
+4. Genere el conjunto `demo-volume-500` solo si va a ejecutar SC-07: 500 órdenes deterministas con BOM de 4 niveles, sin instalarlo en el arranque; confirme que las interacciones del panel responden en menos de 100 ms.
+5. Confirme que no aparecen Entidades, Documentos, pestañas ni campos personalizados del template 001, y que no existen `src/storage.js` ni `src/module-config.js`.
