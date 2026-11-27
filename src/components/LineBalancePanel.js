@@ -6,6 +6,7 @@
 import { escapeHtml, el, fmtNumber, fmtPercent } from './format.js';
 import { businessDaysInPeriod } from '../domain/capacity.js';
 import { utilizationStatus } from '../domain/line-balance.js';
+import { can } from '../domain/access-control.js';
 
 const PERIODS = {
   october: { from: '2026-10-01', to: '2026-10-31', label: 'Octubre 2026' },
@@ -152,9 +153,13 @@ function chartRows(rows) {
 
 /**
  * @param {import('../data/ManufacturingStore.js').ManufacturingStore} store
+ * @param {{role?: string}} [options]
  * @returns {HTMLElement}
  */
-export function LineBalancePanel(store) {
+export function LineBalancePanel(store, options = {}) {
+  const role = options.role;
+  const canView = can(role, 'balance.ver');
+  const canEdit = can(role, 'balance.editar');
   let periodKey = 'october';
   let selectedOrderId = '';
   let selectedWorkCenterId = '';
@@ -181,7 +186,7 @@ export function LineBalancePanel(store) {
         </div>
       </header>
       <div class="kpi-grid kpi-grid--compact" data-role="kpis"></div>
-      <div data-role="body"></div>
+      <div data-role="body" data-action="balance.ver"></div>
       <div class="center-popover-root" data-role="popover-root"></div>
       <div data-role="modal-root"></div>
     </section>`);
@@ -229,6 +234,13 @@ export function LineBalancePanel(store) {
   }
 
   function render() {
+    if (!canView) {
+      kpisEl.innerHTML = '';
+      bodyEl.innerHTML = '<p class="empty-note">Sin permiso para ver el balance de líneas.</p>';
+      bottleneckEl.textContent = '';
+      popoverRoot.innerHTML = '';
+      return;
+    }
     const period = PERIODS[periodKey];
     const balance = store.lineBalanceFor(period);
     const businessDays = businessDaysInPeriod(period);
@@ -329,7 +341,9 @@ export function LineBalancePanel(store) {
               <td>${
                 accepted
                   ? '<span class="badge badge--simulated">Solicitud simulada</span>'
-                  : `<button type="button" class="btn btn--tiny btn--request" data-request="${suggestion.suggestion_id}">Solicitar</button>`
+                  : canEdit
+                    ? `<button type="button" class="btn btn--tiny btn--request" data-request="${suggestion.suggestion_id}">Solicitar</button>`
+                    : ''
               }</td>
             </tr>`;
           })
@@ -457,6 +471,7 @@ export function LineBalancePanel(store) {
   }
 
   function openRequest(suggestion, period) {
+    if (!canEdit) return;
     modalRoot.innerHTML = `
       <div class="modal-backdrop" data-role="request-modal">
         <div class="modal" role="dialog" aria-modal="true" aria-labelledby="balance-request-title">

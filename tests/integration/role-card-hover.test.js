@@ -40,8 +40,8 @@ beforeEach(() => {
   globalThis.document = dom.window.document;
   document.body.append(
     RoleAccessPanel({
-      currentRole: 'operator',
-      username: 'doble',
+      currentRole: 'plant_manager',
+      username: 'jefa.planta',
       store: new ManufacturingStore({ storage: memoryStorage() }),
       modules: [{ id: 'maintenance', label: 'Mantenimiento' }],
       initialTab: 'roles',

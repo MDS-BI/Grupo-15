@@ -193,16 +193,16 @@ describe('Tablero de órdenes', () => {
     expect(document.querySelectorAll('[data-order]')).toHaveLength(1);
     expect(document.querySelector('[data-order="po_3004"]')).toBeTruthy();
 
-    search.value = 'Rueda Armada';
+    search.value = 'OP-3024';
     search.dispatchEvent(new window.Event('input', { bubbles: true }));
     expect(document.querySelectorAll('[data-order]')).toHaveLength(1);
-    expect(document.querySelector('[data-order="po_3004"]')).toBeTruthy();
+    expect(document.querySelector('[data-order="po_3024"]')).toBeTruthy();
 
     search.value = '';
     search.dispatchEvent(new window.Event('input', { bubbles: true }));
     priority.value = 'high';
     priority.dispatchEvent(new window.Event('change', { bubbles: true }));
-    expect(document.querySelectorAll('[data-order]')).toHaveLength(3);
+    expect(document.querySelectorAll('[data-order]')).toHaveLength(7);
 
     search.value = 'OP-3004';
     search.dispatchEvent(new window.Event('input', { bubbles: true }));
@@ -213,7 +213,7 @@ describe('Tablero de órdenes', () => {
 describe('Supervisión de línea (US-07)', () => {
   it('muestra semáforos, asigna operario y escala un incidente', () => {
     document.body.appendChild(SupervisorLinePanel(store));
-    expect(document.querySelectorAll('[data-wc]')).toHaveLength(6);
+    expect(document.querySelectorAll('[data-wc]')).toHaveLength(10);
     const activeCell = document.querySelector('[data-wc="wc_armado"] td[title]');
     expect(activeCell.getAttribute('title')).toContain('poo_');
     expect(document.querySelector('[data-light="wc_corte"]').textContent).toBe('En fallo');

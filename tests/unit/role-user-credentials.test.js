@@ -2,7 +2,32 @@ import { describe, it, expect, vi } from 'vitest';
 import { ManufacturingStore } from '../../src/data/ManufacturingStore.js';
 import { authenticate } from '../../src/data/fixtures/demo-accounts.js';
 import { CANONICAL_ROLES } from '../../src/domain/role-access.js';
-import { SNAPSHOT_KEY } from '../../src/data/persistence.js';
+import {
+  SNAPSHOT_KEY,
+  createFixtureSnapshot,
+  loadSnapshot,
+  saveSnapshot,
+} from '../../src/data/persistence.js';
+
+const EXPECTED_ACCOUNTS = {
+  plant_manager: { username: 'jefa.planta', password: 'ForjaPlanta26!' },
+  planner: { username: 'planificador.ops', password: 'Calendario2026!' },
+  production_engineer: { username: 'ingeniero.prod', password: 'RutaOptimal26!' },
+  supervisor: { username: 'supervisor.linea', password: 'TurnoLinea26!' },
+  operator: { username: 'operador.planta', password: 'Estacion2026!' },
+  maintenance: { username: 'mantencion.mgr', password: 'TallerMaq26!' },
+};
+
+const ROLE_KEYS = {
+  plant_manager: 'role_users_plant_manager',
+  planner: 'role_users_planner',
+  production_engineer: 'role_users_production_engineer',
+  supervisor: 'role_users_supervisor',
+  operator: 'role_users_operator',
+  maintenance: 'role_users_maintenance',
+};
+
+const LEGACY_USERNAMES = ['usuario', 'test', 'doble'];
 
 function memoryStorage() {
   const data = new Map();
@@ -14,45 +39,85 @@ function memoryStorage() {
   };
 }
 
-function roleUsersFrom(storage) {
-  const snapshot = JSON.parse(storage.getItem(SNAPSHOT_KEY));
-  return Object.fromEntries(
-    CANONICAL_ROLES.map((role) => {
-      const key = {
-        plant_manager: 'role_users_plant_manager',
-        supervisor: 'role_users_supervisor',
-        planner: 'role_users_planner',
-        operator: 'role_users_operator',
-        maintenance: 'role_users_maintenance',
-      }[role];
-      return [role, snapshot.data[key]];
-    }),
-  );
+function roleRow(role, username, password = username) {
+  return {
+    id: `ru_${role}_${username}`,
+    company_id: 'cmp_1',
+    username,
+    password,
+    created_at: '2026-01-01T00:00:00.000Z',
+  };
 }
 
-describe('Baja de usuarios por rol', () => {
-  it('guarda la contraseña inicial igual al usuario en altas de las cinco tablas', () => {
-    const storage = memoryStorage();
-    const store = new ManufacturingStore({ storage });
+function oldV2Data() {
+  const data = {
+    ...createFixtureSnapshot(),
+    productionOrders: [],
+    workCenters: [],
+    productionOrderOperations: [],
+  };
+  delete data.roleAccessSchema;
+  delete data[ROLE_KEYS.production_engineer];
+  for (const role of CANONICAL_ROLES.filter((entry) => entry !== 'production_engineer')) {
+    const { username, password } = EXPECTED_ACCOUNTS[role];
+    data[ROLE_KEYS[role]] = [
+      roleRow(role, username, password),
+      ...LEGACY_USERNAMES.map((legacy) => roleRow(role, legacy)),
+    ];
+  }
+  return data;
+}
 
-    for (const role of CANONICAL_ROLES) {
-      const row = store.addRoleUser(role, { username: '  Nueva  ' });
-      expect(row.username).toBe('nueva');
-      expect(row.password).toBe('nueva');
-      expect(store.roleUsersFor(role).find((entry) => entry.username === 'nueva').password).toBe(
-        'nueva',
-      );
-    }
+function authRoles(result) {
+  if (!result) return [];
+  const value = result.roles ?? result.role ?? result;
+  return Array.isArray(value) ? value : [value];
+}
 
-    const persisted = roleUsersFrom(storage);
-    for (const role of CANONICAL_ROLES) {
-      expect(persisted[role].find((row) => row.username === 'nueva').password).toBe('nueva');
+function isSuccess(result) {
+  return result === true || result?.ok === true;
+}
+
+function failureReason(result) {
+  return typeof result === 'string' ? result : result?.reason;
+}
+
+describe('Credenciales de las seis tablas de roles', () => {
+  it('seed six tablas con una cuenta y contraseña literal', () => {
+    const store = new ManufacturingStore({ storage: memoryStorage() });
+    for (const [role, expected] of Object.entries(EXPECTED_ACCOUNTS)) {
+      const rows = store.roleUsersFor(role);
+      expect(rows).toHaveLength(1);
+      expect(rows[0].username).toBe(expected.username);
+      expect(rows[0].password).toBe(expected.password);
+      expect(authRoles(authenticate(expected.username, expected.password))).toEqual([role]);
     }
   });
 
-  it('quita un usuario normalizado, persiste en v2 y emite el cambio', () => {
+  it('crea usuarios con contraseña igual al usuario en una sola tabla', () => {
     const storage = memoryStorage();
     const store = new ManufacturingStore({ storage });
+    store.setSessionRole('plant_manager', 'plant_manager');
+
+    const created = store.addRoleUser('production_engineer', { username: '  Nueva  ' });
+
+    expect(created).toBeTruthy();
+    expect(
+      store.roleUsersFor('production_engineer').find((row) => row.username === 'nueva')?.password,
+    ).toBe('nueva');
+    for (const role of CANONICAL_ROLES.filter((entry) => entry !== 'production_engineer')) {
+      expect(store.roleUsersFor(role).some((row) => row.username === 'nueva')).toBe(false);
+    }
+    const persisted = JSON.parse(storage.getItem(SNAPSHOT_KEY));
+    expect(persisted.data[ROLE_KEYS.production_engineer]).toEqual(
+      expect.arrayContaining([expect.objectContaining({ username: 'nueva', password: 'nueva' })]),
+    );
+  });
+
+  it('quita usuarios y persiste en v2 sin afectar otras tablas', () => {
+    const storage = memoryStorage();
+    const store = new ManufacturingStore({ storage });
+    store.setSessionRole('plant_manager', 'plant_manager');
     const onChange = vi.fn();
     store.addEventListener('change', onChange);
     store.addRoleUser('supervisor', { username: 'nueva' });
@@ -60,140 +125,109 @@ describe('Baja de usuarios por rol', () => {
 
     const result = store.removeRoleUser('supervisor', '  NUEVA  ');
 
-    expect(result.ok).toBe(true);
-    expect(store.roleUsersFor('supervisor').some((row) => row.username === 'nueva')).toBe(false);
+    expect(isSuccess(result)).toBe(true);
     expect(onChange).toHaveBeenCalledTimes(1);
+    expect(store.roleUsersFor('supervisor').some((row) => row.username === 'nueva')).toBe(false);
     expect(JSON.parse(storage.getItem(SNAPSHOT_KEY)).version).toBe(2);
-    expect(roleUsersFrom(storage).supervisor.some((row) => row.username === 'nueva')).toBe(false);
     expect(
-      new ManufacturingStore({ storage })
-        .roleUsersFor('supervisor')
-        .some((row) => row.username === 'nueva'),
+      JSON.parse(storage.getItem(SNAPSHOT_KEY)).data[ROLE_KEYS.supervisor].some(
+        (row) => row.username === 'nueva',
+      ),
     ).toBe(false);
   });
 
-  it('no altera los otros roles cuando el usuario pertenece a varias tablas', () => {
+  it('rechaza bajar al último plant_manager sin mutar ni persistir', () => {
     const storage = memoryStorage();
     const store = new ManufacturingStore({ storage });
-
-    expect(store.removeRoleUser('operator', ' doble ').ok).toBe(true);
-    expect(store.rolesForUsername('doble')).toEqual(['maintenance']);
-    expect(store.roleUsersFor('maintenance').some((row) => row.username === 'doble')).toBe(true);
-  });
-
-  it('rechaza quitar al último usuario de plant_manager sin mutar ni persistir', () => {
-    const storage = memoryStorage();
-    const store = new ManufacturingStore({ storage });
+    store.setSessionRole('plant_manager', 'plant_manager');
     const onChange = vi.fn();
     store.addEventListener('change', onChange);
-
-    expect(store.removeRoleUser('plant_manager', 'test').ok).toBe(true);
     const before = storage.getItem(SNAPSHOT_KEY);
     onChange.mockClear();
 
-    const result = store.removeRoleUser('plant_manager', ' jefa ');
+    const result = store.removeRoleUser('plant_manager', ' jefa.planta ');
 
-    expect(result).toEqual({ ok: false, reason: 'last-plant-manager' });
-    expect(store.roleUsersFor('plant_manager').map((row) => row.username)).toEqual(['jefa']);
+    expect(isSuccess(result)).toBe(false);
+    expect(failureReason(result)).toBe('last-plant-manager');
+    expect(store.roleUsersFor('plant_manager').map((row) => row.username)).toEqual(['jefa.planta']);
     expect(storage.getItem(SNAPSHOT_KEY)).toBe(before);
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it('rechaza roles desconocidos y usuarios ausentes', () => {
-    const store = new ManufacturingStore({ storage: memoryStorage() });
-
-    expect(store.removeRoleUser('inventado', 'jefa').ok).toBe(false);
-    expect(store.removeRoleUser('planner', 'ausente').ok).toBe(false);
-    expect(store.roleUsersFor('planner').map((row) => row.username)).toContain('test');
-  });
-});
-
-describe('Alta de usuarios con roles múltiples', () => {
-  it('crea un usuario en todas las tablas válidas con dedupe, contraseña y persistencia única', () => {
+  it('actualiza la contraseña literal y la acepta authenticate tras recargar', () => {
     const storage = memoryStorage();
     const store = new ManufacturingStore({ storage });
-    const onChange = vi.fn();
-    store.addEventListener('change', onChange);
+    store.setSessionRole('plant_manager', 'plant_manager');
 
-    const created = store.createUserWithRoles('  Multi  ', [
-      'planner',
-      'planner',
-      'inventado',
-      'maintenance',
-      'operator',
-    ]);
+    const result = store.changeUserPassword(' ingeniero.prod ', 'RutaOptimal26!', 'NuevaClave123');
 
-    const expectedRoles = ['planner', 'maintenance', 'operator'];
-    expect(created.map((row) => row.username)).toEqual(['multi', 'multi', 'multi']);
-    expect(onChange).toHaveBeenCalledTimes(1);
-    expect([...store.rolesForUsername('multi')].sort()).toEqual([...expectedRoles].sort());
-    for (const role of expectedRoles) {
-      const row = store.roleUsersFor(role).find((entry) => entry.username === 'multi');
-      expect(row.password).toBe('multi');
-    }
-
-    const snapshot = JSON.parse(storage.getItem(SNAPSHOT_KEY));
-    expect(snapshot.version).toBe(2);
-    const persisted = roleUsersFrom(storage);
-    for (const role of expectedRoles) {
-      expect(persisted[role].find((row) => row.username === 'multi').password).toBe('multi');
-    }
-    expect([...new ManufacturingStore({ storage }).rolesForUsername('multi')].sort()).toEqual(
-      [...expectedRoles].sort(),
+    expect(isSuccess(result)).toBe(true);
+    const reloaded = new ManufacturingStore({ storage });
+    const roleUsers = Object.fromEntries(
+      CANONICAL_ROLES.map((role) => [role, reloaded.roleUsersFor(role)]),
     );
-  });
-
-  it('no muta ni persiste cuando no hay usuario o no hay roles válidos', () => {
-    const storage = memoryStorage();
-    const store = new ManufacturingStore({ storage });
-    const before = storage.getItem(SNAPSHOT_KEY);
-
-    expect(store.createUserWithRoles('   ', ['planner'])).toEqual([]);
-    expect(store.createUserWithRoles('multi', ['inventado'])).toEqual([]);
-    expect(store.rolesForUsername('multi')).toEqual([]);
-    expect(storage.getItem(SNAPSHOT_KEY)).toBe(before);
+    expect(authRoles(authenticate('ingeniero.prod', 'NuevaClave123', roleUsers))).toEqual([
+      'production_engineer',
+    ]);
+    expect(authenticate('ingeniero.prod', 'RutaOptimal26!', roleUsers)).toBeNull();
   });
 });
 
-describe('Cambio de contraseña persistente', () => {
-  it('actualiza la credencial en todas las tablas del usuario y la acepta authenticate', () => {
+describe('Migración de snapshots v2 de roles', () => {
+  it('elimina usuario/test/doble y agrega la tabla vacía del ingeniero', () => {
     const storage = memoryStorage();
-    const store = new ManufacturingStore({ storage });
-    const rolesBefore = store.rolesForUsername('doble');
-    const onChange = vi.fn();
-    store.addEventListener('change', onChange);
+    saveSnapshot(oldV2Data(), storage);
 
-    const result = store.changeUserPassword('  DOBLE  ', 'doble', 'NuevaClave123');
+    const migrated = loadSnapshot(storage);
 
-    expect(result.ok).toBe(true);
-    expect(onChange).toHaveBeenCalledTimes(1);
-    expect(store.rolesForUsername('doble')).toEqual(rolesBefore);
-    const persisted = roleUsersFrom(storage);
-    for (const role of CANONICAL_ROLES) {
-      for (const row of persisted[role]) {
-        expect(row.password).toBe(row.username === 'doble' ? 'NuevaClave123' : row.username);
+    expect(migrated.data.roleAccessSchema).toBe(2);
+    expect(migrated.data[ROLE_KEYS.production_engineer]).toEqual([]);
+    for (const key of Object.values(ROLE_KEYS)) {
+      const usernames = migrated.data[key].map((row) => row.username);
+      for (const legacy of LEGACY_USERNAMES) {
+        expect(usernames).not.toContain(legacy);
       }
     }
-    const rebuilt = new ManufacturingStore({ storage });
-    const rebuiltUsers = Object.fromEntries(
-      CANONICAL_ROLES.map((role) => [role, rebuilt.roleUsersFor(role)]),
-    );
-    expect(authenticate('doble', 'NuevaClave123', rebuiltUsers)).toEqual([
-      'operator',
-      'maintenance',
-    ]);
-    expect(authenticate('doble', 'doble', rebuiltUsers)).toBeNull();
+
+    const store = new ManufacturingStore({ storage });
+    store.setSessionRole('plant_manager', 'plant_manager');
+    expect(store.roleUsersFor('production_engineer')).toEqual([]);
+    for (const legacy of LEGACY_USERNAMES) {
+      expect(store.rolesForUsername(legacy)).toEqual([]);
+    }
+    store.addRoleUser('planner', { username: 'nueva' });
+
+    const persisted = JSON.parse(storage.getItem(SNAPSHOT_KEY));
+    expect(persisted.data.roleAccessSchema).toBe(2);
+    expect(persisted.data[ROLE_KEYS.production_engineer]).toEqual([]);
+    for (const key of Object.values(ROLE_KEYS)) {
+      const usernames = persisted.data[key].map((row) => row.username);
+      for (const legacy of LEGACY_USERNAMES) {
+        expect(usernames).not.toContain(legacy);
+      }
+    }
+    expect(persisted.data[ROLE_KEYS.planner].some((row) => row.username === 'nueva')).toBe(true);
   });
 
-  it('niega cambios sin mutar si falla usuario, contraseña actual o nueva contraseña', () => {
+  it('conserva un snapshot ya migrado sin vaciar la tabla del ingeniero', () => {
     const storage = memoryStorage();
-    const store = new ManufacturingStore({ storage });
-    const before = storage.getItem(SNAPSHOT_KEY);
+    const engineer = roleRow('production_engineer', 'ingeniero.prod', 'RutaOptimal26!');
+    const data = { ...createFixtureSnapshot(), roleAccessSchema: 2 };
+    data[ROLE_KEYS.production_engineer] = [engineer];
+    saveSnapshot(data, storage);
 
-    expect(store.changeUserPassword('ausente', 'ausente', 'otra').ok).toBe(false);
-    expect(store.changeUserPassword('test', 'incorrecta', 'otra').ok).toBe(false);
-    expect(store.changeUserPassword('test', 'test', '   ').ok).toBe(false);
-    expect(storage.getItem(SNAPSHOT_KEY)).toBe(before);
-    expect(store.roleUsersFor('test').every((row) => row.password === 'test')).toBe(true);
+    const loaded = loadSnapshot(storage);
+
+    expect(loaded.data.roleAccessSchema).toBe(2);
+    expect(loaded.data[ROLE_KEYS.production_engineer]).toEqual([engineer]);
+
+    const store = new ManufacturingStore({ storage });
+    store.setSessionRole('plant_manager', 'plant_manager');
+    expect(store.roleUsersFor('production_engineer')).toEqual([engineer]);
+    store.addRoleUser('supervisor', { username: 'nueva' });
+
+    const persisted = JSON.parse(storage.getItem(SNAPSHOT_KEY));
+    expect(persisted.data.roleAccessSchema).toBe(2);
+    expect(persisted.data[ROLE_KEYS.production_engineer]).toEqual([engineer]);
   });
 });

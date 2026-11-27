@@ -1,11 +1,7 @@
-/**
- * @file Fixtures de órdenes de mantenimiento preventivo (US-09).
- * Ver data-model.md §3.20.
- */
-
 import { relativeDay, relativeTimestamp } from './demo-dates.js';
+import { refreshableArray } from './master-data.js';
 
-export const preventiveMaintenanceOrders = [
+export const preventiveMaintenanceOrders = refreshableArray(() => [
   {
     id: 'pmo_2001',
     company_id: 'cmp_1',
@@ -62,4 +58,18 @@ export const preventiveMaintenanceOrders = [
     downtime_minutes: null,
     notes: 'Preventiva vigente.',
   },
-];
+  {
+    id: 'pmo_2005',
+    company_id: 'cmp_1',
+    order_code: 'PM-2005',
+    work_center_id: 'wc_ensamble',
+    source_ticket_id: null,
+    title: 'Revisión de ensamble eléctrico',
+    planned_date: relativeDay(-1),
+    status: 'in_progress',
+    technician_ext_hr_employee_id: 'ext_hr_tec_02',
+    completed_at: null,
+    downtime_minutes: null,
+    notes: 'Preventiva en ejecución.',
+  },
+]);

@@ -46,9 +46,9 @@ El inicio es un login genérico: no muestra roles, descripciones ni pistas sobre
 
 No hay autenticación real ni backend: es una simulación frontend. El formulario valida las credenciales con `src/data/fixtures/demo-accounts.js`, guarda el rol del login en `erp.manufacturing.role` y vuelve al ingreso al cargar la página o al pulsar **Cerrar sesión**. No existen las cuentas `usuario`, `test` ni `doble`, y no hay controles de cambio de rol en la cabecera ni en los paneles.
 
-**Ver como** aparece solo en el menú de usuario de `jefa.planta`. Es una previsualización temporal con confirmación: muestra «Viendo como: <rol>» y ofrece **Volver a mi rol**. La identidad, la contraseña y los permisos base siguen siendo los del login; el logo lleva al módulo de inicio del rol autenticado y cerrar sesión descarta la previsualización.
+**Ver como** aparece solo en el menú de usuario de `jefa.planta`. Es una previsualización temporal: muestra «Viendo como: <rol>» y aplica la intersección de permisos entre el rol autenticado y el rol previsualizado, sin ampliarlos. La identidad y la contraseña siguen siendo las del login; cerrar sesión descarta la previsualización.
 
-La única página **Roles** (`#/roles`) está disponible solo para `jefa.planta`, integra las seis tablas y permite altas de usuario en hasta seis roles, bajas confirmadas por rol y asignaciones adicionales. No existe el botón **Datos de roles** ni una vista independiente `#/admin-roles`.
+La única página **Roles** (`#/roles`) está disponible solo para `jefa.planta`, integra las seis tarjetas y las seis tablas, y permite altas de usuario con un solo rol y bajas confirmadas por rol. No existe el botón **Datos de roles**, una vista independiente `#/admin-roles` ni asignaciones adicionales de rol.
 
 | Rol | Módulos principales |
 |---|---|
@@ -99,4 +99,4 @@ El menú de usuario ofrece **Cambiar contraseña** a cualquier cuenta autenticad
 
 ## Deuda conocida
 
-- No hay deuda pendiente de Fase 16. `T002` quedó cerrado con `environment: 'jsdom'` global en `vitest.config.mjs` y `T084` con el aislamiento histórico de las 12 suites heredadas de `001-erp-base-module` que importan `src/app.js`, `src/storage.js` y `src/module-config.js`: se excluyen en `test.exclude` (conservando los excludes por defecto), sin borrarlas. Ese módulo es solo contexto histórico/prohibido y no forma parte del MVP activo. Detalle en `specs/002-operations-manufacturing/tasks.md`.
+- No hay deuda pendiente de Fase 16. `T002` quedó cerrado con `environment: 'jsdom'` global en `vitest.config.mjs`; la excepción documentada de Fase 33 retiró `browser-check.html`, las 13 suites heredadas de `001-erp-base-module` y el bloque `exclude` heredado. `001-erp-base-module` es solo contexto histórico/prohibido y no forma parte del MVP activo. Detalle en `specs/002-operations-manufacturing/tasks.md`.

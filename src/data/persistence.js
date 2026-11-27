@@ -33,6 +33,9 @@ import { workCenters } from './fixtures/work-centers.js';
 export const SNAPSHOT_KEY = 'erp.manufacturing.v2';
 export const LEGACY_SNAPSHOT_KEY = 'erp.manufacturing.v1';
 export const SNAPSHOT_VERSION = 2;
+export const ROLE_ACCESS_SCHEMA_VERSION = 2;
+
+const LEGACY_ROLE_USERNAMES = new Set(['usuario', 'test', 'doble']);
 
 const COLLECTION_KEYS = [
   'companies',
@@ -160,6 +163,17 @@ function normalizeData(data) {
     } else {
       normalized[key] = data[key];
     }
+  }
+  normalized.roleAccessSchema = ROLE_ACCESS_SCHEMA_VERSION;
+  for (const key of Object.values(ROLE_USER_COLLECTION_KEYS)) {
+    normalized[key] = normalized[key].filter(
+      (row) =>
+        !LEGACY_ROLE_USERNAMES.has(
+          String(row?.username ?? '')
+            .trim()
+            .toLowerCase(),
+        ),
+    );
   }
   return normalized;
 }

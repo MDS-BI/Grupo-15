@@ -1,11 +1,6 @@
-/**
- * @file Fixtures de estructuras de materiales (BOM) multi-nivel.
- * Grafo: Bicicleta → (Cuadro, Rueda, ...); Cuadro → Tubo, Pintura, Soldadura;
- * Rueda → Llanta, Rayos, Maza. Ver data-model.md §3.6–3.7.
- */
+import { relativeDay } from './demo-dates.js';
 
 export const billOfMaterials = [
-  // Bien terminado principal
   {
     id: 'bom_bici',
     company_id: 'cmp_1',
@@ -18,7 +13,18 @@ export const billOfMaterials = [
     status: 'active',
     notes: 'Estructura vigente de la bicicleta urbana.',
   },
-  // Sub-ensamble: Cuadro
+  {
+    id: 'bom_cargo',
+    company_id: 'cmp_1',
+    product_id: 'prod_cargo',
+    code: 'BOM-CARGO-01',
+    version: 'A',
+    effective_from: relativeDay(-300),
+    effective_to: null,
+    base_quantity: 1,
+    status: 'active',
+    notes: 'Estructura vigente de la bicicleta cargo.',
+  },
   {
     id: 'bom_cuadro',
     company_id: 'cmp_1',
@@ -31,7 +37,6 @@ export const billOfMaterials = [
     status: 'active',
     notes: 'Sub-ensamble soldado.',
   },
-  // Sub-ensamble: Rueda
   {
     id: 'bom_rueda',
     company_id: 'cmp_1',
@@ -44,10 +49,33 @@ export const billOfMaterials = [
     status: 'active',
     notes: 'Sub-ensamble de rueda armada.',
   },
+  {
+    id: 'bom_tubo',
+    company_id: 'cmp_1',
+    product_id: 'comp_tubo',
+    code: 'BOM-TUBO-01',
+    version: 'A',
+    effective_from: relativeDay(-300),
+    effective_to: null,
+    base_quantity: 1,
+    status: 'active',
+    notes: 'Consumo de soldadura por metro de tubo.',
+  },
+  {
+    id: 'bom_maza',
+    company_id: 'cmp_1',
+    product_id: 'comp_maza',
+    code: 'BOM-MAZA-01',
+    version: 'A',
+    effective_from: relativeDay(-300),
+    effective_to: null,
+    base_quantity: 1,
+    status: 'active',
+    notes: 'Sub-ensamble de maza con freno.',
+  },
 ];
 
 export const bomComponents = [
-  // Bicicleta → Cuadro (1) + Rueda (2)
   {
     id: 'bc_1',
     bom_id: 'bom_bici',
@@ -68,7 +96,46 @@ export const bomComponents = [
     sequence: 20,
     is_optional: false,
   },
-  // Rueda → Llanta (1) + Rayos (1) + Maza (1)
+  {
+    id: 'bc_9',
+    bom_id: 'bom_cargo',
+    component_product_id: 'prod_cuadro',
+    quantity_per_unit: 1,
+    uom_id: 'uom_un',
+    scrap_percentage: 0,
+    sequence: 10,
+    is_optional: false,
+  },
+  {
+    id: 'bc_10',
+    bom_id: 'bom_cargo',
+    component_product_id: 'prod_rueda',
+    quantity_per_unit: 2,
+    uom_id: 'uom_un',
+    scrap_percentage: 0,
+    sequence: 20,
+    is_optional: false,
+  },
+  {
+    id: 'bc_11',
+    bom_id: 'bom_cargo',
+    component_product_id: 'comp_manubrio',
+    quantity_per_unit: 1,
+    uom_id: 'uom_un',
+    scrap_percentage: 1,
+    sequence: 30,
+    is_optional: false,
+  },
+  {
+    id: 'bc_12',
+    bom_id: 'bom_cargo',
+    component_product_id: 'rm_barniz',
+    quantity_per_unit: 0.5,
+    uom_id: 'uom_l',
+    scrap_percentage: 3,
+    sequence: 40,
+    is_optional: false,
+  },
   {
     id: 'bc_3',
     bom_id: 'bom_rueda',
@@ -99,7 +166,6 @@ export const bomComponents = [
     sequence: 30,
     is_optional: false,
   },
-  // Cuadro → Tubo (6m) + Pintura (0.8kg) + Soldadura (0.4kg)
   {
     id: 'bc_6',
     bom_id: 'bom_cuadro',
@@ -128,6 +194,36 @@ export const bomComponents = [
     uom_id: 'uom_kg',
     scrap_percentage: 0,
     sequence: 30,
+    is_optional: false,
+  },
+  {
+    id: 'bc_13',
+    bom_id: 'bom_cuadro',
+    component_product_id: 'comp_maza',
+    quantity_per_unit: 1,
+    uom_id: 'uom_un',
+    scrap_percentage: 0,
+    sequence: 40,
+    is_optional: false,
+  },
+  {
+    id: 'bc_14',
+    bom_id: 'bom_tubo',
+    component_product_id: 'rm_soldadura',
+    quantity_per_unit: 0.05,
+    uom_id: 'uom_kg',
+    scrap_percentage: 4,
+    sequence: 10,
+    is_optional: false,
+  },
+  {
+    id: 'bc_15',
+    bom_id: 'bom_maza',
+    component_product_id: 'comp_freno',
+    quantity_per_unit: 1,
+    uom_id: 'uom_un',
+    scrap_percentage: 0,
+    sequence: 10,
     is_optional: false,
   },
 ];

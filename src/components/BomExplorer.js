@@ -6,6 +6,7 @@
 import { fmtNumber, escapeHtml, el } from './format.js';
 import { decimalInput, parseDecimal } from './numeric-field.js';
 import { confirmDialog, notifyDialog } from './ConfirmDialog.js';
+import { can } from '../domain/access-control.js';
 
 const MODIFY_FIELDS = [
   ['material_quantity', 'Cantidad de un material'],
@@ -26,9 +27,14 @@ const MODIFY_FIELDS = [
 
 /**
  * @param {import('../data/ManufacturingStore.js').ManufacturingStore} store
+ * @param {{role?: string}} [options]
  * @returns {HTMLElement}
  */
-export function BomExplorer(store) {
+export function BomExplorer(store, options = {}) {
+  const role = options.role;
+  const canView = can(role, 'bom.ver');
+  const canCreate = can(role, 'bom.crear');
+  const canEdit = can(role, 'bom.editar');
   let selectedBomId = store.activeBoms().length ? store.activeBoms()[0].id : null;
 
   const root = el(`
@@ -39,13 +45,13 @@ export function BomExplorer(store) {
           <p class="view__subtitle">Recetas, materiales, estaciones y consumo teórico.</p>
         </div>
         <div class="row-actions">
-          <button type="button" class="btn btn--primary" data-role="new-recipe">Añadir receta</button>
-          <button type="button" class="btn" data-role="edit-recipe">Modificar receta</button>
-          <button type="button" class="btn btn--danger" data-role="delete-recipe">Eliminar receta</button>
+          ${canCreate ? '<button type="button" class="btn btn--primary" data-role="new-recipe">Añadir receta</button>' : ''}
+          ${canEdit ? '<button type="button" class="btn" data-role="edit-recipe">Modificar receta</button>' : ''}
+          ${canEdit ? '<button type="button" class="btn btn--danger" data-role="delete-recipe">Eliminar receta</button>' : ''}
         </div>
       </header>
       <div class="bom-layout">
-        <aside class="panel panel--side">
+        <aside class="panel panel--side" data-action="bom.ver">
           <header class="panel__header"><h2>Recetas / Listas de Materiales</h2></header>
           <div class="panel__body">
             <ul class="bom-list" data-role="bom-list"></ul>
@@ -185,9 +191,7 @@ export function BomExplorer(store) {
     if (!bom) {
       editorEl.innerHTML = `
         <p class="empty-note">Crea una receta para registrar materiales y estaciones.</p>
-        <div class="detail-actions">
-          <button type="button" class="btn btn--primary" data-role="empty-new">Añadir receta</button>
-        </div>`;
+        ${canCreate ? '<div class="detail-actions"><button type="button" class="btn btn--primary" data-role="empty-new">Añadir receta</button></div>' : ''}`;
       const emptyNew = editorEl.querySelector('[data-role="empty-new"]');
       if (emptyNew) emptyNew.addEventListener('click', openNewRecipeModal);
       return;
@@ -205,10 +209,12 @@ export function BomExplorer(store) {
         <td>${fmtNumber(line.quantity_per_unit, 4)} ${escapeHtml(uom ? uom.code : '')}</td>
         <td>${fmtNumber(line.scrap_percentage, 2)}%</td>
         <td>${escapeHtml(line.sequence)}</td>
-        <td class="cell--actions">
-          <button type="button" class="btn btn--tiny" data-edit-material="${escapeHtml(line.id)}">Modificar</button>
-          <button type="button" class="btn btn--tiny btn--danger" data-remove-material="${escapeHtml(line.id)}">Eliminar</button>
-        </td>
+        <td class="cell--actions">${
+          canEdit
+            ? `<button type="button" class="btn btn--tiny" data-edit-material="${escapeHtml(line.id)}">Modificar</button>
+          <button type="button" class="btn btn--tiny btn--danger" data-remove-material="${escapeHtml(line.id)}">Eliminar</button>`
+            : ''
+        }</td>
       </tr>`;
       })
       .join('');
@@ -223,10 +229,12 @@ export function BomExplorer(store) {
         <td>${fmtNumber(station.setup_time_minutes, 2)} min</td>
         <td>${fmtNumber(station.run_time_per_unit_minutes, 2)} min/u</td>
         <td>${fmtNumber(station.estimated_time_minutes, 2)} min</td>
-        <td class="cell--actions">
-          <button type="button" class="btn btn--tiny" data-edit-station="${escapeHtml(station.id)}">Modificar</button>
-          <button type="button" class="btn btn--tiny btn--danger" data-remove-station="${escapeHtml(station.id)}">Eliminar</button>
-        </td>
+        <td class="cell--actions">${
+          canEdit
+            ? `<button type="button" class="btn btn--tiny" data-edit-station="${escapeHtml(station.id)}">Modificar</button>
+          <button type="button" class="btn btn--tiny btn--danger" data-remove-station="${escapeHtml(station.id)}">Eliminar</button>`
+            : ''
+        }</td>
       </tr>`;
       })
       .join('');
@@ -245,10 +253,14 @@ export function BomExplorer(store) {
           <tbody>${stationRows || '<tr><td colspan="7" class="empty-cell">Sin estaciones configuradas.</td></tr>'}</tbody>
         </table>
       </div>
-      <div class="detail-actions">
+      ${
+        canEdit
+          ? `<div class="detail-actions">
         <button type="button" class="btn btn--small" data-role="add-station">Añadir estación</button>
         <button type="button" class="btn btn--small" data-role="edit-stations">Modificar tiempos</button>
-      </div>
+      </div>`
+          : ''
+      }
 
       <header class="panel__header"><h3>Materiales (${lines.length})</h3></header>
       <div class="table-wrap">
@@ -257,7 +269,9 @@ export function BomExplorer(store) {
           <tbody>${rows || '<tr><td colspan="5" class="empty-cell">Sin materiales.</td></tr>'}</tbody>
         </table>
       </div>
-      <form class="inline-form" data-role="add-component">
+      ${
+        canEdit
+          ? `<form class="inline-form" data-role="add-component">
         <select name="component_product_id" required>
           <option value="">Añadir material…</option>
           ${addableMaterials}
@@ -265,12 +279,14 @@ export function BomExplorer(store) {
         ${decimalInput({ name: 'quantity_per_unit', placeholder: 'Cant./unidad', required: true, min: 0.01, label: 'La cantidad por unidad' })}
         ${decimalInput({ name: 'scrap_percentage', placeholder: 'Merma %', value: '0', min: 0, label: 'La merma' })}
         <button type="submit" class="btn btn--primary">Añadir</button>
-      </form>
+      </form>`
+          : ''
+      }
       <p class="form-error" data-role="error" role="alert"></p>`;
 
     const form = editorEl.querySelector('[data-role="add-component"]');
     const errorEl = editorEl.querySelector('[data-role="error"]');
-    form.addEventListener('submit', (event) => {
+    form?.addEventListener('submit', (event) => {
       event.preventDefault();
       const data = new FormData(form);
       try {
@@ -460,6 +476,7 @@ export function BomExplorer(store) {
   }
 
   function openNewRecipeModal() {
+    if (!canCreate) return;
     const productNames = store.products
       .filter((product) => product.product_type === 'finished_good')
       .map((product) => `<option value="${escapeHtml(product.name)}"></option>`)
@@ -649,6 +666,7 @@ export function BomExplorer(store) {
   }
 
   function openModifyRecipeModal({ field = 'material_quantity', target = null } = {}) {
+    if (!canEdit) return;
     const bom = currentBom();
     if (!bom) return;
     const fieldOptions = MODIFY_FIELDS.map(
@@ -821,6 +839,7 @@ export function BomExplorer(store) {
   }
 
   async function openDeleteRecipeModal() {
+    if (!canEdit) return;
     const boms = store.activeBoms();
     if (!boms.length) {
       await notifyDialog({ title: 'Sin recetas', message: 'No hay recetas para eliminar.' });
@@ -874,14 +893,22 @@ export function BomExplorer(store) {
   }
 
   function renderAll() {
+    if (!canView) {
+      listEl.innerHTML = '';
+      titleEl.textContent = '—';
+      metaEl.textContent = '';
+      treeEl.innerHTML = '';
+      editorEl.innerHTML = '<p class="empty-note">Sin permiso para ver recetas.</p>';
+      return;
+    }
     const boms = ensureSelection();
     renderList(boms);
     renderTree();
     renderEditor();
   }
 
-  root.querySelector('[data-role="new-recipe"]').addEventListener('click', openNewRecipeModal);
-  root.querySelector('[data-role="edit-recipe"]').addEventListener('click', async () => {
+  root.querySelector('[data-role="new-recipe"]')?.addEventListener('click', openNewRecipeModal);
+  root.querySelector('[data-role="edit-recipe"]')?.addEventListener('click', async () => {
     if (!currentBom()) {
       await notifyDialog({
         title: 'Sin receta seleccionada',
@@ -893,7 +920,7 @@ export function BomExplorer(store) {
   });
   root
     .querySelector('[data-role="delete-recipe"]')
-    .addEventListener('click', openDeleteRecipeModal);
+    ?.addEventListener('click', openDeleteRecipeModal);
 
   renderAll();
   return root;

@@ -1008,3 +1008,67 @@ T278 trazabilidad AC-88–AC-103 en specs/002-operations-manufacturing/spec.md
 - [X] T326 Ejecutar `npm run build` desde `package.json` y confirmar que el build de producción termine sin errores ni advertencias bloqueantes.
 
 **Punto de control**: la Fase 32 deja 18 tareas nuevas (`T309`–`T326`), mantiene Fases 1–31 intactas, documenta el MVP vigente, completa AC-123 a AC-125 sin alterar US-11 y cierra solo cuando las cuatro compuertas (`npm test -- --run`, `npm run lint`, `npm run format:check` y `npm run build`) estén en verde.
+
+---
+
+## Fase 33: Roles canónicos, matriz por acción y dataset de demostración (2026-11-26)
+
+**Objetivo**: cerrar FR-13, FR-21, FR-22 y FR-23 con seis roles canónicos, una cuenta por rol, matriz `ACTION_ACCESS`/`can(role, action)` aplicada en UI y store, dataset semilla completo y una excepción documentada a FR-18 para retirar los restos heredados de 001.
+
+**Dependencias**: conserva íntegramente las Fases 1–32, `package.json`, el nombre del paquete, `@fontsource-variable/inter`, `icons.js`, `ConfirmDialog.js`, `Toast.js`, `labels.js`, `demo-dates.js` y el período fijo de US-11 (`2026-10-01` a `2026-10-31`). Las fechas nuevas se calculan con `src/data/fixtures/demo-dates.js`. Las tareas de esta fase se ejecutan después de T326.
+
+**Prueba independiente US-12**: con cada una de las seis cuentas de FR-13 el login resuelve un único rol; `#/roles` solo abre para `jefa.planta` y `#/admin-roles` redirige; las acciones prohibidas por FR-22 no aparecen y el store devuelve `{ ok: false, reason: 'permission-denied' }` sin mutar ni persistir.
+
+**Prueba independiente US-16**: tras el primer arranque y tras "Reiniciar datos de demo" los conteos de la sección "Datos de demostración" se cumplen, las fechas relativas caen en el mes vigente y no hay registros huérfanos ni duplicados.
+
+### Pruebas — Fase 33 (escribir primero) ⚠️
+
+- [X] T327 [P] [US12] Actualizar `tests/unit/access-control.test.js` para los seis roles, etiqueta Operador, inicio en `#/plant`, `ACTION_ACCESS`, `can(role, action)` y denegación por módulo/acción.
+- [X] T328 [P] [US12] Actualizar `tests/unit/role-access.test.js` para `production_engineer`, seis roles canónicos, una sola tabla por usuario y sin roles multicuenta.
+- [X] T329 [P] [US12] Actualizar `tests/unit/demo-accounts.test.js` para exactamente seis cuentas con usuario/contraseña literals de FR-13, sin `usuario`, `test` ni `doble`.
+- [X] T330 [P] [US12] Actualizar `tests/unit/role-user-credentials.test.js` para las seis tablas, la contraseña literal de cada cuenta y la migración de snapshots v2 que elimina `usuario`, `test` y `doble` y agrega `role_users_production_engineer` vacía.
+- [X] T331 [P] [US12] Actualizar `tests/integration/role-admin-panel.test.js` para el formulario de alta con un solo desplegable de rol, seis opciones, sin botón "+" ni filas "Rol 2".
+- [X] T332 [P] [US12] Actualizar `tests/integration/login-shell.test.js` para cuenta única por rol, "Ver como" solo para Jefa, sin cuenta de prueba multicrol y con `#/admin-roles` redirigido a `#/roles`.
+- [X] T333 [P] [US12] Crear `tests/integration/action-access.test.js` con la matriz FR-22 para los seis roles, acciones ocultas en los nueve paneles y rechazo en `ManufacturingStore` con `permission-denied`.
+
+### Implementación — US-12 (FR-13, FR-20.9, FR-22, FR-23)
+
+- [X] T334 [US12] Agregar `production_engineer` en `src/domain/access-control.js`: rol, orden, etiqueta, descripción, inicio `#/line-balance`, `MODULE_ACCESS` de FR-22 y `ACTION_ACCESS`/`can(role, action)` derivados de la matriz con alias de módulos de UI (`dashboard`/`plant`, `operator`, `scheduling`, `line-balance`, `maintenance`).
+- [X] T335 [US12] Agregar `production_engineer` en `CANONICAL_ROLES` y consistentemente en `rolesForUsername`, `modulesForRoles`, `roleLabel` y `roleChangeMessage` de `src/domain/role-access.js`, eliminando la duplicación de la lista de roles.
+- [X] T336 [US12] Reescribir `src/data/fixtures/demo-accounts.js` con exactly seis cuentas de FR-13, `ROLE_USER_COLLECTION_KEYS` con `role_users_production_engineer`, una fila por cuenta en su única tabla y contraseñas literales.
+- [X] T337 [US12] Migrar snapshots v2 existentes en `src/data/persistence.js`: agregar `roleAccessSchema`, eliminar filas de `usuario`, `test` y `doble` de todas las tablas, crear `role_users_production_engineer` vacía cuando falte el marcador y conservar el contenido de los snapshots ya migrados.
+- [X] T338 [US12] Actualizar `src/data/ManufacturingStore.js` para hidratar/persistir la sexta tabla y exponer la sesión autenticada mediante `setSessionRole(realRole, previewRole)`, con intersección de permisos para "Ver como".
+- [X] T339 [US12] Actualizar `src/manufacturing-main.js`: `erp.manufacturing.role` guarda una sola cuenta/rol, sin conmutador de rol, "Ver como" solo para `plant_manager`, módulo inicial `#/plant`, `#/roles` único y `#/admin-roles` redirige/deniega según FR-13.
+- [X] T340 [US12] Unificar `RoleAccessPanel.js` y `RoleAdminPanel.js` en la única página `#/roles` de `src/manufacturing-main.js`, con las seis tarjetas y las seis tablas administradas solo por Jefa.
+- [X] T341 [US12] Alinear FR-20.9 en `src/components/RoleAdminPanel.js`: el alta crea un usuario con un solo rol, contraseña inicial igual al usuario, inscripción en una sola tabla, toast y formulario de una sola fila; actualizar `README.md` en consecuencia.
+- [X] T342 [US12] Quitar el `<select data-role="role">` de `src/components/PlantPerformancePanel.js` y usar exclusivamente el rol de sesión recibido en `context.role`.
+- [X] T343 [US12] Aplicar `can(role, action)` en `ProductionOrders.js`, `BomExplorer.js`, `DashboardOverview.js`, `OperatorWorkstationPanel.js`, `SupervisorLinePanel.js`, `LineBalancePanel.js`, `PlantPerformancePanel.js`, `ProductionSchedulingPanel.js`, `MaintenancePanel.js` y `RoleAccessPanel.js`, ocultando acciones denegadas.
+- [X] T344 [US12] Validar en `src/data/ManufacturingStore.js`, antes de cualquier escritura, `change`, `#persist()` o alta/edición/baja de usuarios, contraseñas, umbrales, BOM, rutas, órdenes, turnos, asignaciones, tickets, preventivas, fechas y resoluciones, devolviendo `{ ok: false, reason: 'permission-denied' }` sin mutar.
+
+### Implementación — US-16 (FR-21)
+
+- [X] T345 [P] [US16] Ampliar `src/data/fixtures/master-data.js` con empresa, 3 bodegas, 4 UoM, al menos 13 productos (4 terminados, 6 componentes, 3 materias primas) y 3 pedidos con fechas relativas.
+- [X] T346 [P] [US16] Ampliar `src/data/fixtures/boms.js` y `src/data/fixtures/routings.js` con los cuatro BOM de hasta 4 niveles, conservando la cadena Bicicleta Urbana 700c → Cuadro Soldado → Tubo de acero cromoly → Hilo de soldadura y las cargas de US-11.
+- [X] T347 [P] [US16] Ampliar `src/data/fixtures/work-centers.js` a los 10 centros, con `Horno de Curado` inactivo y estados/ station_type de la sección "Datos de demostración".
+- [X] T348 [P] [US16] Ampliar `src/data/fixtures/hr-employees.js` a los 12 nombres ficticios únicos y la distribución 6/3/1/1/1 de FR-21.
+- [X] T349 [US16] Ampliar `src/data/fixtures/production-orders.js` a exactamente 40 órdenes con la matriz anterior/actual/siguiente y cinco estados, 4 `planned` sin fechas, órdenes vigentes con operaciones congeladas y sin dañar el cuello de botella de US-11.
+- [X] T350 [P] [US16] Ampliar `src/data/fixtures/production-shifts.js` a 5 turnos pendientes, 2 validados, 3 atrasos abiertos (uno escalado) y 8 cerrados.
+- [X] T351 [P] [US16] Ajustar `src/data/fixtures/maintenance-tickets.js` y `src/data/fixtures/preventive-maintenance-orders.js` a 15 tickets (5/5/5 por estado y prioridad, 3 programados) y 5 preventivas (1 vencida, 2 vigentes, 1 en curso, 1 completada) con `demo-dates.js`.
+- [X] T352 [P] [US16] Agregar el generador `demo-volume-500` en `src/data/fixtures/demo-volume-500.js` con 500 órdenes deterministas y reparto 125/100/100/125/50 sin cargarlo en el arranque ni en reset.
+- [X] T353 [US16] Verificar en `tests/unit/demo-reset.test.js` y `tests/unit/demo-dates.test.js` que el reset reconstruye el dataset completo, recalcula fechas relativas y no deja huérfanos ni duplicados.
+
+### Excepción FR-18 y documentación
+
+- [X] T354 [FR18] Eliminar `browser-check.html` y los 13 suites heredados de 001 enumerados en `vitest.config.mjs` (`add-document`, `create-entity`, `custom-fields`, `dashboard`, `edit-delete-entity`, `manage-document`, `manage-tabs`, `relabeling`, `search-entities`, `workspace-shell`, `html-escaping`, `module-config`, `storage`).
+- [X] T355 [FR18] Quitar el arreglo `exclude` y sus usos de `vitest.config.mjs`, dejando los projects `unit` e `integration` sin exclusión heredada.
+- [X] T356 [FR18] Actualizar FR-18 en `specs/002-operations-manufacturing/spec.md` para documentar la excepción: se retiran `browser-check.html`, las 13 suites heredadas y el bloque `exclude`, sin incorporar elementos de 001.
+- [X] T357 [P] [US12] Actualizar `README.md` con las seis credenciales literales, la cuenta única por rol, el formulario de alta de un solo rol y la página única `#/roles` solo para Jefa.
+
+### Compuertas y trazabilidad — Fase 33
+
+- [X] T358 Ejecutar `npm test -- --run` y corregir todos los fallos hasta que las suites vigentes terminen en verde.
+- [X] T359 Ejecutar `npm run build` y corregir cualquier error de producción.
+- [X] T360 Ejecutar `npm run lint` y `npm run format:check`, corrigiendo los hallazgos de los archivos modificados.
+- [X] T361 Marcar T327–T360 como `[X]` y actualizar en `specs/002-operations-manufacturing/spec.md` el estado de AC-07, AC-34, AC-41, AC-82, AC-87, AC-117, AC-118, AC-120–AC-126, AC-128–AC-132 y AC-136 a `Verificado` solo cuando sus pruebas correspondientes pasen.
+
+**Punto de control**: la Fase 33 deja 35 tareas nuevas (`T327`–`T361`), conserva Fases 1–32 intactas, implementa FR-13/FR-21/FR-22/FR-23, documenta la excepción a FR-18 y cierra solo con `npm test -- --run`, `npm run build`, `npm run lint` y `npm run format:check` en verde.

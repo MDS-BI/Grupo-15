@@ -1,12 +1,6 @@
-import { MODULE_ACCESS, ROLE_LABELS, isModuleAllowed } from './access-control.js';
+import { MODULE_ACCESS, ROLE_LABELS, ROLE_ORDER, isModuleAllowed } from './access-control.js';
 
-export const CANONICAL_ROLES = Object.freeze([
-  'plant_manager',
-  'supervisor',
-  'planner',
-  'operator',
-  'maintenance',
-]);
+export const CANONICAL_ROLES = ROLE_ORDER;
 
 function normalizeUsername(username) {
   return String(username ?? '')
@@ -17,9 +11,10 @@ function normalizeUsername(username) {
 export function rolesForUsername(roleUsers, username) {
   const normalized = normalizeUsername(username);
   if (!normalized) return [];
-  return CANONICAL_ROLES.filter((role) =>
-    (roleUsers?.[role] ?? []).some((row) => row.username === normalized),
+  const role = CANONICAL_ROLES.find((entry) =>
+    (roleUsers?.[entry] ?? []).some((row) => row.username === normalized),
   );
+  return role ? [role] : [];
 }
 
 export function modulesForRoles(roles = []) {

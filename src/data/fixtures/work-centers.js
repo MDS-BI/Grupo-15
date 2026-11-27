@@ -1,8 +1,3 @@
-/**
- * @file Fixtures de centros de trabajo (work_centers). Ver data-model.md §3.8.
- * `operational_status` alimenta el semáforo de supervisión y mantenimiento.
- */
-
 export const workCenters = [
   {
     id: 'wc_corte',
@@ -15,7 +10,8 @@ export const workCenters = [
     efficiency_factor: 0.9,
     cost_per_hour: 15000,
     status: 'active',
-    operational_status: 'fault',
+    operational_status: 'available',
+    recommended_maintenance_frequency_days: 30,
   },
   {
     id: 'wc_solda',
@@ -28,7 +24,8 @@ export const workCenters = [
     efficiency_factor: 0.85,
     cost_per_hour: 22000,
     status: 'active',
-    operational_status: 'available',
+    operational_status: 'in_operation',
+    recommended_maintenance_frequency_days: 21,
   },
   {
     id: 'wc_solda_2',
@@ -42,6 +39,7 @@ export const workCenters = [
     cost_per_hour: 22000,
     status: 'active',
     operational_status: 'available',
+    recommended_maintenance_frequency_days: 21,
   },
   {
     id: 'wc_pintura',
@@ -54,7 +52,8 @@ export const workCenters = [
     efficiency_factor: 0.8,
     cost_per_hour: 18000,
     status: 'active',
-    operational_status: 'available',
+    operational_status: 'fault',
+    recommended_maintenance_frequency_days: 15,
   },
   {
     id: 'wc_armado',
@@ -68,6 +67,7 @@ export const workCenters = [
     cost_per_hour: 12000,
     status: 'active',
     operational_status: 'in_operation',
+    recommended_maintenance_frequency_days: 45,
   },
   {
     id: 'wc_calidad',
@@ -77,9 +77,66 @@ export const workCenters = [
     station_type: 'calidad',
     warehouse_id: 'wh_pt',
     capacity_per_day_minutes: 480,
-    efficiency_factor: 1.0,
+    efficiency_factor: 1,
     cost_per_hour: 16000,
     status: 'active',
     operational_status: 'available',
+    recommended_maintenance_frequency_days: 60,
+  },
+  {
+    id: 'wc_laminado',
+    company_id: 'cmp_1',
+    code: 'CT-LAM',
+    name: 'Laminado',
+    station_type: 'corte',
+    warehouse_id: 'wh_mp',
+    capacity_per_day_minutes: 420,
+    efficiency_factor: 0.9,
+    cost_per_hour: 14000,
+    status: 'active',
+    operational_status: 'available',
+    recommended_maintenance_frequency_days: 30,
+  },
+  {
+    id: 'wc_ensamble',
+    company_id: 'cmp_1',
+    code: 'CT-ENS',
+    name: 'Ensamble Eléctrico',
+    station_type: 'armado',
+    warehouse_id: 'wh_wip',
+    capacity_per_day_minutes: 380,
+    efficiency_factor: 0.9,
+    cost_per_hour: 13000,
+    status: 'active',
+    operational_status: 'in_operation',
+    recommended_maintenance_frequency_days: 30,
+  },
+  {
+    id: 'wc_pulido',
+    company_id: 'cmp_1',
+    code: 'CT-PUL',
+    name: 'Pulido',
+    station_type: 'pintura',
+    warehouse_id: 'wh_wip',
+    capacity_per_day_minutes: 300,
+    efficiency_factor: 0.85,
+    cost_per_hour: 11000,
+    status: 'active',
+    operational_status: 'available',
+    recommended_maintenance_frequency_days: 20,
+  },
+  {
+    id: 'wc_horno',
+    company_id: 'cmp_1',
+    code: 'CT-HORNO',
+    name: 'Horno de Curado',
+    station_type: 'calidad',
+    warehouse_id: 'wh_pt',
+    capacity_per_day_minutes: 240,
+    efficiency_factor: 0.8,
+    cost_per_hour: 19000,
+    status: 'inactive',
+    operational_status: 'inactive',
+    recommended_maintenance_frequency_days: 90,
   },
 ];

@@ -1,14 +1,17 @@
-/**
- * @file Fixtures de rutas de fabricación (routings, routing_operations).
- * Ver data-model.md §3.9–3.10.
- */
-
 export const routings = [
   {
     id: 'rt_bici',
     company_id: 'cmp_1',
     product_id: 'prod_bici',
     code: 'RT-BICI-01',
+    version: 'A',
+    status: 'active',
+  },
+  {
+    id: 'rt_cargo',
+    company_id: 'cmp_1',
+    product_id: 'prod_cargo',
+    code: 'RT-CARGO-01',
     version: 'A',
     status: 'active',
   },
@@ -28,10 +31,25 @@ export const routings = [
     version: 'A',
     status: 'active',
   },
+  {
+    id: 'rt_tubo',
+    company_id: 'cmp_1',
+    product_id: 'comp_tubo',
+    code: 'RT-TUBO-01',
+    version: 'A',
+    status: 'active',
+  },
+  {
+    id: 'rt_maza',
+    company_id: 'cmp_1',
+    product_id: 'comp_maza',
+    code: 'RT-MAZA-01',
+    version: 'A',
+    status: 'active',
+  },
 ];
 
 export const routingOperations = [
-  // Ruta de la bicicleta: Corte → Armado → Inspección final
   {
     id: 'ro_bici_1',
     routing_id: 'rt_bici',
@@ -59,7 +77,33 @@ export const routingOperations = [
     setup_time_minutes: 5,
     run_time_per_unit_minutes: 2,
   },
-  // Ruta del cuadro: Corte → Soldadura → Pintura
+  {
+    id: 'ro_cargo_1',
+    routing_id: 'rt_cargo',
+    work_center_id: 'wc_corte',
+    sequence: 10,
+    description: 'Corte de tubos para cargo',
+    setup_time_minutes: 20,
+    run_time_per_unit_minutes: 4,
+  },
+  {
+    id: 'ro_cargo_2',
+    routing_id: 'rt_cargo',
+    work_center_id: 'wc_ensamble',
+    sequence: 20,
+    description: 'Ensamble de carga y manubrio',
+    setup_time_minutes: 15,
+    run_time_per_unit_minutes: 14,
+  },
+  {
+    id: 'ro_cargo_3',
+    routing_id: 'rt_cargo',
+    work_center_id: 'wc_calidad',
+    sequence: 30,
+    description: 'Inspección final de cargo',
+    setup_time_minutes: 8,
+    run_time_per_unit_minutes: 3,
+  },
   {
     id: 'ro_cuadro_1',
     routing_id: 'rt_cuadro',
@@ -87,7 +131,6 @@ export const routingOperations = [
     setup_time_minutes: 30,
     run_time_per_unit_minutes: 8,
   },
-  // Ruta de la rueda: Armado → Inspección
   {
     id: 'ro_rueda_1',
     routing_id: 'rt_rueda',
@@ -103,6 +146,42 @@ export const routingOperations = [
     work_center_id: 'wc_calidad',
     sequence: 20,
     description: 'Inspección de rueda',
+    setup_time_minutes: 5,
+    run_time_per_unit_minutes: 1,
+  },
+  {
+    id: 'ro_tubo_1',
+    routing_id: 'rt_tubo',
+    work_center_id: 'wc_laminado',
+    sequence: 10,
+    description: 'Laminado del tubo',
+    setup_time_minutes: 12,
+    run_time_per_unit_minutes: 2,
+  },
+  {
+    id: 'ro_tubo_2',
+    routing_id: 'rt_tubo',
+    work_center_id: 'wc_pulido',
+    sequence: 20,
+    description: 'Pulido del tubo',
+    setup_time_minutes: 8,
+    run_time_per_unit_minutes: 1,
+  },
+  {
+    id: 'ro_maza_1',
+    routing_id: 'rt_maza',
+    work_center_id: 'wc_armado',
+    sequence: 10,
+    description: 'Armado de maza y freno',
+    setup_time_minutes: 10,
+    run_time_per_unit_minutes: 6,
+  },
+  {
+    id: 'ro_maza_2',
+    routing_id: 'rt_maza',
+    work_center_id: 'wc_calidad',
+    sequence: 20,
+    description: 'Verificación de maza',
     setup_time_minutes: 5,
     run_time_per_unit_minutes: 1,
   },

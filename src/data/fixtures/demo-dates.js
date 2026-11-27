@@ -20,6 +20,17 @@ export function relativeTimestamp(offsetDays = 0, time = '08:00', now = new Date
     .replace('.000Z', 'Z');
 }
 
+export function relativeMonth(offsetMonths = 0, now = new Date()) {
+  const date = safeDate(now);
+  const offset = Number(offsetMonths);
+  const target = new Date(
+    date.getFullYear(),
+    date.getMonth() + (Number.isFinite(offset) ? offset : 0),
+    1,
+  );
+  return `${target.getFullYear()}-${pad(target.getMonth() + 1)}-01`;
+}
+
 export function daysAgo(days = 1, now = new Date()) {
   return relativeDay(-Math.abs(Number(days) || 0), now);
 }

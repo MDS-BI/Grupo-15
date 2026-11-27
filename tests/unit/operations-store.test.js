@@ -242,17 +242,26 @@ describe('ManufacturingStore - US-10 planificación', () => {
 
   it('resume y ordena las órdenes para calendarización', () => {
     expect(store.orderScheduleSummary('2026-11-01')).toEqual({
-      planned: 11,
-      unplanned: 2,
-      overdue: 3,
+      planned: 36,
+      unplanned: 4,
+      overdue: 1,
     });
     const openOrders = store.ordersForScheduling();
     expect(openOrders.map((order) => order.id)).not.toContain('po_3001');
     expect(openOrders.map((order) => order.id)).not.toContain('po_3006');
     expect(store.ordersForScheduling({ status: 'planned' }).map((order) => order.id)).toEqual([
+      'po_3033',
+      'po_3034',
+      'po_3035',
+      'po_3036',
+      'po_3037',
+      'po_3038',
+      'po_3039',
+      'po_3040',
       'po_3004',
       'po_3012',
       'po_3013',
+      'po_3014',
     ]);
   });
 
@@ -273,7 +282,7 @@ describe('ManufacturingStore - US-10 planificación', () => {
 describe('ManufacturingStore - US-11 balance de líneas', () => {
   it('devuelve utilización, cuello de botella y detalle por orden', () => {
     const balance = store.lineBalanceFor({ from: '2026-10-01', to: '2026-10-31' });
-    expect(balance.utilization_by_work_center).toHaveLength(6);
+    expect(balance.utilization_by_work_center).toHaveLength(10);
     expect(balance.bottleneck).toBeTruthy();
     expect(balance.standard_times.wc_corte.operation_count).toBeGreaterThan(0);
     expect(balance.suggestions[0].to_work_center_id).toBe('wc_solda_2');

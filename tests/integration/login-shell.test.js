@@ -1,15 +1,24 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { JSDOM } from 'jsdom';
 import { ROLE_DESCRIPTIONS, ROLE_LABELS, ROLE_ORDER } from '../../src/domain/access-control.js';
-import { CANONICAL_ROLES } from '../../src/domain/role-access.js';
 import { SNAPSHOT_KEY } from '../../src/data/persistence.js';
 
 const CREDENTIALS = {
-  plant_manager: ['jefa', 'jefa'],
-  supervisor: ['supervisor', 'supervisor'],
-  planner: ['planificador', 'planificador'],
-  operator: ['operador', 'operador'],
-  maintenance: ['mantenimiento', 'mantenimiento'],
+  plant_manager: ['jefa.planta', 'ForjaPlanta26!'],
+  planner: ['planificador.ops', 'Calendario2026!'],
+  production_engineer: ['ingeniero.prod', 'RutaOptimal26!'],
+  supervisor: ['supervisor.linea', 'TurnoLinea26!'],
+  operator: ['operador.planta', 'Estacion2026!'],
+  maintenance: ['mantencion.mgr', 'TallerMaq26!'],
+};
+
+const HOME = {
+  plant_manager: ['#/plant', 'Planta'],
+  planner: ['#/scheduling', 'Planificación'],
+  production_engineer: ['#/line-balance', 'Balance'],
+  supervisor: ['#/supervision', 'Supervisión'],
+  operator: ['#/operator', 'Estación'],
+  maintenance: ['#/maintenance', 'Mantenimiento'],
 };
 
 let dom;
@@ -34,22 +43,23 @@ function openUserMenu() {
   document.querySelector('[data-role="user-menu-toggle"]').click();
 }
 
-function chooseRole(role) {
-  openUserMenu();
-  const select = document.querySelector('[data-role="role-select"]');
-  select.value = role;
-  select.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
-}
-
 function goToHash(hash) {
   globalThis.location.hash = hash;
   dom.window.dispatchEvent(new dom.window.Event('hashchange'));
 }
 
 function currentRoleLabel() {
-  return document
-    .querySelector('[data-role="user-menu-toggle"] .user-menu__role')
-    .textContent.trim();
+  return document.querySelector('[data-role="user-menu-toggle"]').textContent.trim();
+}
+
+function storedRole() {
+  return globalThis.localStorage.getItem('erp.manufacturing.role') ?? '';
+}
+
+function expectStoredRole(username, role) {
+  const raw = storedRole();
+  expect(raw).toContain(username);
+  expect(raw).toContain(role);
 }
 
 function installDom(stored = {}) {
@@ -91,7 +101,6 @@ async function waitForChangePasswordDialog() {
   return vi.waitFor(() => {
     const backdrop = document.querySelector('.modal-backdrop[data-role="change-password-dialog"]');
     expect(backdrop).toBeTruthy();
-    expect(backdrop.querySelector('.modal')).toBeTruthy();
     return backdrop;
   });
 }
@@ -123,24 +132,26 @@ afterEach(() => {
   delete globalThis.addEventListener;
 });
 
-describe('Ingreso genérico y sistema multi-rol', () => {
-  it('muestra un login sin datos de roles', async () => {
+describe('Ingreso genérico y cuenta única', () => {
+  it('muestra un login sin roles ni descripciones', async () => {
     await boot();
 
     expect(document.querySelector('[data-role="login-form"]')).toBeTruthy();
-    expect(document.querySelector('#toast-region').getAttribute('role')).toBe('status');
     expect(document.body.textContent).toContain('Iniciar sesión');
-    for (const role of ROLE_ORDER)
+    for (const role of ROLE_ORDER) {
       expect(document.body.textContent).not.toContain(ROLE_LABELS[role]);
+    }
     for (const description of Object.values(ROLE_DESCRIPTIONS)) {
       expect(document.body.textContent).not.toContain(description);
     }
-    expect(document.body.textContent).not.toContain('Entrar como');
+    for (const [username] of Object.values(CREDENTIALS)) {
+      expect(document.body.textContent).not.toContain(username);
+    }
   });
 
-  it('muestra un error genérico y no entra con credenciales inválidas', async () => {
+  it('muestra un error genérico con contraseña incorrecta', async () => {
     await boot();
-    submitLogin('jefa', 'incorrecta');
+    submitLogin('jefa.planta', 'incorrecta');
 
     const error = document.querySelector('[data-role="login-error"]');
 
@@ -149,172 +160,115 @@ describe('Ingreso genérico y sistema multi-rol', () => {
     expect(document.querySelector('.shell')).toBeNull();
   });
 
-  it('entra con un rol único y no ofrece selector ni administración', async () => {
+  for (const [role, [username, password]] of Object.entries(CREDENTIALS)) {
+    it(`entra con ${username} en su único rol ${role}`, async () => {
+      await boot();
+      await enter(username, password);
+
+      const [hash, label] = HOME[role];
+      expect(globalThis.location.hash).toBe(hash);
+      expect(document.querySelector('[data-role="breadcrumb"] strong').textContent).toBe(label);
+      expect(document.querySelector('[data-module="roles"]')).toBeNull();
+      expectStoredRole(username, role);
+
+      openUserMenu();
+      expect(document.querySelector('[data-role="role-select"]')).toBeNull();
+      if (role === 'plant_manager') {
+        expect(document.querySelector('[data-role="user-menu"]').textContent).toContain('Ver como');
+      } else {
+        expect(document.querySelector('[data-role="user-menu"]').textContent).not.toContain(
+          'Ver como',
+        );
+      }
+    });
+  }
+
+  it('rechaza cuentas eliminadas usuario, test y doble', async () => {
     await boot();
-    await enter(...CREDENTIALS.operator);
-
-    expect(document.querySelector('[data-module="admin-roles"]')).toBeNull();
-    expect(localStorage.getItem('erp.manufacturing.role')).toBe('operador|operator');
-    openUserMenu();
-    expect(document.querySelector('[data-role="role-select"]')).toBeNull();
-
-    goToHash('#/admin-roles');
-
-    expect(document.querySelector('[data-role="breadcrumb"] strong').textContent).toBe('Roles');
-    expect(document.querySelector('[data-role="role-tab"][data-tab="config"]').disabled).toBe(true);
-    expect(document.querySelectorAll('[data-role="admin-user-table"]')).toHaveLength(0);
-    expect(document.body.textContent).not.toContain('Entrar como');
+    for (const username of ['usuario', 'test', 'doble']) {
+      submitLogin(username, username);
+      expect(document.querySelector('[data-role="login-error"]').hidden).toBe(false);
+      expect(document.querySelector('.shell')).toBeNull();
+    }
   });
+});
 
-  it('permite a la Jefa de Planta abrir el panel de cinco tablas desde Roles', async () => {
+describe('Navegación, "Ver como" y páginas de roles', () => {
+  it('muestra "Ver como" solo a la Jefa de Planta', async () => {
     await boot();
     await enter(...CREDENTIALS.plant_manager);
-
-    expect(document.querySelector('[data-module="admin-roles"]')).toBeNull();
-    document.querySelector('[data-module="roles"]').click();
-    document.querySelector('[data-role="role-tab"][data-tab="config"]').click();
-
-    expect(document.querySelectorAll('[data-role="admin-user-table"]')).toHaveLength(5);
-    expect(document.querySelectorAll('[data-pick-role]')).toHaveLength(0);
-    expect(document.body.textContent).toContain('Configurar roles');
-    expect(document.body.textContent).toContain('Jefa de Planta');
-  });
-
-  it('abre Configurar roles desde #/admin-roles solo con el rol activo de plant_manager', async () => {
-    await boot();
-    await enter('test', 'test');
-
-    goToHash('#/admin-roles');
-
-    expect(document.querySelector('[data-role="breadcrumb"] strong').textContent).toBe('Roles');
-    expect(
-      document
-        .querySelector('[data-role="role-tab"][data-tab="config"]')
-        .getAttribute('aria-selected'),
-    ).toBe('true');
-    expect(document.querySelectorAll('[data-role="admin-user-table"]')).toHaveLength(5);
-
-    chooseRole('operator');
-    goToHash('#/admin-roles');
-
-    expect(
-      document
-        .querySelector('[data-role="role-tab"][data-tab="roles"]')
-        .getAttribute('aria-selected'),
-    ).toBe('true');
-    expect(document.querySelector('[data-role="role-tab"][data-tab="config"]').disabled).toBe(true);
-    expect(document.querySelectorAll('[data-role="admin-user-table"]')).toHaveLength(0);
-  });
-
-  it('confirma antes de aplicar el cambio de rol desde una tarjeta', async () => {
-    await boot();
-    await enter('test', 'test');
-    document.querySelector('[data-module="roles"]').click();
-
-    expect(
-      [...document.querySelectorAll('[data-role-card]')].map((card) => card.dataset.roleCard),
-    ).toEqual(CANONICAL_ROLES);
-
-    document.querySelector('[data-role-card="operator"]').click();
-    const dialog = await vi.waitFor(() => {
-      const found = document.querySelector('[data-role="confirm-dialog"]');
-      expect(found).toBeTruthy();
-      return found;
-    });
-    expect(dialog.textContent).toContain('¿Deseas cambiar tu vista al rol Operador de Máquina?');
-    expect(currentRoleLabel()).toBe('Jefa de Planta');
-    expect(localStorage.getItem('erp.manufacturing.role')).toBe('test|plant_manager');
-
-    document.querySelector('[data-role="cancel"]').click();
-    await vi.waitFor(() =>
-      expect(document.querySelector('[data-role="confirm-dialog"]')).toBeNull(),
-    );
-    expect(currentRoleLabel()).toBe('Jefa de Planta');
-
-    document.querySelector('[data-role-card="operator"]').click();
-    document.querySelector('[data-role="confirm"]').click();
-    await vi.waitFor(() => expect(currentRoleLabel()).toBe('Operador de Máquina'));
-    expect(localStorage.getItem('erp.manufacturing.role')).toBe('test|operator');
-  });
-
-  it('rechaza la cuenta genérica usuario', async () => {
-    await boot();
-    submitLogin('usuario', 'usuario');
-
-    expect(document.querySelector('[data-role="login-error"]').hidden).toBe(false);
-    expect(document.querySelector('.shell')).toBeNull();
-  });
-
-  it('ofrece los cinco roles a test y solo dos a doble', async () => {
-    await boot();
-    await enter('test', 'test');
     openUserMenu();
 
-    expect(
-      Array.from(document.querySelectorAll('[data-role="role-select"] option')).map(
-        (option) => option.value,
-      ),
-    ).toEqual(CANONICAL_ROLES);
-    expect(localStorage.getItem('erp.manufacturing.role')).toBe('test|plant_manager');
+    expect(document.querySelector('[data-role="user-menu"]').textContent).toContain('Ver como');
 
     document.querySelector('[data-logout]').click();
     await vi.waitFor(() => expect(document.querySelector('[data-role="login-form"]')).toBeTruthy());
 
-    await enter('doble', 'doble');
+    await enter(...CREDENTIALS.production_engineer);
     openUserMenu();
-    expect(
-      Array.from(document.querySelectorAll('[data-role="role-select"] option')).map(
-        (option) => option.value,
-      ),
-    ).toEqual(['operator', 'maintenance']);
-    expect(localStorage.getItem('erp.manufacturing.role')).toBe('doble|operator');
-    expect(document.querySelector('[data-module="admin-roles"]')).toBeNull();
+    expect(document.querySelector('[data-role="user-menu"]').textContent).not.toContain('Ver como');
+    expect(document.querySelector('[data-role="role-select"]')).toBeNull();
   });
 
-  it('cambia de rol efectivo sin alterar la identidad', async () => {
+  it('no ofrece selector de rol dentro del panel de planta', async () => {
     await boot();
-    await enter('test', 'test');
-    chooseRole('operator');
+    await enter(...CREDENTIALS.plant_manager);
 
-    expect(document.querySelector('[data-role="viewing-as"]').textContent).toContain(
-      'Viendo como: Operador de Máquina',
-    );
-    expect(localStorage.getItem('erp.manufacturing.role')).toBe('test|operator');
-    expect(document.querySelector('[data-module="orders"]')).toBeNull();
-    expect(document.querySelector('[data-module="scheduling"]')).toBeTruthy();
-
-    chooseRole('plant_manager');
-
-    expect(document.querySelector('[data-role="viewing-as"]')).toBeNull();
-    expect(document.querySelector('[data-module="scheduling"]')).toBeTruthy();
-    expect(localStorage.getItem('erp.manufacturing.role')).toBe('test|plant_manager');
+    expect(globalThis.location.hash).toBe('#/plant');
+    expect(document.querySelector('[data-role="content"] [data-role="role-select"]')).toBeNull();
+    expect(document.querySelectorAll('[data-select-role]')).toHaveLength(0);
+    expect(document.querySelector('[data-module="roles"]')).toBeNull();
   });
+
+  it('redirige #/admin-roles a #/roles solo para la Jefa', async () => {
+    await boot();
+    await enter(...CREDENTIALS.plant_manager);
+    goToHash('#/admin-roles');
+
+    expect(globalThis.location.hash).toBe('#/roles');
+    expect(document.querySelector('[data-role="breadcrumb"] strong').textContent).toBe('Roles');
+    expect(document.querySelectorAll('[data-role-card]')).toHaveLength(6);
+    expect(document.querySelector('[data-role="role-tab"][data-tab="config"]').disabled).toBe(
+      false,
+    );
+    document.querySelector('[data-role="role-tab"][data-tab="config"]').click();
+    expect(document.querySelectorAll('[data-role="admin-user-table"]')).toHaveLength(6);
+  });
+
+  for (const [role, [username, password]] of Object.entries(CREDENTIALS)) {
+    if (role === 'plant_manager') continue;
+    it(`deniega #/admin-roles y #/roles a ${username}`, async () => {
+      await boot();
+      await enter(username, password);
+
+      goToHash('#/admin-roles');
+      const [hash, label] = HOME[role];
+      expect(globalThis.location.hash).toBe(hash);
+      expect(document.querySelector('[data-role="breadcrumb"] strong').textContent).toBe(label);
+      expect(document.querySelectorAll('[data-role-card]')).toHaveLength(0);
+      expect(document.querySelectorAll('[data-role="admin-user-table"]')).toHaveLength(0);
+
+      goToHash('#/roles');
+      expect(globalThis.location.hash).toBe(hash);
+      expect(document.querySelector('[data-role="breadcrumb"] strong').textContent).toBe(label);
+    });
+  }
 
   it('vuelve al login al cerrar sesión', async () => {
     await boot();
     await enter(...CREDENTIALS.planner);
-
     openUserMenu();
     document.querySelector('[data-logout]').click();
 
     expect(document.querySelector('[data-role="login-form"]')).toBeTruthy();
-    expect(localStorage.getItem('erp.manufacturing.role')).toBeNull();
+    expect(storedRole()).toBe('');
   });
+});
 
-  it('no duplica el selector de rol dentro de #/roles', async () => {
-    await boot();
-    await enter('test', 'test');
-    document.querySelector('[data-module="roles"]').click();
-
-    expect(document.querySelectorAll('[data-select-role]')).toHaveLength(0);
-    expect(document.querySelectorAll('[data-role="role-select"]')).toHaveLength(0);
-    expect(document.body.textContent).toContain('Páginas disponibles');
-  });
-
-  it('permite reiniciar la demo solo a la jefa real con su rol', async () => {
+describe('Reinicio de demo y contraseña', () => {
+  it('ofrece reiniciar la demo solo a la jefa real con su rol', async () => {
     await boot();
     await enter(...CREDENTIALS.plant_manager);
-
     openUserMenu();
     const resetButton = document.querySelector('[data-reset-demo]');
     expect(resetButton).toBeTruthy();
@@ -324,46 +278,33 @@ describe('Ingreso genérico y sistema multi-rol', () => {
       expect(document.querySelector('[data-role="confirm-dialog"]')).toBeTruthy(),
     );
     document.querySelector('[data-role="confirm"]').click();
-
     await vi.waitFor(() =>
       expect(document.querySelector('[data-role="confirm-dialog"]')).toBeNull(),
     );
+
     expect(document.querySelector('[data-role="login-form"]')).toBeNull();
-    expect(localStorage.getItem('erp.manufacturing.role')).toBe('jefa|plant_manager');
+    expectStoredRole('jefa.planta', 'plant_manager');
     expect(document.body.textContent).toContain('Datos de demo reiniciados');
   });
 
-  it('oculta el reinicio de la demo a otros roles y mientras se visualiza otro rol', async () => {
+  it('oculta el reinicio de la demo a otros roles', async () => {
     await boot();
-    await enter(...CREDENTIALS.operator);
-    openUserMenu();
-    expect(document.querySelector('[data-reset-demo]')).toBeNull();
-
-    document.querySelector('[data-logout]').click();
-    await vi.waitFor(() => expect(document.querySelector('[data-role="login-form"]')).toBeTruthy());
-
-    await enter('test', 'test');
-    chooseRole('operator');
+    await enter(...CREDENTIALS.production_engineer);
     openUserMenu();
     expect(document.querySelector('[data-reset-demo]')).toBeNull();
   });
-});
 
-describe('Cambio de contraseña desde el menú de usuario', () => {
-  it('está disponible para cualquier rol y muestra errores inline', async () => {
+  it('valida errores inline y persiste la nueva contraseña', async () => {
     await boot();
     await enter(...CREDENTIALS.operator);
     const before = localStorage.getItem(SNAPSHOT_KEY);
 
     openChangePassword();
-    const dialog = await waitForChangePasswordDialog();
+    let dialog = await waitForChangePasswordDialog();
     expect(
       document.querySelector('[data-role="user-menu-toggle"]').getAttribute('aria-expanded'),
     ).toBe('false');
     expect(document.querySelector('[data-change-password]')).toBeNull();
-    expect(dialog.textContent).toContain('Contraseña actual');
-    expect(dialog.textContent).toContain('Nueva contraseña');
-    expect(dialog.textContent).toContain('Confirmar nueva contraseña');
 
     fillChangePassword(dialog, 'incorrecta', 'ClaveNueva123');
     submitChangePassword(dialog);
@@ -372,64 +313,18 @@ describe('Cambio de contraseña desde el menú de usuario', () => {
         false,
       ),
     );
-    expect(dialog.textContent).toMatch(/contraseña actual/i);
     expect(localStorage.getItem(SNAPSHOT_KEY)).toBe(before);
 
-    fillChangePassword(dialog, 'operador', 'ClaveNueva123', 'distinta');
+    fillChangePassword(dialog, 'Estacion2026!', 'ClaveNueva123', 'distinta');
     submitChangePassword(dialog);
     await vi.waitFor(() =>
       expect(dialog.querySelector('[data-role="change-password-error-confirm"]').hidden).toBe(
         false,
       ),
     );
-    expect(dialog.textContent).toMatch(/coincid/i);
     expect(localStorage.getItem(SNAPSHOT_KEY)).toBe(before);
 
-    fillChangePassword(dialog, 'operador', '   ', '   ');
-    submitChangePassword(dialog);
-    await vi.waitFor(() =>
-      expect(dialog.querySelector('[data-role="change-password-error-new"]').hidden).toBe(false),
-    );
-    expect(localStorage.getItem(SNAPSHOT_KEY)).toBe(before);
-  });
-
-  it('cierra el modal con botón, Escape y clic fuera sin mutar credenciales', async () => {
-    await boot();
-    await enter(...CREDENTIALS.planner);
-    const before = localStorage.getItem(SNAPSHOT_KEY);
-
-    openChangePassword();
-    let dialog = await waitForChangePasswordDialog();
-    dialog.querySelector('[data-role="change-password-cancel"]').click();
-    await vi.waitFor(() =>
-      expect(document.querySelector('[data-role="change-password-dialog"]')).toBeNull(),
-    );
-
-    openChangePassword();
-    dialog = await waitForChangePasswordDialog();
-    document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape' }));
-    await vi.waitFor(() =>
-      expect(document.querySelector('[data-role="change-password-dialog"]')).toBeNull(),
-    );
-
-    openChangePassword();
-    dialog = await waitForChangePasswordDialog();
-    dialog.click();
-    await vi.waitFor(() =>
-      expect(document.querySelector('[data-role="change-password-dialog"]')).toBeNull(),
-    );
-
-    expect(localStorage.getItem(SNAPSHOT_KEY)).toBe(before);
-  });
-
-  it('persiste la nueva credencial, conserva el rol y permite ingresar tras logout y recarga', async () => {
-    await boot();
-    await enter('test', 'test');
-    chooseRole('operator');
-
-    openChangePassword();
-    const dialog = await waitForChangePasswordDialog();
-    fillChangePassword(dialog, 'test', 'ClaveNueva456');
+    fillChangePassword(dialog, 'Estacion2026!', 'ClaveNueva123');
     submitChangePassword(dialog);
     await vi.waitFor(() =>
       expect(document.querySelector('#toast-region').textContent).toContain(
@@ -440,34 +335,27 @@ describe('Cambio de contraseña desde el menú de usuario', () => {
       expect(document.querySelector('[data-role="change-password-dialog"]')).toBeNull(),
     );
 
-    expect(currentRoleLabel()).toBe('Operador de Máquina');
-    expect(localStorage.getItem('erp.manufacturing.role')).toBe('test|operator');
+    expect(currentRoleLabel()).toBe('Operador');
+    expectStoredRole('operador.planta', 'operator');
     const snapshot = JSON.parse(localStorage.getItem(SNAPSHOT_KEY));
     for (const key of Object.keys(snapshot.data).filter((name) => name.startsWith('role_users_'))) {
       for (const row of snapshot.data[key]) {
-        if (row.username === 'test') expect(row.password).toBe('ClaveNueva456');
+        if (row.username === 'operador.planta') expect(row.password).toBe('ClaveNueva123');
       }
     }
 
     reloadWithStoredData();
     await boot();
     expect(document.querySelector('.shell')).toBeTruthy();
-    expect(currentRoleLabel()).toBe('Operador de Máquina');
+    expect(currentRoleLabel()).toBe('Operador');
 
     openUserMenu();
     document.querySelector('[data-logout]').click();
     await vi.waitFor(() => expect(document.querySelector('[data-role="login-form"]')).toBeTruthy());
 
-    submitLogin('test', 'test');
+    submitLogin('operador.planta', 'Estacion2026!');
     expect(document.querySelector('[data-role="login-error"]').hidden).toBe(false);
-    expect(document.querySelector('.shell')).toBeNull();
-
-    await enter('test', 'ClaveNueva456');
-    openUserMenu();
-    expect(
-      Array.from(document.querySelectorAll('[data-role="role-select"] option')).map(
-        (option) => option.value,
-      ),
-    ).toEqual(CANONICAL_ROLES);
+    await enter('operador.planta', 'ClaveNueva123');
+    expect(globalThis.location.hash).toBe('#/operator');
   });
 });

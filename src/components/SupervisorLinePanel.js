@@ -6,6 +6,7 @@
 import { escapeHtml, el, fmtNumber } from './format.js';
 import { employeeLabel, operationLabel } from './labels.js';
 import { showToast } from './Toast.js';
+import { can } from '../domain/access-control.js';
 
 const LIGHT_LABEL = {
   in_operation: 'En operación',
@@ -17,9 +18,15 @@ const LIGHT_LABEL = {
 
 /**
  * @param {import('../data/ManufacturingStore.js').ManufacturingStore} store
+ * @param {{role?: string}} [options]
  * @returns {HTMLElement}
  */
-export function SupervisorLinePanel(store) {
+export function SupervisorLinePanel(store, options = {}) {
+  const role = options.role;
+  const canView = can(role, 'supervision.ver');
+  const canCreate = can(role, 'supervision.crear');
+  const canEdit = can(role, 'supervision.editar');
+  const canApprove = can(role, 'supervision.aprobar');
   const root = el(`
     <section class="view">
       <header class="view__header">
@@ -34,7 +41,9 @@ export function SupervisorLinePanel(store) {
         <article class="panel">
           <header class="panel__header"><h3>Asignar operador</h3></header>
           <div class="panel__body">
-          <form class="stack-form" data-role="assign-form">
+          ${
+            canCreate
+              ? `<form class="stack-form" data-role="assign-form" data-action="supervision.crear">
             <label>Centro de trabajo
               <select name="work_center_id">${store.workCenters
                 .map((wc) => `<option value="${escapeHtml(wc.id)}">${escapeHtml(wc.name)}</option>`)
@@ -58,7 +67,9 @@ export function SupervisorLinePanel(store) {
             </label>
             <p class="form-error" data-role="assign-error" role="alert"></p>
             <button type="submit" class="btn btn--primary">Asignar</button>
-          </form>
+          </form>`
+              : '<p class="empty-note">Sin permiso para asignar operadores.</p>'
+          }
           </div>
         </article>
         <article class="panel">
@@ -137,7 +148,7 @@ export function SupervisorLinePanel(store) {
           <label>Trabajadores
             <select multiple size="4" data-station-operators="${escapeHtml(row.work_center_id)}" data-station-operators-index="${index}">${workers}</select>
           </label>
-          <button type="button" class="btn btn--tiny btn--danger" data-station-remove="${index}">Quitar</button>
+          ${canEdit ? `<button type="button" class="btn btn--tiny btn--danger" data-station-remove="${index}">Quitar</button>` : ''}
         </div>`;
       })
       .join('');
@@ -150,16 +161,18 @@ export function SupervisorLinePanel(store) {
             <label>Orden
               <select data-role="station-order-select">${orderOptions}</select>
             </label>
-            <button type="button" class="btn btn--tiny" data-role="edit-stations">Editar estaciones y trabajadores</button>
+            ${canEdit ? '<button type="button" class="btn btn--tiny" data-role="edit-stations">Editar estaciones y trabajadores</button>' : ''}
           </div>
           ${
-            editorExpanded
+            editorExpanded && canEdit
               ? `<div class="station-editor__rows">${rowsHtml || '<p class="empty-note">Sin estaciones. Agregue una estación para esta orden.</p>'}</div>
                 <div class="station-editor__actions">
                   <button type="button" class="btn btn--tiny" data-role="add-station">Agregar estación</button>
                   <button type="button" class="btn btn--tiny btn--primary" data-role="save-stations">Guardar estaciones</button>
                 </div>`
-              : '<p class="empty-note">Presione “Editar estaciones y trabajadores” para ajustar la dotación.</p>'
+              : canEdit
+                ? '<p class="empty-note">Presione “Editar estaciones y trabajadores” para ajustar la dotación.</p>'
+                : '<p class="empty-note">Sin permiso para editar estaciones y trabajadores.</p>'
           }
           <p class="form-error" data-role="station-error" role="alert"></p>
         </div>
@@ -172,10 +185,12 @@ export function SupervisorLinePanel(store) {
       stationDraft = null;
       renderStationEditor();
     });
-    stationEditorHost.querySelector('[data-role="edit-stations"]').addEventListener('click', () => {
-      editorExpanded = true;
-      renderStationEditor();
-    });
+    stationEditorHost
+      .querySelector('[data-role="edit-stations"]')
+      ?.addEventListener('click', () => {
+        editorExpanded = true;
+        renderStationEditor();
+      });
     stationEditorHost.querySelectorAll('[data-station-work-center]').forEach((select) => {
       select.addEventListener('change', () => {
         draftRows()[Number(select.dataset.stationWorkCenter)].work_center_id = select.value;
@@ -264,7 +279,11 @@ export function SupervisorLinePanel(store) {
                     <td title="${escapeHtml(active_operation?.id || '')}">${
                       active_operation ? escapeHtml(operationLabel(store, active_operation)) : '—'
                     }</td>
-                    <td><button type="button" class="${escalateClass}" data-escalate="${escapeHtml(work_center.id)}">Escalar incidente</button></td>
+                    <td>${
+                      canCreate
+                        ? `<button type="button" class="${escalateClass}" data-escalate="${escapeHtml(work_center.id)}">Escalar incidente</button>`
+                        : ''
+                    }</td>
                   </tr>`;
                 })
                 .join('')}
@@ -290,7 +309,7 @@ export function SupervisorLinePanel(store) {
             const order = operation ? store.orderById(operation.production_order_id) : null;
             return `<div class="closure-row" data-shift-row="${escapeHtml(shift.id)}">
               <span>${escapeHtml(order ? order.order_number : shift.po_operation_id)} · turno ${shift.shift_number} · ${fmtNumber(shift.quantity_counted)} piezas</span>
-              <button type="button" class="btn btn--tiny btn--primary" data-validate="${escapeHtml(shift.id)}">Validar cierre</button>
+              ${canApprove ? `<button type="button" class="btn btn--tiny btn--primary" data-validate="${escapeHtml(shift.id)}">Validar cierre</button>` : ''}
             </div>`;
           })
           .join('')
@@ -312,6 +331,7 @@ export function SupervisorLinePanel(store) {
   }
 
   function openEscalate(workCenterId) {
+    if (!canCreate) return;
     const workCenter = store.workCenterById(workCenterId);
     modalRoot.innerHTML = `
       <div class="modal-backdrop" data-role="escalate-modal">
@@ -354,7 +374,8 @@ export function SupervisorLinePanel(store) {
     });
   }
 
-  root.querySelector('[data-role="assign-form"]').addEventListener('submit', (event) => {
+  root.querySelector('[data-role="assign-form"]')?.addEventListener('submit', (event) => {
+    if (!canCreate) return;
     event.preventDefault();
     const data = new FormData(event.target);
     try {
@@ -371,6 +392,12 @@ export function SupervisorLinePanel(store) {
   });
 
   function render() {
+    if (!canView) {
+      lightsEl.innerHTML = '<p class="empty-note">Sin permiso para ver supervisión de línea.</p>';
+      stationEditorHost.innerHTML = '';
+      closuresEl.innerHTML = '';
+      return;
+    }
     stationDraft = null;
     renderLights();
     renderStationEditor();

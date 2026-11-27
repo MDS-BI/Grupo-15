@@ -24,8 +24,10 @@ describe('bom-explosion', () => {
     expect(tree.children.map((c) => c.product_id).sort()).toEqual(['prod_cuadro', 'prod_rueda']);
     // Nivel 2: desde el cuadro → tubo, pintura, soldadura
     const cuadro = tree.children.find((c) => c.product_id === 'prod_cuadro');
-    expect(cuadro.children.length).toBe(3);
+    expect(cuadro.children.length).toBe(4);
     expect(cuadro.children.map((c) => c.product_id)).toContain('comp_tubo');
+    const tubo = cuadro.children.find((c) => c.product_id === 'comp_tubo');
+    expect(tubo.children.map((c) => c.product_id)).toContain('rm_soldadura');
   });
 
   it('aplana el árbol con cantidades acumuladas', () => {

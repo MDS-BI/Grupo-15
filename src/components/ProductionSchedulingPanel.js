@@ -9,6 +9,7 @@ import {
   filterCalendarEvents,
 } from '../domain/calendar-scheduling.js';
 import { canResolveScheduledMaintenance, isResolvedMaintenance } from '../domain/maintenance.js';
+import { can } from '../domain/access-control.js';
 
 const MENU_ROLES = new Set(['planner', 'plant_manager', 'supervisor']);
 const TRAY_ROLES = new Set(['planner', 'plant_manager']);
@@ -130,6 +131,10 @@ function buildMonthCells(month, events) {
  */
 export function ProductionSchedulingPanel(store, options = {}) {
   const role = String(options.role || 'planner');
+  const canView = can(role, 'planificacion.ver');
+  const canCreate = can(role, 'planificacion.crear');
+  const canEdit = can(role, 'planificacion.editar');
+  const canApprove = can(role, 'planificacion.aprobar');
   const operatorId =
     options.operatorId ||
     (role === 'operator'
@@ -172,7 +177,7 @@ export function ProductionSchedulingPanel(store, options = {}) {
             : '<button type="button" class="tab-bar__btn scheduling-tabs__tab maintenance-tabs__tab" role="tab" data-view="list" aria-controls="list-view" aria-selected="false">Listado</button>'
         }
       </nav>
-      <div class="scheduling-calendar" id="calendar-view" data-role="calendar-view">
+      <div class="scheduling-calendar" id="calendar-view" data-role="calendar-view" data-action="planificacion.ver">
         <div class="calendar-toolbar">
           <div class="calendar-month-nav">
             <button type="button" class="btn btn--tiny" data-month-nav="prev" aria-label="Mes anterior">‹</button>
@@ -452,7 +457,7 @@ export function ProductionSchedulingPanel(store, options = {}) {
             : '<p class="empty-note">Sin tareas para este día.</p>'
         }
         ${
-          role === 'supervisor'
+          role === 'supervisor' && can(role, 'supervision.ver')
             ? '<button type="button" class="btn btn--tiny calendar-day-menu__supervision" data-role="supervision-shortcut">Ir a Supervisión de línea</button>'
             : ''
         }`,
@@ -497,6 +502,7 @@ export function ProductionSchedulingPanel(store, options = {}) {
   }
 
   function openSchedulePopup() {
+    if (!canCreate) return null;
     const { startDate, endDate, startTime, endTime } = state.popup;
     const modal = createCalendarModal({
       role: 'schedule-popup',
@@ -694,7 +700,7 @@ export function ProductionSchedulingPanel(store, options = {}) {
     tbody.innerHTML = rows
       .map((event) => {
         const id = escapeHtml(event.id);
-        const canResolve = canResolveScheduledMaintenance(event);
+        const canResolve = canApprove && canResolveScheduledMaintenance(event);
         return `<tr data-maintenance-row="${id}">
           <td class="maint-code"><strong>${escapeHtml(event.title || event.sourceId || '—')}</strong></td>
           <td>${escapeHtml(event.work_center_name || event.work_center_id || '—')}</td>
@@ -737,11 +743,15 @@ export function ProductionSchedulingPanel(store, options = {}) {
           <td>${escapeHtml(product ? product.name : order.product_id)}</td>
           <td>${orderStatusBadge(order.status)}</td>
           <td>${escapeHtml(PRIORITY_LABEL[order.priority] || order.priority)}</td>
-          <td><input type="date" data-date="start" data-order="${escapeHtml(order.id)}" value="${escapeHtml(order.planned_start_date || '')}" ${closed ? 'disabled' : ''} /></td>
-          <td><input type="date" data-date="end" data-order="${escapeHtml(order.id)}" value="${escapeHtml(order.planned_end_date || '')}" ${closed ? 'disabled' : ''} /></td>
+          <td><input type="date" data-date="start" data-order="${escapeHtml(order.id)}" value="${escapeHtml(order.planned_start_date || '')}" ${closed || !canEdit ? 'disabled' : ''} /></td>
+          <td><input type="date" data-date="end" data-order="${escapeHtml(order.id)}" value="${escapeHtml(order.planned_end_date || '')}" ${closed || !canEdit ? 'disabled' : ''} /></td>
           <td class="row-actions">
-            <button type="button" class="btn btn--tiny btn--primary" data-save="${escapeHtml(order.id)}" ${closed ? 'disabled' : ''}>Guardar</button>
-            <button type="button" class="btn btn--tiny" data-clear="${escapeHtml(order.id)}" ${closed ? 'disabled' : ''}>Limpiar</button>
+            ${
+              canEdit
+                ? `<button type="button" class="btn btn--tiny btn--primary" data-save="${escapeHtml(order.id)}" ${closed ? 'disabled' : ''}>Guardar</button>
+            <button type="button" class="btn btn--tiny" data-clear="${escapeHtml(order.id)}" ${closed ? 'disabled' : ''}>Limpiar</button>`
+                : ''
+            }
             <span class="form-error" data-error="${escapeHtml(order.id)}" role="alert"></span>
           </td>
         </tr>`;
@@ -750,6 +760,7 @@ export function ProductionSchedulingPanel(store, options = {}) {
   }
 
   async function resolveMaintenance(id) {
+    if (!canApprove) return;
     const confirmed = await confirmDialog({
       title: 'Resolver mantención',
       message: '¿Está seguro que quiere resolver esta mantención?',
@@ -767,6 +778,7 @@ export function ProductionSchedulingPanel(store, options = {}) {
   }
 
   function saveListDates(orderId, clear = false) {
+    if (!canEdit) return;
     const rowsEl = listContentEl.querySelector('[data-role="rows"]');
     const startInput = rowsEl.querySelector(`[data-date="start"][data-order="${orderId}"]`);
     const endInput = rowsEl.querySelector(`[data-date="end"][data-order="${orderId}"]`);
@@ -785,7 +797,7 @@ export function ProductionSchedulingPanel(store, options = {}) {
   }
 
   function openPopup() {
-    if (!state.focusOrderId || !state.dragStart) return;
+    if (!canCreate || !state.focusOrderId || !state.dragStart) return;
     const range = sortedRange(state.dragStart, state.dragEnd);
     state.popup = {
       startDate: range.start,
@@ -811,7 +823,7 @@ export function ProductionSchedulingPanel(store, options = {}) {
   }
 
   function savePopup() {
-    if (!state.popup) return;
+    if (!canCreate || !state.popup) return;
     const timeStart = popupModal?.querySelector('[data-schedule-time="start"]');
     const timeEnd = popupModal?.querySelector('[data-schedule-time="end"]');
     const errorEl = popupModal?.querySelector('[data-error="schedule"]');
@@ -838,6 +850,12 @@ export function ProductionSchedulingPanel(store, options = {}) {
   }
 
   function render() {
+    if (!canView) {
+      calendarView.hidden = true;
+      listView.hidden = true;
+      gridEl.innerHTML = '<p class="empty-note">Sin permiso para ver planificación.</p>';
+      return;
+    }
     renderSummary();
     renderViews();
     renderCalendar();
@@ -895,7 +913,7 @@ export function ProductionSchedulingPanel(store, options = {}) {
   });
 
   trayEl.addEventListener('click', (event) => {
-    if (role !== 'planner') return;
+    if (role !== 'planner' || !canCreate) return;
     if (event.target.closest('select, input, button:not(.pending-tray__focus)')) return;
     const row = event.target.closest('.pending-tray__row');
     if (!row) return;

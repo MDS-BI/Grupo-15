@@ -20,7 +20,12 @@ export function RoleAccessPanel({
   const canConfigure = currentRole === 'plant_manager' && Boolean(store);
   let activeTab = canConfigure && initialTab === 'config' ? 'config' : 'roles';
 
-  const availableRoles = store && username ? store.rolesForUsername(username) : [...ROLE_ORDER];
+  const availableRoles =
+    currentRole === 'plant_manager'
+      ? [...ROLE_ORDER]
+      : store && username
+        ? store.rolesForUsername(username)
+        : [currentRole].filter(Boolean);
 
   const root = el(`
     <section class="view" data-role="role-access-view">
@@ -33,10 +38,10 @@ export function RoleAccessPanel({
       <nav class="role-tabs maintenance-tabs" role="tablist" aria-label="Secciones de roles">
         <button type="button" class="role-tabs__tab maintenance-tabs__tab" role="tab"
           data-role="role-tab" data-tab="roles" aria-controls="role-tabpanel-roles"
-          aria-selected="${activeTab === 'roles'}">Roles</button>
+          aria-selected="${activeTab === 'roles'}" ${canConfigure ? 'data-action="roles.ver"' : ''}>Roles</button>
         <button type="button" class="role-tabs__tab maintenance-tabs__tab" role="tab"
           data-role="role-tab" data-tab="config" aria-controls="role-tabpanel-config"
-          aria-selected="${activeTab === 'config'}" ${canConfigure ? '' : 'disabled aria-disabled="true"'}>Configurar roles</button>
+          aria-selected="${activeTab === 'config'}" ${canConfigure ? 'data-action="roles.configurar"' : 'disabled aria-disabled="true"'}>Configurar roles</button>
       </nav>
       <section class="maintenance-tabpanel role-tabpanel" role="tabpanel" id="role-tabpanel-roles"
         data-role="role-panel" data-panel="roles" ${activeTab === 'roles' ? '' : 'hidden'}>
@@ -53,7 +58,7 @@ export function RoleAccessPanel({
   const adminHost = root.querySelector('[data-role="role-admin-host"]');
 
   function renderCards() {
-    const roles = store && username ? store.rolesForUsername(username) : availableRoles;
+    const roles = availableRoles;
     cardsHost.innerHTML = roles
       .map((role) => {
         const active = role === currentRole;
@@ -65,7 +70,8 @@ export function RoleAccessPanel({
         );
         return `
           <button type="button" class="role-card ${active ? 'is-active' : ''}"
-            data-role-card="${escapeHtml(role)}" aria-pressed="${active}">
+            data-role-card="${escapeHtml(role)}" aria-pressed="${active}"
+            ${canConfigure ? 'data-action="roles.ver"' : ''}>
             <span class="role-card__header">
               <h2>${escapeHtml(ROLE_LABELS[role])}</h2>
               ${active ? '<span class="role-card__badge">Rol efectivo</span>' : ''}

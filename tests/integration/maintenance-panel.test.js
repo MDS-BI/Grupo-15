@@ -180,7 +180,7 @@ describe('Panel de mantenimiento · cabecera y máquinas (T242, T266-T271)', () 
     ).toEqual(['Todos', 'Disponible', 'En operación', 'En mantención', 'Detenida / En fallo']);
 
     search('[data-role="maintenance-search-machines"]', 'Armado');
-    expect([...document.querySelectorAll('[data-role="machine-row"]')]).toHaveLength(1);
+    expect([...document.querySelectorAll('[data-role="machine-row"]')]).toHaveLength(2);
     expect(document.querySelector('[data-role="machine-row"]').dataset.machineId).toBe('wc_armado');
 
     search('[data-role="maintenance-search-machines"]', 'CT-ARM');
@@ -208,7 +208,7 @@ describe('Panel de mantenimiento · cabecera y máquinas (T242, T266-T271)', () 
 
     const detail = document.querySelector('.maintenance-machine-detail');
     expect(detail.textContent).toContain('Estación de Soldadura 1');
-    expect(detail.textContent).toContain('Disponible');
+    expect(detail.textContent).toContain('En operación');
     expect(detail.textContent).toContain('Cada cuánto se recomienda mantención');
     expect(detail.querySelector('[data-role="frequency-input"]')).toBeTruthy();
     expect(detail.textContent).toMatch(/Desgaste|Indicador de desgaste/);

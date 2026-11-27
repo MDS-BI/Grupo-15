@@ -7,7 +7,7 @@ import {
   ORDER_STATUS_LABEL,
 } from './format.js';
 import { effectiveCapacityPerDay } from '../domain/operation-planning.js';
-import { isModuleAllowed, ROLE_DESCRIPTIONS, ROLE_LABELS } from '../domain/access-control.js';
+import { can, isModuleAllowed, ROLE_DESCRIPTIONS, ROLE_LABELS } from '../domain/access-control.js';
 import { ACTIVITY_FEED, DEMO_NOTICE } from '../data/fixtures/dashboard-demo.js';
 
 /**
@@ -29,6 +29,13 @@ export function DashboardOverview(store, options = {}) {
   ).length;
   const pendingClosures = store.shiftsPendingValidation().length;
   const overdueOrders = store.orderScheduleSummary().overdue;
+
+  const attentionActions = {
+    plant: 'panel.ver',
+    maintenance: 'mantenimiento.ver',
+    supervision: 'supervision.ver',
+    scheduling: 'planificacion.ver',
+  };
 
   const activeByStatus = ['released', 'in_progress', 'planned']
     .map((status) => {
@@ -95,7 +102,9 @@ export function DashboardOverview(store, options = {}) {
       tone: overdueOrders ? 'warning' : 'success',
     },
   ]
-    .filter((card) => isModuleAllowed(role, card.moduleId))
+    .filter(
+      (card) => isModuleAllowed(role, card.moduleId) && can(role, attentionActions[card.moduleId]),
+    )
     .map(
       (card) => `
       <button type="button" class="attention-card attention-card--${escapeHtml(card.tone)}" data-attention="${escapeHtml(card.moduleId)}">

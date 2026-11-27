@@ -1,9 +1,39 @@
-/**
- * @file Fixtures de datos maestros de frontera (Core / Logística / Ventas / Calidad).
- * Solo lectura para el módulo de manufactura. Ver data-model.md §3.1–3.5, §3.15.
- */
-
 import { relativeDay } from './demo-dates.js';
+
+export function refreshableArray(build) {
+  let key = null;
+  let current = [];
+  const read = () => {
+    const next = relativeDay(0);
+    if (key !== next) {
+      key = next;
+      current = build();
+    }
+    return current;
+  };
+  return new Proxy([], {
+    get(_target, property) {
+      if (property === 'toJSON') return () => read().map((item) => ({ ...item }));
+      return Reflect.get(read(), property);
+    },
+    set(_target, property, value) {
+      return Reflect.set(read(), property, value);
+    },
+    has(_target, property) {
+      return Reflect.has(read(), property);
+    },
+    ownKeys() {
+      return Reflect.ownKeys(read());
+    },
+    getOwnPropertyDescriptor(_target, property) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(read(), property);
+      if (descriptor && !descriptor.configurable && property !== 'length') {
+        return { ...descriptor, configurable: true };
+      }
+      return descriptor;
+    },
+  });
+}
 
 export const companies = [
   {
@@ -45,11 +75,7 @@ export const warehouses = [
   },
 ];
 
-/**
- * Productos. `finished_good` = bien terminado; `component`/`raw_material` = consumible.
- */
 export const products = [
-  // Bienes terminados
   {
     id: 'prod_bici',
     company_id: 'cmp_1',
@@ -60,10 +86,19 @@ export const products = [
     unit_cost: 85000,
   },
   {
+    id: 'prod_cargo',
+    company_id: 'cmp_1',
+    code: 'FG-CARGO-01',
+    name: 'Bicicleta Cargo 700c',
+    product_type: 'finished_good',
+    uom_id: 'uom_un',
+    unit_cost: 119000,
+  },
+  {
     id: 'prod_cuadro',
     company_id: 'cmp_1',
     code: 'FG-CUADRO-01',
-    name: 'Cuadro Soldado (sub-ensamble)',
+    name: 'Cuadro Soldado',
     product_type: 'finished_good',
     uom_id: 'uom_un',
     unit_cost: 32000,
@@ -72,12 +107,11 @@ export const products = [
     id: 'prod_rueda',
     company_id: 'cmp_1',
     code: 'FG-RUEDA-01',
-    name: 'Rueda Armada (sub-ensamble)',
+    name: 'Rueda Armada',
     product_type: 'finished_good',
     uom_id: 'uom_un',
     unit_cost: 18000,
   },
-  // Componentes fabricados intermedios
   {
     id: 'comp_tubo',
     company_id: 'cmp_1',
@@ -114,7 +148,24 @@ export const products = [
     uom_id: 'uom_un',
     unit_cost: 4200,
   },
-  // Materias primas
+  {
+    id: 'comp_freno',
+    company_id: 'cmp_1',
+    code: 'CP-FRENO-01',
+    name: 'Freno de disco',
+    product_type: 'component',
+    uom_id: 'uom_un',
+    unit_cost: 11500,
+  },
+  {
+    id: 'comp_manubrio',
+    company_id: 'cmp_1',
+    code: 'CP-MANU-01',
+    name: 'Manubrio aleado',
+    product_type: 'component',
+    uom_id: 'uom_un',
+    unit_cost: 7800,
+  },
   {
     id: 'rm_pintura',
     company_id: 'cmp_1',
@@ -133,9 +184,18 @@ export const products = [
     uom_id: 'uom_kg',
     unit_cost: 3800,
   },
+  {
+    id: 'rm_barniz',
+    company_id: 'cmp_1',
+    code: 'RM-BARN-01',
+    name: 'Barniz epóxico',
+    product_type: 'raw_material',
+    uom_id: 'uom_l',
+    unit_cost: 9600,
+  },
 ];
 
-export const salesOrders = [
+export const salesOrders = refreshableArray(() => [
   {
     id: 'so_1001',
     company_id: 'cmp_1',
@@ -163,7 +223,7 @@ export const salesOrders = [
     make_to_order: false,
     requested_date: relativeDay(9),
   },
-];
+]);
 
 export const qualityInspections = [
   {

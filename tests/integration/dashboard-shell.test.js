@@ -47,7 +47,7 @@ describe('Panel inicial con datos de demostración', () => {
     });
     document.body.appendChild(view);
 
-    expect(document.body.textContent).toContain('Supervisor de línea');
+    expect(document.body.textContent).toContain('Supervisor de Línea');
     expect(document.body.textContent).toContain('Datos de demostración');
     expect(document.body.textContent).toContain('Actividad reciente');
     expect(document.body.textContent).not.toContain('Accesos rápidos');
@@ -66,9 +66,7 @@ describe('Panel inicial con datos de demostración', () => {
     });
     document.body.appendChild(view);
 
-    expect(document.querySelector('.context-banner__line').textContent).toContain(
-      'Operador de Máquina',
-    );
+    expect(document.querySelector('.context-banner__line').textContent).toContain('Operador');
     expect(document.querySelector('[data-attention="supervision"]')).toBeNull();
     expect(document.querySelector('[data-attention="scheduling"]')).toBeTruthy();
     expect(document.body.textContent).not.toContain('Operario');

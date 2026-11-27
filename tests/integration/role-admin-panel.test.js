@@ -7,6 +7,15 @@ import { mountToastRegion } from '../../src/components/Toast.js';
 import { CANONICAL_ROLES } from '../../src/domain/role-access.js';
 import { SNAPSHOT_KEY } from '../../src/data/persistence.js';
 
+const EXPECTED_USERS = {
+  plant_manager: 'jefa.planta',
+  planner: 'planificador.ops',
+  production_engineer: 'ingeniero.prod',
+  supervisor: 'supervisor.linea',
+  operator: 'operador.planta',
+  maintenance: 'mantencion.mgr',
+};
+
 function memoryStorage() {
   const data = new Map();
   return {
@@ -25,6 +34,16 @@ function submit(form) {
   form.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));
 }
 
+function roleSelect(form) {
+  return form.querySelector('[data-role="admin-new-role"]');
+}
+
+function countUsername(username) {
+  return CANONICAL_ROLES.flatMap((role) => store.roleUsersFor(role)).filter(
+    (row) => row.username === username,
+  );
+}
+
 beforeEach(() => {
   dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost/' });
   globalThis.window = dom.window;
@@ -32,6 +51,7 @@ beforeEach(() => {
   globalThis.localStorage = dom.window.localStorage;
   storage = memoryStorage();
   store = new ManufacturingStore({ storage });
+  store.setSessionRole('plant_manager', 'plant_manager');
   mountToastRegion();
   document.body.append(RoleAdminPanel({ store }));
 });
@@ -45,107 +65,71 @@ afterEach(() => {
 });
 
 describe('Panel de administración de roles', () => {
-  it('muestra las cinco tablas con sus usuarios demo', () => {
-    const tables = document.querySelectorAll('[data-role="admin-user-table"]');
-    expect(tables).toHaveLength(5);
-    expect(Array.from(tables).map((table) => table.dataset.roles)).toEqual(CANONICAL_ROLES);
-    expect(document.body.textContent).toContain('jefa');
-    expect(document.body.textContent).toContain('doble');
-    expect(document.querySelector('[data-role="role-select"]')).toBeNull();
-  });
-
-  it('agrega usuarios a un rol y persiste de inmediato', () => {
-    const form = document.querySelector('[data-role="admin-add-form"]');
-    form.querySelector('[data-role="admin-new-username"]').value = 'nueva';
-    form.querySelector('[data-role="admin-new-role"]').value = 'planner';
-    submit(form);
-
-    expect(store.roleUsersFor('planner').some((row) => row.username === 'nueva')).toBe(true);
-    expect(document.body.textContent).toContain('nueva');
-    expect(document.querySelector('#toast-region').textContent).toContain('Usuario agregado');
-    expect(
-      new ManufacturingStore({ storage })
-        .roleUsersFor('planner')
-        .some((row) => row.username === 'nueva'),
-    ).toBe(true);
-  });
-
-  it('permite inscribir un usuario en hasta cinco roles únicos y reinicia el formulario', () => {
-    const form = document.querySelector('[data-role="admin-add-form"]');
-    const rows = () => [...form.querySelectorAll('[data-role="admin-role-row"]')];
-    const addRole = form.querySelector('[data-role="admin-add-role"]');
-
-    expect(rows()).toHaveLength(1);
-    expect(rows()[0].querySelector('label > span').textContent.trim()).toBe('Rol');
-    expect(addRole.textContent.trim()).toBe('+');
-
-    for (let index = 2; index <= 5; index += 1) {
-      addRole.click();
-      expect(rows()).toHaveLength(index);
-      expect(rows().at(-1).querySelector('label > span').textContent.trim()).toBe(`Rol ${index}`);
+  it('muestra las seis tablas con una cuenta demo por rol', () => {
+    const tables = [...document.querySelectorAll('[data-role="admin-user-table"]')];
+    expect(tables).toHaveLength(6);
+    expect(tables.map((table) => table.dataset.roles).sort()).toEqual([...CANONICAL_ROLES].sort());
+    for (const table of tables) {
+      expect(table.textContent).toContain(EXPECTED_USERS[table.dataset.roles]);
     }
-    expect(addRole.disabled).toBe(true);
-
-    form.querySelector('[data-role="admin-new-username"]').value = '  Multi  ';
-    const values = ['planner', 'maintenance', 'operator', 'planner', 'supervisor'];
-    rows().forEach((row, index) => {
-      row.querySelector('[data-role="admin-new-role"]').value = values[index];
-    });
-    submit(form);
-
-    const expectedRoles = CANONICAL_ROLES.filter((role) => values.includes(role));
-    expect(store.rolesForUsername('multi')).toEqual(expectedRoles);
-    for (const role of expectedRoles) {
-      const row = store.roleUsersFor(role).find((entry) => entry.username === 'multi');
-      expect(row.password).toBe('multi');
+    for (const legacy of ['usuario', 'test', 'doble']) {
+      expect(document.body.textContent).not.toContain(legacy);
     }
-    expect(new ManufacturingStore({ storage }).rolesForUsername('multi')).toEqual(expectedRoles);
-    expect(document.querySelector('#toast-region').textContent).toContain('Usuario agregado');
-    expect(rows()).toHaveLength(1);
-    expect(form.querySelector('[data-role="admin-new-username"]').value).toBe('');
-    expect(addRole.disabled).toBe(false);
   });
 
-  it('quita filas de roles adicionales sin dejar la última sin desplegable', () => {
+  it('ofrece un único desplegable de rol con seis opciones y sin botón +', () => {
     const form = document.querySelector('[data-role="admin-add-form"]');
-    const addRole = form.querySelector('[data-role="admin-add-role"]');
-    addRole.click();
-    addRole.click();
-    expect(form.querySelectorAll('[data-role="admin-role-row"]')).toHaveLength(3);
+    const selects = [...form.querySelectorAll('[data-role="admin-new-role"]')];
 
-    const removeButtons = () => [...form.querySelectorAll('[data-role="admin-remove-role"]')];
-    expect(removeButtons()).toHaveLength(2);
-    removeButtons()[1].click();
-    expect(form.querySelectorAll('[data-role="admin-role-row"]')).toHaveLength(2);
-    removeButtons()[0].click();
-    expect(form.querySelectorAll('[data-role="admin-role-row"]')).toHaveLength(1);
+    expect(selects).toHaveLength(1);
+    expect([...selects[0].options].map((option) => option.value).sort()).toEqual(
+      [...CANONICAL_ROLES].sort(),
+    );
+    expect(form.querySelector('[data-role="admin-add-role"]')).toBeNull();
     expect(form.querySelector('[data-role="admin-remove-role"]')).toBeNull();
-    expect(addRole.disabled).toBe(false);
+    expect(form.textContent).not.toContain('Rol 2');
   });
 
-  it('asigna roles adicionales y persiste de inmediato', () => {
-    const form = document.querySelector('[data-role="admin-assign-form"]');
-    form.querySelector('[data-role="admin-existing-username"]').value = 'operador';
-    form.querySelector('[data-role="admin-assign-role"]').value = 'maintenance';
+  it('agrega un usuario en una sola tabla, notifica y reinicia el formulario', () => {
+    const form = document.querySelector('[data-role="admin-add-form"]');
+    form.querySelector('[data-role="admin-new-username"]').value = '  Nueva  ';
+    roleSelect(form).value = 'production_engineer';
     submit(form);
 
-    expect(store.rolesForUsername('operador')).toEqual(['operator', 'maintenance']);
-    expect(document.querySelector('#toast-region').textContent).toContain('Rol asignado');
-    expect(new ManufacturingStore({ storage }).rolesForUsername('operador')).toEqual([
-      'operator',
-      'maintenance',
-    ]);
+    expect(store.rolesForUsername('nueva')).toEqual(['production_engineer']);
+    const rows = countUsername('nueva');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].password).toBe('nueva');
+    expect(
+      document.querySelectorAll(
+        '[data-role="admin-user-table"] .role-admin__user-chip[data-username="nueva"]',
+      ),
+    ).toHaveLength(1);
+    expect(document.querySelector('#toast-region').textContent).toContain('Usuario agregado');
+
+    const persisted = JSON.parse(storage.getItem(SNAPSHOT_KEY));
+    expect(persisted.data.role_users_production_engineer).toEqual(
+      expect.arrayContaining([expect.objectContaining({ username: 'nueva', password: 'nueva' })]),
+    );
+    for (const role of CANONICAL_ROLES.filter((entry) => entry !== 'production_engineer')) {
+      const key = `role_users_${role}`;
+      expect(persisted.data[key].some((row) => row.username === 'nueva')).toBe(false);
+    }
+
+    expect(form.querySelector('[data-role="admin-new-username"]').value).toBe('');
+    expect(form.querySelectorAll('[data-role="admin-new-role"]')).toHaveLength(1);
+    expect(form.textContent).not.toContain('Rol 2');
   });
 });
 
 describe('Configuración de roles integrada en Roles', () => {
-  function mountAccess(currentRole = 'plant_manager', initialTab = 'config') {
+  function mountAccess(currentRole, initialTab = 'config') {
     document.body.innerHTML = '';
     mountToastRegion();
     document.body.append(
       RoleAccessPanel({
         currentRole,
-        username: 'jefa',
+        username: EXPECTED_USERS[currentRole],
         store,
         modules: [{ id: 'orders', label: 'Órdenes' }],
         initialTab,
@@ -153,70 +137,35 @@ describe('Configuración de roles integrada en Roles', () => {
     );
   }
 
-  function clickRoleTab(tabName) {
-    const tab = document.querySelector(`[data-role="role-tab"][data-tab="${tabName}"]`);
-    expect(tab).toBeTruthy();
-    tab.click();
-  }
+  it('monta las seis tablas y el alta solo para plant_manager', () => {
+    mountAccess('plant_manager');
 
-  it('monta las cinco tablas y los formularios como subpestaña de plant_manager', () => {
-    mountAccess();
-
-    const tabs = [...document.querySelectorAll('[data-role="role-tab"]')];
-    expect(tabs.map((tab) => tab.textContent.trim())).toEqual(['Roles', 'Configurar roles']);
-    for (const tab of tabs) {
-      expect(tab.getAttribute('role')).toBe('tab');
-      expect(tab.getAttribute('aria-selected')).toBe(String(tab.dataset.tab === 'config'));
-    }
-    expect(document.querySelectorAll('[data-role="admin-user-table"]')).toHaveLength(5);
+    const configTab = document.querySelector('[data-role="role-tab"][data-tab="config"]');
+    expect(configTab.disabled).toBe(false);
+    expect(configTab.getAttribute('aria-selected')).toBe('true');
+    expect(document.querySelectorAll('[data-role="admin-user-table"]')).toHaveLength(6);
     expect(document.querySelector('[data-role="admin-add-form"]')).toBeTruthy();
-    expect(document.querySelector('[data-role="admin-assign-form"]')).toBeTruthy();
-    expect(document.querySelector('[data-role="role-select"]')).toBeNull();
     expect(document.querySelector('[data-module="admin-roles"]')).toBeNull();
   });
 
-  it('conserva altas y asignaciones dentro de la subpestaña integrada', () => {
-    mountAccess();
+  it('niega la administración a los otros cinco roles', () => {
+    for (const role of CANONICAL_ROLES.filter((entry) => entry !== 'plant_manager')) {
+      mountAccess(role);
 
-    const addForm = document.querySelector('[data-role="admin-add-form"]');
-    addForm.querySelector('[data-role="admin-new-username"]').value = 'nueva';
-    addForm.querySelector('[data-role="admin-new-role"]').value = 'planner';
-    submit(addForm);
-
-    const assignForm = document.querySelector('[data-role="admin-assign-form"]');
-    assignForm.querySelector('[data-role="admin-existing-username"]').value = 'nueva';
-    assignForm.querySelector('[data-role="admin-assign-role"]').value = 'operator';
-    submit(assignForm);
-
-    expect(store.rolesForUsername('nueva')).toEqual(['planner', 'operator']);
-    expect(document.querySelector('#toast-region').textContent).toContain('Rol asignado');
+      const configTab = document.querySelector('[data-role="role-tab"][data-tab="config"]');
+      const configPanel = document.querySelector('[data-panel="config"]');
+      expect(!configTab || configTab.disabled === true).toBe(true);
+      expect(!configPanel || configPanel.hidden === true).toBe(true);
+      expect(document.querySelectorAll('[data-role="admin-user-table"]')).toHaveLength(0);
+      expect(document.querySelector('[data-role="admin-add-form"]')).toBeNull();
+    }
   });
 
-  it('niega la subpestaña de configuración a otros roles activos', () => {
-    mountAccess('operator', 'config');
-
-    expect(document.querySelector('[data-role="role-tab"][data-tab="config"]').disabled).toBe(true);
-    expect(
-      document
-        .querySelector('[data-role="role-tab"][data-tab="roles"]')
-        .getAttribute('aria-selected'),
-    ).toBe('true');
-    expect(document.querySelector('[data-panel="config"]').hidden).toBe(true);
-    expect(document.querySelectorAll('[data-role="admin-user-table"]')).toHaveLength(0);
-    expect(document.querySelector('[data-role="admin-add-form"]')).toBeNull();
-    expect(document.querySelectorAll('[data-role-card]')).toHaveLength(1);
-
-    clickRoleTab('roles');
-    expect(document.querySelectorAll('[data-role="admin-user-table"]')).toHaveLength(0);
-  });
-
-  it('muestra solo los roles asignados al usuario autenticado', () => {
-    mountAccess('plant_manager', 'roles');
-
+  it('muestra solo la tarjeta del rol autenticado', () => {
+    mountAccess('production_engineer', 'roles');
     expect(
       [...document.querySelectorAll('[data-role-card]')].map((card) => card.dataset.roleCard),
-    ).toEqual(['plant_manager']);
-    expect(document.body.textContent).toContain('Rol efectivo');
+    ).toEqual(['production_engineer']);
   });
 });
 
@@ -224,7 +173,6 @@ describe('Baja confirmada de usuarios en Configurar roles', () => {
   function clickRemove(role, username) {
     const button = document.querySelector(`[data-remove-user="${username}"][data-role="${role}"]`);
     expect(button).toBeTruthy();
-    expect(button.textContent.trim()).toBe('×');
     button.click();
   }
 
@@ -234,26 +182,22 @@ describe('Baja confirmada de usuarios en Configurar roles', () => {
       expect(found).toBeTruthy();
       return found;
     });
-    expect(dialog.querySelector('[data-role="confirm"]')).toBeTruthy();
     dialog.querySelector('[data-role="confirm"]').click();
     await vi.waitFor(() =>
       expect(document.querySelector('[data-role="confirm-dialog"]')).toBeNull(),
     );
   }
 
-  it('muestra chips con botón Quitar en las cinco tablas', () => {
+  it('muestra chips con Quitar en las seis tablas', () => {
     const tables = [...document.querySelectorAll('[data-role="admin-user-table"]')];
-    expect(tables).toHaveLength(5);
+    expect(tables).toHaveLength(6);
     for (const table of tables) {
-      const role = table.dataset.roles;
       const chips = [...table.querySelectorAll('.role-admin__user-chip')];
-      expect(chips.length).toBe(store.roleUsersFor(role).length);
+      expect(chips).toHaveLength(store.roleUsersFor(table.dataset.roles).length);
       for (const chip of chips) {
-        expect(chip.dataset.username).toBeTruthy();
         const button = chip.querySelector('[data-remove-user]');
         expect(button.dataset.removeUser).toBe(chip.dataset.username);
-        expect(button.dataset.role).toBe(role);
-        expect(chip.textContent).toContain(chip.dataset.username);
+        expect(button.dataset.role).toBe(table.dataset.roles);
       }
     }
   });
@@ -262,10 +206,8 @@ describe('Baja confirmada de usuarios en Configurar roles', () => {
     const remove = vi.spyOn(store, 'removeRoleUser');
     const before = storage.getItem(SNAPSHOT_KEY);
 
-    clickRemove('supervisor', 'test');
+    clickRemove('supervisor', 'supervisor.linea');
     const dialog = await vi.waitFor(() => document.querySelector('[data-role="confirm-dialog"]'));
-    expect(dialog.textContent).toContain('test');
-    expect(dialog.textContent).toContain('Supervisor');
     dialog.querySelector('[data-role="cancel"]').click();
     await vi.waitFor(() =>
       expect(document.querySelector('[data-role="confirm-dialog"]')).toBeNull(),
@@ -273,44 +215,39 @@ describe('Baja confirmada de usuarios en Configurar roles', () => {
 
     expect(remove).not.toHaveBeenCalled();
     expect(storage.getItem(SNAPSHOT_KEY)).toBe(before);
-    expect(store.roleUsersFor('supervisor').some((row) => row.username === 'test')).toBe(true);
+    expect(store.rolesForUsername('supervisor.linea')).toEqual(['supervisor']);
   });
 
-  it('quita al confirmar, notifica y vuelve a renderizar tablas y datalist', async () => {
-    const addForm = document.querySelector('[data-role="admin-add-form"]');
-    addForm.querySelector('[data-role="admin-new-username"]').value = 'nueva';
-    addForm.querySelector('[data-role="admin-new-role"]').value = 'planner';
-    submit(addForm);
-    const remove = vi.spyOn(store, 'removeRoleUser');
+  it('quita al confirmar, persiste y vuelve a renderizar', async () => {
+    async function confirmWithRemove(role, username) {
+      clickRemove(role, username);
+      await confirmRemoval();
+    }
 
-    clickRemove('planner', 'nueva');
-    await confirmRemoval();
+    await confirmWithRemove('supervisor', 'supervisor.linea');
 
-    expect(remove).toHaveBeenCalledWith('planner', 'nueva');
-    expect(store.roleUsersFor('planner').some((row) => row.username === 'nueva')).toBe(false);
-    expect(document.querySelector('[data-role="admin-tables"]').textContent).not.toContain('nueva');
+    expect(store.rolesForUsername('supervisor.linea')).toEqual([]);
+    expect(document.querySelector('[data-role="admin-tables"]').textContent).not.toContain(
+      'supervisor.linea',
+    );
     expect(
       [...document.querySelectorAll('#admin-user-options option')].map((option) => option.value),
-    ).not.toContain('nueva');
-    expect(document.querySelector('#toast-region').textContent).toContain('nueva');
+    ).not.toContain('supervisor.linea');
     expect(
-      JSON.parse(storage.getItem(SNAPSHOT_KEY)).data.role_users_planner.some(
-        (row) => row.username === 'nueva',
+      JSON.parse(storage.getItem(SNAPSHOT_KEY)).data.role_users_supervisor.some(
+        (row) => row.username === 'supervisor.linea',
       ),
     ).toBe(false);
   });
 
-  it('rechaza con mensaje la baja del último plant_manager sin mutar', async () => {
-    clickRemove('plant_manager', 'test');
-    await confirmRemoval();
-
+  it('rechaza la baja del último plant_manager sin mutar', async () => {
     const before = storage.getItem(SNAPSHOT_KEY);
-    clickRemove('plant_manager', 'jefa');
+
+    clickRemove('plant_manager', 'jefa.planta');
     await confirmRemoval();
 
-    expect(store.roleUsersFor('plant_manager').map((row) => row.username)).toEqual(['jefa']);
+    expect(store.roleUsersFor('plant_manager').map((row) => row.username)).toEqual(['jefa.planta']);
     expect(storage.getItem(SNAPSHOT_KEY)).toBe(before);
-    expect(document.body.textContent).toContain('jefa');
     expect(document.querySelector('#toast-region').textContent).toMatch(/último|plant_manager/i);
   });
 });

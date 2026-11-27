@@ -40,21 +40,31 @@ const MODULES = [
     id: 'dashboard',
     label: 'Panel',
     icon: 'panel',
-    render: (context) => DashboardOverview(store, context),
+    render: (context) => DashboardOverview(store, { ...context, role: context.role }),
   },
-  { id: 'bom', label: 'BOM', icon: 'bom', render: () => BomExplorer(store) },
-  { id: 'orders', label: 'Órdenes', icon: 'orders', render: () => ProductionOrders(store) },
+  {
+    id: 'bom',
+    label: 'BOM',
+    icon: 'bom',
+    render: (context) => BomExplorer(store, { role: context.role }),
+  },
+  {
+    id: 'orders',
+    label: 'Órdenes',
+    icon: 'orders',
+    render: (context) => ProductionOrders(store, { role: context.role }),
+  },
   {
     id: 'operator',
     label: 'Estación',
     icon: 'operator',
-    render: () => OperatorWorkstationPanel(store),
+    render: (context) => OperatorWorkstationPanel(store, { role: context.role }),
   },
   {
     id: 'supervision',
     label: 'Supervisión',
     icon: 'supervision',
-    render: () => SupervisorLinePanel(store),
+    render: (context) => SupervisorLinePanel(store, { role: context.role }),
   },
   {
     id: 'plant',
@@ -72,7 +82,7 @@ const MODULES = [
     id: 'line-balance',
     label: 'Balance',
     icon: 'line-balance',
-    render: () => LineBalancePanel(store),
+    render: (context) => LineBalancePanel(store, { role: context.role }),
   },
   {
     id: 'maintenance',
@@ -100,6 +110,7 @@ const state = {
   active: 'dashboard',
   username: null,
   assignedRoles: [],
+  roleOptions: [],
   realRole: null,
   role: DEFAULT_ROLE,
   roleTab: 'roles',
@@ -109,6 +120,10 @@ const state = {
   showPassword: false,
   loadingLogin: false,
 };
+
+function roleChoicesFor(realRole, assignedRoles) {
+  return realRole === 'plant_manager' ? [...CANONICAL_ROLES] : [...assignedRoles];
+}
 
 function loadRole() {
   try {
@@ -121,18 +136,18 @@ function loadRole() {
       return {
         username: first.trim().toLowerCase(),
         assignedRoles: storedRoles,
+        roleOptions: roleChoicesFor(primary, storedRoles),
         realRole: primary,
-        role: storedRoles.includes(second) ? second : primary,
+        role: roleChoicesFor(primary, storedRoles).includes(second) ? second : primary,
       };
     }
     const legacyRole = normalizeRole(second || first);
-    const account = DEMO_ACCOUNTS.find(
-      (entry) => entry.roles.includes(legacyRole) && entry.roles.length === 1,
-    );
+    const account = DEMO_ACCOUNTS.find((entry) => entry.roles.includes(legacyRole));
     const assignedRoles = account?.roles ?? [legacyRole];
     return {
       username: account?.username ?? null,
       assignedRoles,
+      roleOptions: roleChoicesFor(legacyRole, assignedRoles),
       realRole: legacyRole,
       role: legacyRole,
     };
@@ -160,6 +175,7 @@ function forgetRole() {
   }
   state.username = null;
   state.assignedRoles = [];
+  state.roleOptions = [];
   state.realRole = null;
   state.role = DEFAULT_ROLE;
   state.roleTab = 'roles';
@@ -168,6 +184,7 @@ function forgetRole() {
   state.userMenuOpen = false;
   state.showPassword = false;
   state.loadingLogin = false;
+  store.setSessionRole(DEFAULT_ROLE, DEFAULT_ROLE);
   if (state.loginTimer) {
     globalThis.clearTimeout(state.loginTimer);
     state.loginTimer = null;
@@ -177,7 +194,7 @@ function forgetRole() {
 function routeFromHash() {
   const hash = globalThis.location?.hash || '';
   const value = hash.replace(/^#\/?/, '').split('?')[0];
-  if (value === 'admin-roles') return { moduleId: 'roles', roleTab: 'config' };
+  if (value === 'admin-roles') return { moduleId: 'roles', roleTab: 'roles' };
   return {
     moduleId: MODULES.some((module) => module.id === value) ? value : null,
     roleTab: 'roles',
@@ -213,16 +230,16 @@ function handleLocationChange({ render = true } = {}) {
     route.moduleId && isModuleAllowed(state.role, route.moduleId)
       ? route.moduleId
       : homeModuleForRole(state.role);
-  state.roleTab =
-    route.roleTab === 'config' && isModuleAllowed(state.role, 'admin-roles') ? 'config' : 'roles';
+  state.roleTab = 'roles';
   syncHash(state.active, true);
   state.screen = 'app';
   if (render) renderApp();
 }
 
 function selectEffectiveRole(role, { goHome = false } = {}) {
-  if (!state.assignedRoles.includes(role)) return;
+  if (!state.roleOptions.includes(role)) return;
   state.role = role;
+  store.setSessionRole(state.realRole, state.role);
   persistRole();
   if (state.roleTab === 'config' && !isModuleAllowed(role, 'admin-roles')) state.roleTab = 'roles';
 
@@ -241,7 +258,9 @@ function login(roles, username) {
     .toLowerCase();
   state.assignedRoles = roles;
   state.realRole = roles[0] ?? DEFAULT_ROLE;
+  state.roleOptions = roleChoicesFor(state.realRole, roles);
   state.role = state.realRole;
+  store.setSessionRole(state.realRole, state.role);
   state.roleTab = 'roles';
   state.active = homeModuleForRole(state.role);
   state.screen = 'app';
@@ -310,6 +329,10 @@ function openChangePassword() {
 
 function visibleModules() {
   return MODULES.filter((module) => isModuleAllowed(state.role, module.id));
+}
+
+function sidebarModules() {
+  return visibleModules().filter((module) => module.id !== 'roles');
 }
 
 function monogram(name) {
@@ -386,7 +409,7 @@ function renderLogin() {
 }
 
 function sidebarButtons() {
-  const allowed = visibleModules();
+  const allowed = sidebarModules();
   return MODULE_GROUPS.map((group) => {
     const buttons = group.modules
       .map((id) => allowed.find((module) => module.id === id))
@@ -408,7 +431,7 @@ function sidebarButtons() {
 }
 
 function roleOptions() {
-  return state.assignedRoles
+  return state.roleOptions
     .map(
       (role) =>
         `<option value="${role}" ${role === state.role ? 'selected' : ''}>${escapeHtml(ROLE_LABELS[role])}</option>`,
@@ -419,12 +442,12 @@ function roleOptions() {
 function userMenu() {
   const canResetDemo = state.realRole === 'plant_manager' && state.role === state.realRole;
   const switcher =
-    state.assignedRoles.length > 1
+    state.roleOptions.length > 1
       ? `<div class="user-menu__group">
         <p class="user-menu__label" id="view-as-label">Ver como</p>
         <label class="user-menu__select" aria-labelledby="view-as-label">
           <span class="sr-only">Seleccionar rol de usuario</span>
-          <select data-role="role-select" aria-label="Seleccionar rol de usuario">
+          <select data-role="preview-role" aria-label="Seleccionar rol de usuario">
             ${roleOptions()}
           </select>
         </label>
@@ -435,7 +458,7 @@ function userMenu() {
       <button type="button" class="user-menu__trigger" data-role="user-menu-toggle"
         aria-haspopup="true" aria-expanded="${state.userMenuOpen}"
         aria-label="Abrir menú de usuario">
-        <span class="avatar" aria-hidden="true">${monogram(ROLE_LABELS[state.role])}</span>
+        <span class="avatar" aria-hidden="true" data-initials="${monogram(ROLE_LABELS[state.role])}"></span>
         <span class="user-menu__role">${escapeHtml(ROLE_LABELS[state.role])}</span>
         ${icon('chevron')}
       </button>
@@ -515,12 +538,12 @@ function renderShell() {
     state.drawerOpen = false;
     renderShell();
     const focusTarget = state.userMenuOpen
-      ? app.querySelector('[data-role="role-select"], [data-reset-demo], [data-logout]')
+      ? app.querySelector('[data-role="preview-role"], [data-reset-demo], [data-logout]')
       : app.querySelector('[data-role="user-menu-toggle"]');
     focusTarget?.focus();
   });
 
-  app.querySelector('[data-role="role-select"]')?.addEventListener('change', (event) => {
+  app.querySelector('[data-role="preview-role"]')?.addEventListener('change', (event) => {
     selectEffectiveRole(event.target.value);
   });
 
@@ -595,8 +618,10 @@ const saved = loadRole();
 if (saved) {
   state.username = saved.username;
   state.assignedRoles = saved.assignedRoles;
+  state.roleOptions = saved.roleOptions;
   state.realRole = saved.realRole;
   state.role = saved.role;
+  store.setSessionRole(state.realRole, state.role);
   state.roleTab = 'roles';
   state.active = homeModuleForRole(state.role);
   state.screen = 'app';

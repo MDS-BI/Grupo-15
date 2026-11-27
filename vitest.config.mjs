@@ -1,21 +1,4 @@
-import { configDefaults, defineConfig } from 'vitest/config';
-
-const exclude = [
-  ...configDefaults.exclude,
-  'tests/integration/add-document.test.js',
-  'tests/integration/create-entity.test.js',
-  'tests/integration/custom-fields.test.js',
-  'tests/integration/dashboard.test.js',
-  'tests/integration/edit-delete-entity.test.js',
-  'tests/integration/manage-document.test.js',
-  'tests/integration/manage-tabs.test.js',
-  'tests/integration/relabeling.test.js',
-  'tests/integration/search-entities.test.js',
-  'tests/integration/workspace-shell.test.js',
-  'tests/unit/html-escaping.test.js',
-  'tests/unit/module-config.test.js',
-  'tests/unit/storage.test.js',
-];
+import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
@@ -24,7 +7,6 @@ export default defineConfig({
         test: {
           name: 'unit',
           include: ['tests/unit/**/*.test.js'],
-          exclude,
           environment: 'node',
           setupFiles: ['./tests/setup.js'],
           fileParallelism: true,
@@ -34,8 +16,7 @@ export default defineConfig({
       {
         test: {
           name: 'integration',
-          include: ['tests/integration/**/*.test.js', 'tests/unit/html-escaping.test.js'],
-          exclude,
+          include: ['tests/integration/**/*.test.js'],
           environment: 'jsdom',
           setupFiles: ['./tests/setup.js'],
           fileParallelism: true,

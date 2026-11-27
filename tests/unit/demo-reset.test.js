@@ -29,8 +29,23 @@ describe('Reinicio de datos de demo', () => {
 
     expect(data.companies.length).toBeGreaterThan(0);
     expect(data.productionOrders.length).toBeGreaterThan(0);
+    expect(data.productionOrders).toHaveLength(40);
+    expect(data.productionOrderOperations).toHaveLength(72);
+    expect(data.productionShifts).toHaveLength(7);
+    expect(data.operationDelays).toHaveLength(11);
+    expect(data.maintenanceTickets).toHaveLength(15);
+    expect(data.workCenters).toHaveLength(10);
+    expect(data.billOfMaterials).toHaveLength(6);
     expect(data.thresholdSettings.length).toBeGreaterThan(0);
     expect(data.rolePermissions.length).toBeGreaterThan(0);
+    const orderIds = new Set(data.productionOrders.map((order) => order.id));
+    expect(data.productionOrderOperations.every((op) => orderIds.has(op.production_order_id))).toBe(
+      true,
+    );
+    const operationIds = new Set(data.productionOrderOperations.map((op) => op.id));
+    expect(data.materialConsumption.every((row) => operationIds.has(row.po_operation_id))).toBe(
+      true,
+    );
     expect(data).not.toHaveProperty('technicians');
     expect(data).not.toHaveProperty('maintenanceCauses');
   });
@@ -47,6 +62,8 @@ describe('Reinicio de datos de demo', () => {
 
     const reset = store.resetDemoData();
     expect(reset).toBe(true);
+    expect(store.productionOrders).toHaveLength(40);
+    expect(store.productionOrderOperations).toHaveLength(72);
     expect(store.technicians[0].name).toBe(technicians[0].name);
     expect(store.maintenanceCauses[0].label).toBe(maintenanceCauses[0].label);
     expect(loadSnapshot(storage).version).toBe(2);

@@ -1,38 +1,39 @@
-/**
- * @file Puente de solo lectura a Recursos Humanos (US-07).
- * No duplica datos personales: solo identificador y nombre para la UI.
- */
-
 export const hrEmployees = [
   {
     ext_hr_employee_id: 'emp_op_01',
-    name: 'Diego Fuentes',
+    name: 'Maitén Cubillos Salazar',
     role: 'operator',
     specialty: 'Corte',
   },
   {
     ext_hr_employee_id: 'emp_op_02',
-    name: 'Elena Rojas',
+    name: 'Raimundo Flores Cáceres',
     role: 'operator',
     specialty: 'Armado',
   },
   {
     ext_hr_employee_id: 'emp_op_03',
-    name: 'Felipe Núñez',
+    name: 'Violeta Garrido Neira',
     role: 'operator',
     specialty: 'Soldadura',
   },
   {
     ext_hr_employee_id: 'emp_op_04',
-    name: 'Gabriela Paredes',
+    name: 'Teodoro Aravena Muñoz',
     role: 'operator',
     specialty: 'Calidad',
   },
   {
     ext_hr_employee_id: 'emp_op_05',
-    name: 'Hugo Salinas',
+    name: 'Lidia Pichun Paillao',
     role: 'operator',
     specialty: 'Pintura',
+  },
+  {
+    ext_hr_employee_id: 'emp_op_06',
+    name: 'Amador Riffo Valenzuela',
+    role: 'operator',
+    specialty: 'Ensamble',
   },
   {
     ext_hr_employee_id: 'ext_hr_tec_01',
@@ -54,19 +55,19 @@ export const hrEmployees = [
   },
   {
     ext_hr_employee_id: 'emp_sup_01',
-    name: 'Inés Vidal',
+    name: 'Paz Echenique Vidal',
     role: 'supervisor',
     specialty: 'Línea',
   },
   {
     ext_hr_employee_id: 'emp_plan_01',
-    name: 'Jorge Leiva',
+    name: 'Ignacio Beltrán Soto',
     role: 'planner',
     specialty: 'Planificación',
   },
   {
     ext_hr_employee_id: 'emp_mgr_01',
-    name: 'Karen Muñoz',
+    name: 'Ximena Narria Osses',
     role: 'plant_manager',
     specialty: 'Planta',
   },

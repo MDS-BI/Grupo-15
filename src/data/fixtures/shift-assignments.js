@@ -1,11 +1,7 @@
-/**
- * @file Fixtures de asignación de operadores a centros de trabajo (US-07).
- * Ver data-model.md §3.8 y contracts/operator-shift.md.
- */
-
 import { relativeTimestamp } from './demo-dates.js';
+import { refreshableArray } from './master-data.js';
 
-export const shiftAssignments = [
+export const shiftAssignments = refreshableArray(() => [
   {
     id: 'sa_1',
     shift_assignment_id: 'sa_1',
@@ -51,4 +47,49 @@ export const shiftAssignments = [
     assigned_at: relativeTimestamp(-21, '06:50'),
     active: true,
   },
-];
+  {
+    id: 'sa_6',
+    shift_assignment_id: 'sa_6',
+    work_center_id: 'wc_solda_2',
+    ext_hr_employee_id: 'emp_op_03',
+    shift_band: 'afternoon',
+    assigned_at: relativeTimestamp(-21, '14:50'),
+    active: true,
+  },
+  {
+    id: 'sa_7',
+    shift_assignment_id: 'sa_7',
+    work_center_id: 'wc_laminado',
+    ext_hr_employee_id: 'emp_op_06',
+    shift_band: 'morning',
+    assigned_at: relativeTimestamp(-21, '06:50'),
+    active: true,
+  },
+  {
+    id: 'sa_8',
+    shift_assignment_id: 'sa_8',
+    work_center_id: 'wc_ensamble',
+    ext_hr_employee_id: 'emp_op_06',
+    shift_band: 'afternoon',
+    assigned_at: relativeTimestamp(-21, '14:50'),
+    active: true,
+  },
+  {
+    id: 'sa_9',
+    shift_assignment_id: 'sa_9',
+    work_center_id: 'wc_pulido',
+    ext_hr_employee_id: 'emp_op_05',
+    shift_band: 'afternoon',
+    assigned_at: relativeTimestamp(-21, '14:50'),
+    active: true,
+  },
+  {
+    id: 'sa_10',
+    shift_assignment_id: 'sa_10',
+    work_center_id: 'wc_horno',
+    ext_hr_employee_id: 'emp_op_04',
+    shift_band: 'afternoon',
+    assigned_at: relativeTimestamp(-21, '14:50'),
+    active: false,
+  },
+]);

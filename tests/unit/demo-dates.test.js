@@ -7,6 +7,8 @@ import { preventiveMaintenanceOrders } from '../../src/data/fixtures/preventive-
 import { salesOrders } from '../../src/data/fixtures/master-data.js';
 import { thresholdSettings, rolePermissions } from '../../src/data/fixtures/plant-performance.js';
 import { shiftAssignments } from '../../src/data/fixtures/shift-assignments.js';
+import { workCenters } from '../../src/data/fixtures/work-centers.js';
+import { hrEmployees } from '../../src/data/fixtures/hr-employees.js';
 
 function localNow() {
   return new Date(2026, 5, 15, 12, 0, 0);
@@ -97,10 +99,41 @@ describe('Fechas relativas de la demo', () => {
         order.planned_date <= relativeDay(8),
     );
 
-    expect(productionOrders.length).toBeGreaterThanOrEqual(13);
+    expect(productionOrders).toHaveLength(40);
     expect(currentStarts.length).toBeGreaterThanOrEqual(4);
-    expect(undatedOrders.length).toBeGreaterThanOrEqual(2);
-    expect(scheduledTickets.length).toBeGreaterThanOrEqual(2);
+    expect(undatedOrders).toHaveLength(4);
+    expect(scheduledTickets.length).toBeGreaterThanOrEqual(3);
     expect(upcomingPreventives.length).toBeGreaterThanOrEqual(2);
+
+    const statusCounts = productionOrders.reduce((counts, order) => {
+      counts[order.status] = (counts[order.status] || 0) + 1;
+      return counts;
+    }, {});
+    expect(statusCounts).toEqual({
+      planned: 12,
+      released: 6,
+      in_progress: 6,
+      completed: 14,
+      cancelled: 2,
+    });
+
+    const anchor = new Date(`${relativeDay(0)}T12:00:00`);
+    const monthKey = (offset) => {
+      const date = new Date(anchor.getFullYear(), anchor.getMonth() + offset, 1);
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    };
+    const monthlyCounts = [-1, 0, 1].map((offset) => {
+      const key = monthKey(offset);
+      return productionOrders.filter((order) => order.planned_start_date?.startsWith(key)).length;
+    });
+    monthlyCounts[1] += undatedOrders.length;
+    expect(monthlyCounts).toEqual([10, 20, 10]);
+
+    expect(workCenters).toHaveLength(10);
+    expect(hrEmployees).toHaveLength(12);
+    expect(productionShifts).toHaveLength(7);
+    expect(operationDelays).toHaveLength(11);
+    expect(maintenanceTickets).toHaveLength(15);
+    expect(preventiveMaintenanceOrders).toHaveLength(5);
   });
 });

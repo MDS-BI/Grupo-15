@@ -17,7 +17,12 @@ import * as assignmentFx from './fixtures/shift-assignments.js';
 import * as hrFx from './fixtures/hr-employees.js';
 import * as plantFx from './fixtures/plant-performance.js';
 import { InventoryPort, QualityPort } from './ports/index.js';
-import { loadSnapshot, resetDemoSnapshot, saveSnapshot } from './persistence.js';
+import {
+  ROLE_ACCESS_SCHEMA_VERSION,
+  loadSnapshot,
+  resetDemoSnapshot,
+  saveSnapshot,
+} from './persistence.js';
 import {
   assertTransition,
   canScheduleOnWorkCenter,
@@ -105,14 +110,23 @@ import {
   CANONICAL_ROLES,
   rolesForUsername as resolveRolesForUsername,
 } from '../domain/role-access.js';
+import { DEFAULT_ROLE, ROLE_ORDER, can } from '../domain/access-control.js';
 import { ROLE_USERS, ROLE_USER_COLLECTION_KEYS } from './fixtures/demo-accounts.js';
 
 const ROLE_USER_PROPERTIES = Object.freeze({
   plant_manager: 'roleUsersPlantManager',
-  supervisor: 'roleUsersSupervisor',
   planner: 'roleUsersPlanner',
+  production_engineer: 'roleUsersProductionEngineer',
+  supervisor: 'roleUsersSupervisor',
   operator: 'roleUsersOperator',
   maintenance: 'roleUsersMaintenance',
+});
+
+const LEGACY_ACTION_MAP = Object.freeze({
+  set_threshold: 'panel.configurar',
+  change_priority: 'panel.editar',
+  cancel_order: 'panel.editar',
+  export_report: 'panel.exportar',
 });
 
 function clone(value) {
@@ -154,6 +168,8 @@ export class ManufacturingStore extends EventTarget {
     this.storage =
       storage === undefined ? (typeof localStorage !== 'undefined' ? localStorage : null) : storage;
     this.persistenceWarning = null;
+    this.sessionRealRole = DEFAULT_ROLE;
+    this.sessionPreviewRole = DEFAULT_ROLE;
 
     this.companies = clone(master.companies);
     this.unitsOfMeasure = clone(master.unitsOfMeasure);
@@ -196,7 +212,14 @@ export class ManufacturingStore extends EventTarget {
     this.#resetInventory();
   }
 
+  setSessionRole(realRole, previewRole = realRole) {
+    this.sessionRealRole = ROLE_ORDER.includes(realRole) ? realRole : DEFAULT_ROLE;
+    this.sessionPreviewRole = ROLE_ORDER.includes(previewRole) ? previewRole : this.sessionRealRole;
+    return { realRole: this.sessionRealRole, previewRole: this.sessionPreviewRole };
+  }
+
   resetDemoData() {
+    if (!this.#can('roles.configurar')) return this.#denied();
     if (!this.storage || !resetDemoSnapshot(this.storage)) return false;
     this.#hydrate();
     this.technicians = clone(mtFx.technicians);
@@ -306,6 +329,7 @@ export class ManufacturingStore extends EventTarget {
       hrEmployees: this.hrEmployees,
       thresholdSettings: this.thresholdSettings,
       rolePermissions: this.rolePermissions,
+      roleAccessSchema: ROLE_ACCESS_SCHEMA_VERSION,
       ...Object.fromEntries(
         CANONICAL_ROLES.map((role) => [
           ROLE_USER_COLLECTION_KEYS[role],
@@ -313,6 +337,18 @@ export class ManufacturingStore extends EventTarget {
         ]),
       ),
     };
+  }
+
+  #can(action) {
+    return can(this.sessionRealRole, action) && can(this.sessionPreviewRole, action);
+  }
+
+  #canAny(actions) {
+    return actions.some((action) => this.#can(action));
+  }
+
+  #denied() {
+    return { ok: false, reason: 'permission-denied' };
   }
 
   #persist() {
@@ -418,6 +454,7 @@ export class ManufacturingStore extends EventTarget {
 
   /** Crea una receta completa: cabecera BOM, materiales, estaciones y tiempos. */
   createBomRecipe(input = {}) {
+    if (!this.#can('bom.crear')) return this.#denied();
     const resolved = this.#resolveRecipeProduct(input);
     const product = resolved.product;
     const bom = {
@@ -472,6 +509,7 @@ export class ManufacturingStore extends EventTarget {
 
   /** Modifica cabecera, materiales y/o estaciones de una receta existente. */
   updateBomRecipe(bomId, changes = {}) {
+    if (!this.#can('bom.editar')) return this.#denied();
     const bom = this.billOfMaterials.find((item) => item.id === bomId);
     if (!bom) throw new Error(`Receta no encontrada: ${bomId}`);
 
@@ -583,6 +621,7 @@ export class ManufacturingStore extends EventTarget {
 
   /** Elimina la receta y sus líneas/ruta asociadas (operación confirmada en UI). */
   deleteBomRecipe(bomId) {
+    if (!this.#can('bom.editar')) return this.#denied();
     const bom = this.billOfMaterials.find((item) => item.id === bomId);
     if (!bom) throw new Error(`Receta no encontrada: ${bomId}`);
 
@@ -609,6 +648,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   addBomComponent(bomId, input = {}) {
+    if (!this.#can('bom.editar')) return this.#denied();
     const bom = this.billOfMaterials.find((item) => item.id === bomId);
     if (!bom) throw new Error(`Receta no encontrada: ${bomId}`);
     const component = this.productById(input.component_product_id);
@@ -642,6 +682,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   updateBomComponent(bomId, componentId, changes = {}) {
+    if (!this.#can('bom.editar')) return this.#denied();
     const line = this.bomComponents.find(
       (component) => component.id === componentId && component.bom_id === bomId,
     );
@@ -676,6 +717,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   removeBomComponent(bomId, componentId) {
+    if (!this.#can('bom.editar')) return this.#denied();
     const line = this.bomComponents.find(
       (component) => component.id === componentId && component.bom_id === bomId,
     );
@@ -687,6 +729,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   addRoutingOperationForBom(bomId, input = {}) {
+    if (!this.#can('bom.editar')) return this.#denied();
     const bom = this.billOfMaterials.find((item) => item.id === bomId);
     if (!bom) throw new Error(`Receta no encontrada: ${bomId}`);
     const existingRouting = this.routingForBom(bomId);
@@ -726,6 +769,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   updateRoutingOperationForBom(bomId, operationId, changes = {}) {
+    if (!this.#can('bom.editar')) return this.#denied();
     const routing = this.routingForBom(bomId);
     if (!routing) throw new Error('La receta no tiene estaciones configuradas.');
     const operation = this.routingOperations.find(
@@ -752,6 +796,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   removeRoutingOperationForBom(bomId, operationId) {
+    if (!this.#can('bom.editar')) return this.#denied();
     const routing = this.routingForBom(bomId);
     if (!routing) throw new Error('La receta no tiene estaciones configuradas.');
     const operation = this.routingOperations.find(
@@ -943,6 +988,7 @@ export class ManufacturingStore extends EventTarget {
 
   /** Crea una orden (planned) y genera sus operaciones congeladas. */
   createOrder(input) {
+    if (!this.#can('orders.crear')) return this.#denied();
     const routeOps = input.routing_id
       ? this.routingOperations.filter((ro) => ro.routing_id === input.routing_id)
       : [];
@@ -979,6 +1025,7 @@ export class ManufacturingStore extends EventTarget {
 
   /** Transiciona el estado de una orden validando la máquina de estados. */
   transitionOrder(orderId, to) {
+    if (!this.#can('orders.editar')) return this.#denied();
     const order = this.orderById(orderId);
     if (!order) throw new Error(`Orden no encontrada: ${orderId}`);
     assertTransition(order.status, to);
@@ -987,7 +1034,7 @@ export class ManufacturingStore extends EventTarget {
     if (to === 'in_progress' && !order.actual_start_date)
       order.actual_start_date = now.slice(0, 10);
     if (to === 'completed' && !order.actual_end_date) order.actual_end_date = now.slice(0, 10);
-    if (to === 'released') this.ensureBomStationsForOrder(orderId);
+    if (to === 'released') this.ensureBomStationsForOrder(orderId, { internal: true });
     this.#persist();
     this.#emit();
     return order;
@@ -997,7 +1044,8 @@ export class ManufacturingStore extends EventTarget {
     return this.transitionOrder(orderId, 'released');
   }
 
-  ensureBomStationsForOrder(orderId) {
+  ensureBomStationsForOrder(orderId, { internal = false } = {}) {
+    if (!internal && !this.#can('supervision.editar')) return this.#denied();
     const order = this.orderById(orderId);
     if (!order) throw new Error(`Orden no encontrada: ${orderId}`);
     const derived = deriveBomStations(order, {
@@ -1042,6 +1090,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   setOrderStationStaffing(orderId, stations) {
+    if (!this.#can('supervision.editar')) return this.#denied();
     const order = this.orderById(orderId);
     if (!order) throw new Error(`Orden no encontrada: ${orderId}`);
     if (!Array.isArray(stations)) throw new Error('stations debe ser un arreglo.');
@@ -1100,6 +1149,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   setSupervisionFocusOrder(orderId) {
+    if (!this.#can('supervision.editar')) return this.#denied();
     if (orderId && !this.orderById(orderId)) throw new Error(`Orden no encontrada: ${orderId}`);
     this.focusedStationOrderId = orderId || null;
     return this.focusedStationOrderId;
@@ -1107,6 +1157,7 @@ export class ManufacturingStore extends EventTarget {
 
   /** Recalcula el estado de la orden a partir de sus operaciones. */
   recomputeOrderStatus(orderId) {
+    if (!this.#canAny(['orders.editar', 'estacion.editar'])) return this.#denied();
     const order = this.orderById(orderId);
     if (!order || order.status === 'cancelled') return order;
     if (order.status === 'planned') return order;
@@ -1156,6 +1207,7 @@ export class ManufacturingStore extends EventTarget {
   /* -------------------- Ejecución -------------------- */
 
   startOperation(operationId) {
+    if (!this.#canAny(['estacion.editar', 'orders.editar'])) return this.#denied();
     const op = this.productionOrderOperations.find((o) => o.id === operationId);
     if (!op) throw new Error(`Operación no encontrada: ${operationId}`);
     if (op.status !== 'pending' && op.status !== 'paused') {
@@ -1175,6 +1227,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   pauseOperation(operationId) {
+    if (!this.#canAny(['estacion.editar', 'orders.editar'])) return this.#denied();
     const op = this.productionOrderOperations.find((o) => o.id === operationId);
     if (!op || op.status !== 'in_progress') {
       throw new Error('Solo se puede pausar una operación en progreso.');
@@ -1186,6 +1239,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   completeOperation(operationId, { actual_time_minutes, scrap_quantity = 0 } = {}) {
+    if (!this.#canAny(['estacion.editar', 'orders.editar'])) return this.#denied();
     const op = this.productionOrderOperations.find((o) => o.id === operationId);
     if (!op) throw new Error(`Operación no encontrada: ${operationId}`);
     const minutes = Number(actual_time_minutes);
@@ -1205,6 +1259,7 @@ export class ManufacturingStore extends EventTarget {
   /* -------------------- Consumo / Salida -------------------- */
 
   recordConsumption(input) {
+    if (!this.#canAny(['estacion.editar', 'orders.editar'])) return this.#denied();
     const record = {
       id: makeId('mc'),
       production_order_id: input.production_order_id,
@@ -1230,6 +1285,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   recordOutput(input) {
+    if (!this.#canAny(['estacion.editar', 'orders.editar'])) return this.#denied();
     const record = {
       id: makeId('out'),
       production_order_id: input.production_order_id,
@@ -1454,6 +1510,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   scheduleMaintenanceFromTicket(ticketId, payload = {}, role = 'maintenance') {
+    if (!this.#can('mantenimiento.crear')) return this.#denied();
     if (!canRescheduleMaintenance(role)) {
       throw new Error('Solo el rol de mantenimiento puede programar mantenciones.');
     }
@@ -1484,6 +1541,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   schedulePreventiveMaintenance(orderId, payload = {}, role = 'maintenance') {
+    if (!this.#can('mantenimiento.editar')) return this.#denied();
     if (!canRescheduleMaintenance(role)) {
       throw new Error('Solo el rol de mantenimiento puede programar mantenciones.');
     }
@@ -1509,6 +1567,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   setRecommendedMaintenanceFrequency(workCenterId, days, role = 'maintenance') {
+    if (!this.#can('mantenimiento.editar')) return this.#denied();
     if (!canEditMaintenanceFrequency(role)) {
       throw new Error('Su rol no puede editar la frecuencia recomendada de mantención.');
     }
@@ -1527,6 +1586,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   resolveScheduledMaintenance(id, { resolvedAt } = {}, role = 'maintenance') {
+    if (!this.#can('mantenimiento.aprobar')) return this.#denied();
     if (role !== 'maintenance') {
       throw new Error('Solo el rol de mantenimiento puede resolver mantenciones.');
     }
@@ -1580,6 +1640,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   deleteResolvedMaintenance(id, role = 'maintenance') {
+    if (!this.#can('mantenimiento.aprobar')) return this.#denied();
     if (role !== 'maintenance') {
       throw new Error('Solo el rol de mantenimiento puede eliminar mantenciones históricas.');
     }
@@ -1605,6 +1666,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   startMaintenanceIntervention(ticketId, { technician_ext_hr_employee_id } = {}) {
+    if (!this.#can('mantenimiento.aprobar')) return this.#denied();
     const ticket = this.maintenanceTickets.find((t) => t.id === ticketId);
     if (!ticket) throw new Error(`Ticket no encontrado: ${ticketId}`);
     if (ticket.ticket_status === 'resolved') {
@@ -1642,6 +1704,7 @@ export class ManufacturingStore extends EventTarget {
     ticketId,
     { resolvedAt, downtimeStartedAt, downtimeEndedAt, causeReasonId = null, notes = '' } = {},
   ) {
+    if (!this.#can('mantenimiento.aprobar')) return this.#denied();
     const ticket = this.maintenanceTickets.find((t) => t.id === ticketId);
     if (!ticket) throw new Error(`Ticket no encontrado: ${ticketId}`);
     if (!canResolveTicket(ticket)) {
@@ -1702,6 +1765,7 @@ export class ManufacturingStore extends EventTarget {
     title,
     technician_ext_hr_employee_id,
   } = {}) {
+    if (!this.#can('mantenimiento.crear')) return this.#denied();
     if (!workCenterId) throw new Error('Debe indicar el centro de trabajo.');
     const workCenter = this.workCenterById(workCenterId);
     if (!workCenter) throw new Error(`Centro de trabajo no encontrado: ${workCenterId}`);
@@ -1743,6 +1807,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   transitionPreventiveMaintenanceOrder(orderId, nextStatus) {
+    if (!this.#can('mantenimiento.aprobar')) return this.#denied();
     const order = this.preventiveMaintenanceOrders.find((o) => o.id === orderId);
     if (!order) throw new Error(`Orden preventiva no encontrada: ${orderId}`);
     if (!canTransitionPreventiveOrder(order, nextStatus)) {
@@ -1766,6 +1831,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   cancelPreventiveMaintenanceOrder(orderId, { reason } = {}) {
+    if (!this.#can('mantenimiento.aprobar')) return this.#denied();
     const order = this.preventiveMaintenanceOrders.find((o) => o.id === orderId);
     if (!order) throw new Error(`Orden preventiva no encontrada: ${orderId}`);
     if (!canTransitionPreventiveOrder(order, 'cancelled')) {
@@ -1833,6 +1899,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   startShift(operationId, { operator_id = null, now } = {}) {
+    if (!this.#can('estacion.crear')) return this.#denied();
     const operation = this.#operationFor(operationId);
     if (!operation) throw new Error(`Operación no encontrada: ${operationId}`);
     const active = this.activeShiftFor(operationId);
@@ -1901,6 +1968,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   finishOperation(operationId, { now } = {}) {
+    if (!this.#can('estacion.editar')) return this.#denied();
     const operation = this.#operationFor(operationId);
     if (!operation) throw new Error(`Operación no encontrada: ${operationId}`);
     if (operation.status !== 'in_progress') {
@@ -1925,6 +1993,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   startDelay(operationId, { reasonId = null, customLabel = null, note = '', now } = {}) {
+    if (!this.#can('estacion.crear')) return this.#denied();
     const operation = this.#operationFor(operationId);
     if (!operation) throw new Error(`Operación no encontrada: ${operationId}`);
     const open = this.openDelayFor(operationId);
@@ -1986,6 +2055,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   closeDelay(delayId, { endedAt, now } = {}) {
+    if (!this.#can('estacion.editar')) return this.#denied();
     const delay = this.#delayFor(delayId);
     if (!delay) throw new Error(`Atraso no encontrado: ${delayId}`);
     if (delay.status !== 'open') throw new Error('El atraso ya está cerrado.');
@@ -2001,6 +2071,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   correctOpenDelay(delayId, { endedAt, note = '', correctedBy = null, now } = {}) {
+    if (!this.#can('estacion.aprobar')) return this.#denied();
     const delay = this.#delayFor(delayId);
     if (!delay) throw new Error(`Atraso no encontrado: ${delayId}`);
     if (delay.status !== 'open') throw new Error('Solo se corrigen atrasos abiertos.');
@@ -2043,6 +2114,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   adjustShiftCounter(operationId, delta) {
+    if (!this.#can('estacion.editar')) return this.#denied();
     const shift = this.activeShiftFor(operationId);
     if (!shift) throw new Error('No hay un turno activo para la operación.');
     const next = validateCounter((Number(shift.quantity_counted) || 0) + Number(delta));
@@ -2050,6 +2122,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   setShiftCounter(operationId, value) {
+    if (!this.#can('estacion.editar')) return this.#denied();
     const shift = this.activeShiftFor(operationId);
     if (!shift) throw new Error('No hay un turno activo para la operación.');
     return this.#applyShiftCounter(shift, validateCounter(value));
@@ -2105,6 +2178,7 @@ export class ManufacturingStore extends EventTarget {
     workCenterId,
     { ext_hr_employee_id, shift_band = 'morning', now } = {},
   ) {
+    if (!this.#can('supervision.crear')) return this.#denied();
     const workCenter = this.workCenterById(workCenterId);
     if (!workCenter) throw new Error(`Centro de trabajo no encontrado: ${workCenterId}`);
     const employee = this.hrEmployees.find((row) => row.ext_hr_employee_id === ext_hr_employee_id);
@@ -2138,6 +2212,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   setWorkCenterOperationalStatus(workCenterId, status) {
+    if (!this.#can('supervision.editar')) return this.#denied();
     const allowed = ['in_operation', 'paused', 'fault', 'changeover', 'available'];
     if (!allowed.includes(status)) throw new Error(`Estado operativo inválido: ${status}`);
     const workCenter = this.workCenterById(workCenterId);
@@ -2149,6 +2224,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   validateShiftClosure(shiftId, { supervisor_notes = null, now } = {}) {
+    if (!this.#can('supervision.aprobar')) return this.#denied();
     const shift = this.#shiftFor(shiftId);
     if (!shift) throw new Error(`Turno no encontrado: ${shiftId}`);
     const delays = this.delaysForOperation(shift.po_operation_id);
@@ -2171,6 +2247,7 @@ export class ManufacturingStore extends EventTarget {
     reportedBy = null,
     now,
   } = {}) {
+    if (!this.#can('mantenimiento.crear')) return this.#denied();
     const workCenter = this.workCenterById(workCenterId);
     if (!workCenter) throw new Error(`Centro de trabajo no encontrado: ${workCenterId}`);
     if (operationDelayId) {
@@ -2231,6 +2308,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   addRoleUser(role, { username } = {}) {
+    if (!this.#can('roles.crear')) return this.#denied();
     const property = ROLE_USER_PROPERTIES[role];
     const normalized = normalizedUsername(username);
     if (!property || !normalized) return null;
@@ -2253,6 +2331,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   createUserWithRoles(username, roles) {
+    if (!this.#can('roles.crear')) return [];
     const normalized = normalizedUsername(username);
     const uniqueRoles = [...new Set(Array.isArray(roles) ? roles : [])].filter((role) =>
       CANONICAL_ROLES.includes(role),
@@ -2280,6 +2359,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   assignRoleToUser(username, role) {
+    if (!this.#can('roles.editar')) return this.#denied();
     const property = ROLE_USER_PROPERTIES[role];
     const normalized = normalizedUsername(username);
     if (!property || !normalized) return false;
@@ -2301,6 +2381,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   removeRoleUser(role, username) {
+    if (!this.#can('roles.editar')) return this.#denied();
     const property = ROLE_USER_PROPERTIES[role];
     const normalized = normalizedUsername(username);
     if (!property || !normalized) return { ok: false, reason: 'invalid-input' };
@@ -2340,7 +2421,8 @@ export class ManufacturingStore extends EventTarget {
   }
 
   canPerformActionFor(role, action) {
-    return canPerformAction(role, action, this.rolePermissions);
+    const canonical = LEGACY_ACTION_MAP[action] ?? action;
+    return can(role, canonical) || canPerformAction(role, action, this.rolePermissions);
   }
 
   #enrichedOperations() {
@@ -2428,6 +2510,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   setIndicatorThreshold({ indicator, threshold, comparison } = {}) {
+    if (!this.#can('panel.configurar')) return this.#denied();
     const indicators = ['load', 'oee', 'downtime', 'fulfillment'];
     if (!indicators.includes(indicator)) {
       throw new Error(`Indicador desconocido: ${indicator}`);
@@ -2470,6 +2553,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   changeOrderPriority(orderId, priority) {
+    if (!this.#can('panel.editar')) return this.#denied();
     const order = this.orderById(orderId);
     if (!order) throw new Error(`Orden no encontrada: ${orderId}`);
     if (order.status !== 'planned') {
@@ -2485,6 +2569,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   cancelOrderFromPanel(orderId, { reason } = {}) {
+    if (!this.#can('panel.editar')) return this.#denied();
     const order = this.orderById(orderId);
     if (!order) throw new Error(`Orden no encontrada: ${orderId}`);
     if (order.status === 'cancelled' || order.status === 'completed') {
@@ -2536,6 +2621,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   updatePlannedDates(orderId, { planned_start_date, planned_end_date } = {}) {
+    if (!this.#can('planificacion.editar')) return this.#denied();
     const order = this.orderById(orderId);
     if (!order) throw new Error(`Orden no encontrada: ${orderId}`);
     if (!canRescheduleOrder(order)) {
@@ -2639,6 +2725,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   scheduleOrderRange(orderId, payload = {}, role = null) {
+    if (!this.#can('planificacion.editar')) return this.#denied();
     if (role && !canEditOrderSchedule(role)) {
       throw new Error('Su rol no puede modificar horarios del calendario.');
     }
@@ -2678,6 +2765,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   setOrderPriority(orderId, priority, role = 'plant_manager') {
+    if (!this.#can('panel.configurar')) return this.#denied();
     if (role !== 'plant_manager') {
       throw new Error('Solo la jefa de planta puede cambiar la prioridad.');
     }
@@ -2696,6 +2784,7 @@ export class ManufacturingStore extends EventTarget {
   }
 
   setCriticalUrgent(orderId, flag, role = 'plant_manager') {
+    if (!this.#can('panel.configurar')) return this.#denied();
     if (role !== 'plant_manager') {
       throw new Error('Solo la jefa de planta puede marcar urgencia crítica.');
     }

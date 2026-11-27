@@ -6,8 +6,6 @@
 
 import {
   buildPreventiveOrderFromHistory,
-  canEditMaintenanceFrequency,
-  canRescheduleMaintenance,
   canResolveScheduledMaintenance,
   deriveWearIndicator,
   isResolvedMaintenance,
@@ -26,6 +24,7 @@ import { daysFromNow, relativeDay } from '../data/fixtures/demo-dates.js';
 import { stopEventLabel, technicianLabel } from './labels.js';
 import { icon } from './icons.js';
 import { showToast } from './Toast.js';
+import { can } from '../domain/access-control.js';
 
 const TICKET_STATUS_LABEL = {
   open: 'Abierto',
@@ -139,6 +138,9 @@ function currentCalendarMonth() {
  * @returns {HTMLElement}
  */
 export function MaintenancePanel(store, { role = 'maintenance' } = {}) {
+  const canView = can(role, 'mantenimiento.ver');
+  const canEdit = can(role, 'mantenimiento.editar');
+  const canApprove = can(role, 'mantenimiento.aprobar');
   let activeTab = 'maintenances';
   let selectedTicketId = null;
   let selectedMachineId = null;
@@ -157,7 +159,7 @@ export function MaintenancePanel(store, { role = 'maintenance' } = {}) {
         </div>
       </header>
 
-      <nav class="maintenance-tabs" role="tablist" aria-label="Secciones de mantenimiento">
+      <nav class="maintenance-tabs" role="tablist" aria-label="Secciones de mantenimiento" data-action="mantenimiento.ver">
         <button type="button" class="maintenance-tabs__tab" role="tab" data-role="maintenance-tab" data-tab="maintenances" aria-selected="true">
           <span class="maintenance-tabs__icon">${icon('scheduling')}</span><span>Mantenimientos</span>
         </button>
@@ -402,10 +404,7 @@ export function MaintenancePanel(store, { role = 'maintenance' } = {}) {
       </header>
       <div class="panel__body">
         <dl class="detail-list">
-          <div><dt>Cada cuánto se recomienda mantención</dt><dd>${frequencyControl(
-            wc,
-            canEditMaintenanceFrequency(role),
-          )}</dd></div>
+          <div><dt>Cada cuánto se recomienda mantención</dt><dd>${frequencyControl(wc, canEdit)}</dd></div>
           <div><dt>Estado operativo</dt><dd>${operationalBadge(wc.operational_status)}</dd></div>
           <div><dt>Desgaste</dt><dd>${wearBadge(wear.wear_level)}</dd></div>
           <div><dt>Fallas resueltas</dt><dd>${fmtNumber(wear.failure_count)}</dd></div>
@@ -420,9 +419,13 @@ export function MaintenancePanel(store, { role = 'maintenance' } = {}) {
           ${failureList(wc.id)}
         </section>
         <div class="detail-actions">
-          <button type="button" class="btn btn--small btn--primary" data-preventive-create data-center="${escapeHtml(
-            wc.id,
-          )}">Programar preventiva</button>
+          ${
+            canEdit
+              ? `<button type="button" class="btn btn--small btn--primary" data-preventive-create data-center="${escapeHtml(
+                  wc.id,
+                )}">Programar preventiva</button>`
+              : ''
+          }
           <button type="button" class="btn btn--small" data-role="review-history" data-center="${escapeHtml(
             wc.id,
           )}">Revisar históricas</button>
@@ -485,7 +488,8 @@ export function MaintenancePanel(store, { role = 'maintenance' } = {}) {
   }
 
   function scheduleButton(ticket) {
-    const disabled = !canRescheduleMaintenance(role) || ticket.ticket_status === 'resolved';
+    if (!canEdit) return '';
+    const disabled = ticket.ticket_status === 'resolved';
     return `<button type="button" class="btn btn--small" data-schedule-ticket="${escapeHtml(
       ticket.id,
     )}" ${disabled ? 'disabled title="No se puede programar esta mantención"' : ''}>Programar mantención</button>`;
@@ -658,17 +662,15 @@ export function MaintenancePanel(store, { role = 'maintenance' } = {}) {
             ${filtered
               .map((event) => {
                 const resolved = isResolvedMaintenance(event);
-                const action = resolved
-                  ? `<button type="button" class="btn btn--small btn--danger" data-delete-maintenance="${escapeHtml(
-                      event.id,
-                    )}" ${role === 'maintenance' ? '' : 'disabled'}>Eliminar</button>`
-                  : `<button type="button" class="btn btn--small btn--primary" data-resolve-scheduled="${escapeHtml(
-                      event.id,
-                    )}" ${
-                      role === 'maintenance' && canResolveScheduledMaintenance(event)
-                        ? ''
-                        : 'disabled'
-                    }>Resolver</button>`;
+                const action = !canApprove
+                  ? ''
+                  : resolved
+                    ? `<button type="button" class="btn btn--small btn--danger" data-delete-maintenance="${escapeHtml(
+                        event.id,
+                      )}">Eliminar</button>`
+                    : `<button type="button" class="btn btn--small btn--primary" data-resolve-scheduled="${escapeHtml(
+                        event.id,
+                      )}" ${canResolveScheduledMaintenance(event) ? '' : 'disabled'}>Resolver</button>`;
                 return `<tr data-maintenance-row="${escapeHtml(event.id)}">
                   <td class="maint-code"><strong>${escapeHtml(maintenanceCode(event))}</strong></td>
                   <td>${escapeHtml(event.work_center_name || workCenterName(event.work_center_id))}</td>
@@ -750,6 +752,7 @@ export function MaintenancePanel(store, { role = 'maintenance' } = {}) {
   }
 
   function openScheduleModal(ticketId) {
+    if (!canEdit) return;
     const ticket = ticketById(ticketId);
     if (!ticket) return;
     const techOptions = store.technicians
@@ -811,6 +814,7 @@ export function MaintenancePanel(store, { role = 'maintenance' } = {}) {
   }
 
   function openPreventiveModal(workCenterId) {
+    if (!canEdit) return;
     const centerId = workCenterId || selectedMachineId;
     if (!centerId) return;
     const suggestion = buildPreventiveOrderFromHistory(
@@ -877,6 +881,7 @@ export function MaintenancePanel(store, { role = 'maintenance' } = {}) {
   }
 
   async function handleResolveScheduled(id) {
+    if (!canApprove) return;
     const confirmed = await confirmDialog({
       title: 'Resolver mantención',
       message: '¿Está seguro que quiere resolver esta mantención?',
@@ -892,6 +897,7 @@ export function MaintenancePanel(store, { role = 'maintenance' } = {}) {
   }
 
   async function handleDeleteMaintenance(id) {
+    if (!canApprove) return;
     const confirmed = await confirmDialog({
       title: 'Eliminar mantención histórica',
       message: 'Esta acción elimina el registro de v2 y del calendario. No se puede deshacer.',
@@ -1001,6 +1007,7 @@ export function MaintenancePanel(store, { role = 'maintenance' } = {}) {
       maintenanceStatus = target.value;
       renderMaintenances();
     } else if (target.matches('[data-role="frequency-input"]')) {
+      if (!canEdit) return;
       try {
         store.setRecommendedMaintenanceFrequency(target.dataset.center, target.value, role);
         showToast('Frecuencia recomendada actualizada', { tone: 'success' });
@@ -1044,6 +1051,12 @@ export function MaintenancePanel(store, { role = 'maintenance' } = {}) {
   );
 
   function renderAll() {
+    if (!canView) {
+      root.querySelectorAll('[data-role="maintenance-tabpanel"]').forEach((panel) => {
+        panel.innerHTML = '<p class="empty-note">Sin permiso para ver mantenimiento.</p>';
+      });
+      return;
+    }
     renderTabs();
     renderMachines();
     renderMachineDetail();

@@ -70,14 +70,14 @@ const PRIORITY_LABEL = { low: 'Baja', normal: 'Normal', high: 'Alta' };
  */
 export function PlantPerformancePanel(store, options = {}) {
   let periodKey = 'october';
-  let role = options.role || 'plant_manager';
+  let role = store.sessionPreviewRole || options.role || 'plant_manager';
 
   const root = el(`
     <section class="view plant-view">
       <header class="view__header">
         <div>
           <h1>Desempeño de Planta</h1>
-          <p class="view__subtitle">Indicadores agregados por período. El rol global fija el valor inicial; puedes simular otros permisos aquí. Solo contexto operacional — no evaluación de desempeño.</p>
+          <p class="view__subtitle">Indicadores agregados por período. Los permisos se toman de la sesión autenticada. Solo contexto operacional — no evaluación de desempeño.</p>
         </div>
         <div class="inline-actions">
           <label class="inline-field">Período
@@ -87,32 +87,24 @@ export function PlantPerformancePanel(store, options = {}) {
               <option value="all">Todo el historial</option>
             </select>
           </label>
-          <label class="inline-field">Rol simulado
-            <select data-role="role">
-              <option value="plant_manager">Jefa de Planta</option>
-              <option value="supervisor">Supervisor de línea</option>
-              <option value="planner">Planificador</option>
-              <option value="operator">Operador de Máquina</option>
-            </select>
-          </label>
           <button type="button" class="btn" data-export="csv">Exportar CSV</button>
           <button type="button" class="btn" data-export="pdf">Exportar PDF</button>
         </div>
       </header>
-      <div class="performance-body" data-role="body"></div>
+      <div class="performance-body" data-role="body" data-action="panel.ver"></div>
       <div class="modal-root" data-role="modal-root"></div>
     </section>`);
 
   const bodyEl = root.querySelector('[data-role="body"]');
   const modalRoot = root.querySelector('[data-role="modal-root"]');
   const periodEl = root.querySelector('[data-role="period"]');
-  const roleEl = root.querySelector('[data-role="role"]');
 
   function currentPeriod() {
     return PERIODS[periodKey];
   }
 
   function render() {
+    role = store.sessionPreviewRole || role;
     const period = currentPeriod();
     const data = store.plantPerformanceFor(period);
     const canSetThreshold = store.canPerformActionFor(role, 'set_threshold');
@@ -231,7 +223,7 @@ export function PlantPerformancePanel(store, options = {}) {
           <td>${escapeHtml(order.order_number)}</td>
           <td>${orderStatusBadge(order.status)}</td>
           <td class="perf-select">
-            <select class="priority-select" data-priority="${escapeHtml(order.id)}" ${priorityDisabled ? 'disabled' : ''}>
+            <select class="priority-select" data-priority="${escapeHtml(order.id)}" ${canChangePriority ? 'data-action="panel.editar"' : ''} ${priorityDisabled ? 'disabled' : ''}>
               ${['low', 'normal', 'high']
                 .map(
                   (priority) =>
@@ -240,7 +232,7 @@ export function PlantPerformancePanel(store, options = {}) {
                 .join('')}
             </select>
           </td>
-          <td class="perf-action"><button type="button" class="btn btn--tiny btn--danger" data-cancel="${escapeHtml(order.id)}" ${canCancel ? '' : 'disabled'}>Cancelar</button></td>
+          <td class="perf-action"><button type="button" class="btn btn--tiny btn--danger" data-cancel="${escapeHtml(order.id)}" ${canCancel ? 'data-action="panel.editar"' : ''} ${canCancel ? '' : 'disabled'}>Cancelar</button></td>
         </tr>`;
       })
       .join('');
@@ -276,7 +268,7 @@ export function PlantPerformancePanel(store, options = {}) {
               </select>
             </label>
             <p class="form-error" data-role="threshold-error" role="alert"></p>
-            <button type="submit" class="btn btn--primary" ${canSetThreshold ? '' : 'disabled'}>Guardar umbral</button>
+            <button type="submit" class="btn btn--primary" ${canSetThreshold ? 'data-action="panel.configurar"' : ''} ${canSetThreshold ? '' : 'disabled'}>Guardar umbral</button>
             <p class="empty-note">${canSetThreshold ? '' : 'El rol simulado no puede modificar umbrales.'}</p>
           </form>
           </div>
@@ -360,7 +352,9 @@ export function PlantPerformancePanel(store, options = {}) {
 
     for (const button of root.querySelectorAll('[data-export]')) {
       button.disabled = !canExport;
-      button.title = canExport ? '' : 'El rol simulado no puede exportar.';
+      button.title = canExport ? '' : 'Tu rol no puede exportar.';
+      if (canExport) button.dataset.action = 'panel.exportar';
+      else delete button.dataset.action;
     }
   }
 
@@ -408,10 +402,6 @@ export function PlantPerformancePanel(store, options = {}) {
     periodKey = periodEl.value;
     render();
   });
-  roleEl.addEventListener('change', () => {
-    role = roleEl.value;
-    render();
-  });
   for (const button of root.querySelectorAll('[data-export]')) {
     button.addEventListener('click', () => {
       const report = store.consolidatedReportFor(currentPeriod());
@@ -420,7 +410,6 @@ export function PlantPerformancePanel(store, options = {}) {
       showToast('Reporte generado', { tone: 'info' });
     });
   }
-  roleEl.value = role;
   store.addEventListener('change', render);
   render();
   return root;

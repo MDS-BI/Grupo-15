@@ -103,19 +103,20 @@ afterEach(() => {
 
 describe('Panel de desempeño de planta (US-08)', () => {
   it('muestra KPIs, aplica permisos por rol y actualiza umbrales', () => {
-    document.body.appendChild(PlantPerformancePanel(store));
+    store.setSessionRole('plant_manager', 'operator');
+    document.body.appendChild(PlantPerformancePanel(store, { role: 'operator' }));
     expect(document.body.textContent).toContain('no evaluación de desempeño');
     expect(document.body.textContent).not.toMatch(/ranking/i);
     expect(document.querySelector('[data-kpi="load"]').textContent).toContain('%');
-    expect(document.querySelectorAll('[data-wc]')).toHaveLength(6);
-
-    change('[data-role="role"]', 'operator');
+    expect(document.querySelectorAll('[data-wc]')).toHaveLength(10);
+    expect(document.querySelector('[data-role="role-select"]')).toBeNull();
     expect(
       document.querySelector('[data-role="threshold-form"] button[type="submit"]').disabled,
     ).toBe(true);
     expect(document.querySelector('[data-export="csv"]').disabled).toBe(true);
 
-    change('[data-role="role"]', 'plant_manager');
+    store.setSessionRole('plant_manager', 'plant_manager');
+    document.body.replaceChildren(PlantPerformancePanel(store, { role: 'plant_manager' }));
     expect(document.querySelector('[data-export="csv"]').disabled).toBe(false);
 
     change('[data-role="threshold-form"] [name="indicator"]', 'downtime');
@@ -144,10 +145,10 @@ describe('Panel de desempeño de planta (US-08)', () => {
 describe('Planificación de producción (US-10)', () => {
   it('filtra, guarda fechas y muestra errores de rango', () => {
     document.body.appendChild(ProductionSchedulingPanel(store));
-    expect(document.querySelector('[data-summary="planned"]').textContent).toBe('Planificadas: 11');
+    expect(document.querySelector('[data-summary="planned"]').textContent).toBe('Planificadas: 36');
 
     change('[data-role="filter-status"]', 'planned');
-    expect(document.querySelectorAll('tr[data-order]')).toHaveLength(3);
+    expect(document.querySelectorAll('tr[data-order]')).toHaveLength(12);
 
     fill('[data-date="start"][data-order="po_3004"]', '2026-11-01');
     fill('[data-date="end"][data-order="po_3004"]', '2026-11-10');
@@ -424,15 +425,15 @@ describe('Balance de líneas (US-11)', () => {
     document.body.appendChild(LineBalancePanel(store));
     expect(document.body.textContent).toContain('no evaluación de desempeño');
     expect(document.body.textContent).not.toMatch(/ranking/i);
-    expect(document.querySelectorAll('[data-wc]')).toHaveLength(6);
+    expect(document.querySelectorAll('[data-wc]')).toHaveLength(10);
     expect(document.querySelectorAll('[data-wc].is-bottleneck')).toHaveLength(1);
     expect(document.querySelector('[data-bottleneck]').textContent).toContain('Cuello de botella:');
     expect(document.querySelector('[data-unscheduled]').textContent).toContain(
-      'Órdenes sin fechas excluidas: 2',
+      'Órdenes sin fechas excluidas: 4',
     );
 
     change('[data-role="order-select"]', 'po_3004');
-    expect(document.querySelectorAll('[data-order-wc]')).toHaveLength(6);
+    expect(document.querySelectorAll('[data-order-wc]')).toHaveLength(10);
     expect(document.querySelector('[data-order-wc="wc_corte"]')).toBeTruthy();
   });
 
@@ -480,9 +481,9 @@ describe('Balance de líneas (US-11)', () => {
     const armadoDailyCell = document.querySelectorAll('[data-wc="wc_armado"] td')[dailyIndex];
     expect(armadoDailyCell.querySelector('.bar').classList.contains('bar--bottleneck')).toBe(true);
     expect(armadoDailyCell.querySelector('.bar__label').className).toBe('bar__label');
-    expect(document.querySelectorAll('.bar__fill').length).toBe(12);
-    expect(document.querySelectorAll('.balance-chart__fill').length).toBe(6);
-    expect(document.querySelectorAll('.balance-chart__ref').length).toBe(6);
+    expect(document.querySelectorAll('.bar__fill').length).toBe(20);
+    expect(document.querySelectorAll('.balance-chart__fill').length).toBe(10);
+    expect(document.querySelectorAll('.balance-chart__ref').length).toBe(10);
   });
 
   it('abre un popover compacto con las órdenes del centro al hacer clic en una fila', () => {

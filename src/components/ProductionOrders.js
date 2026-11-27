@@ -21,14 +21,22 @@ import { decimalInput, parseDecimal } from './numeric-field.js';
 import { showToast } from './Toast.js';
 import { canTransition } from '../domain/order-state-machine.js';
 import { notifyDialog } from './ConfirmDialog.js';
+import { can } from '../domain/access-control.js';
 
 const BOARD_COLUMNS = ['planned', 'released', 'in_progress', 'completed'];
 
 /**
  * @param {import('../data/ManufacturingStore.js').ManufacturingStore} store
+ * @param {{role?: string}} [options]
  * @returns {HTMLElement}
  */
-export function ProductionOrders(store) {
+export function ProductionOrders(store, options = {}) {
+  const role = options.role;
+  const canView = can(role, 'orders.ver');
+  const canCreate = can(role, 'orders.crear');
+  const canEdit = can(role, 'orders.editar');
+  const canViewStation = can(role, 'estacion.ver');
+  const canViewSupervision = can(role, 'supervision.ver');
   let selectedOrderId = null;
   let draggingOrderId = null;
   let dragJustEnded = false;
@@ -42,7 +50,7 @@ export function ProductionOrders(store) {
           <h1>Órdenes de Producción</h1>
           <p class="view__subtitle">Despacho, estado y trazabilidad plan-vs-real.</p>
         </div>
-        <button type="button" class="btn btn--primary btn--header-action" data-role="new-order">Nueva Orden</button>
+        ${canCreate ? '<button type="button" class="btn btn--primary btn--header-action" data-role="new-order" data-action="orders.crear">Nueva Orden</button>' : ''}
       </header>
       <div class="orders-toolbar">
         <label class="inline-field">Buscar
@@ -58,7 +66,7 @@ export function ProductionOrders(store) {
         </label>
       </div>
       <div class="orders-layout">
-        <div class="orders-board" data-role="board"></div>
+        <div class="orders-board" data-role="board" data-action="orders.ver"></div>
         <aside class="panel panel--side" data-role="detail"></aside>
       </div>
       <div class="modal-root" data-role="modal-root"></div>
@@ -77,6 +85,10 @@ export function ProductionOrders(store) {
   }
 
   function renderBoard() {
+    if (!canView) {
+      boardEl.innerHTML = '<p class="empty-note">Sin permiso para ver órdenes.</p>';
+      return;
+    }
     boardEl.innerHTML = BOARD_COLUMNS.map((status) => {
       const orders = store.productionOrders.filter((o) => o.status === status && matchesFilters(o));
       const cards = orders.map((order) => card(order)).join('');
@@ -99,30 +111,33 @@ export function ProductionOrders(store) {
         selectedOrderId = cardEl.getAttribute('data-order');
         renderDetail();
       });
-      cardEl.addEventListener('dragstart', (event) => {
-        const orderId = cardEl.getAttribute('data-order');
-        draggingOrderId = orderId;
-        if (event.dataTransfer) {
-          event.dataTransfer.setData('text/plain', orderId);
-          event.dataTransfer.effectAllowed = 'move';
-        }
-        cardEl.classList.add('is-dragging');
-      });
-      cardEl.addEventListener('dragend', () => {
-        draggingOrderId = null;
-        dragJustEnded = true;
-        cardEl.classList.remove('is-dragging');
-        boardEl.querySelectorAll('.is-drop-target').forEach((node) => {
-          node.classList.remove('is-drop-target');
+      if (canEdit) {
+        cardEl.addEventListener('dragstart', (event) => {
+          const orderId = cardEl.getAttribute('data-order');
+          draggingOrderId = orderId;
+          if (event.dataTransfer) {
+            event.dataTransfer.setData('text/plain', orderId);
+            event.dataTransfer.effectAllowed = 'move';
+          }
+          cardEl.classList.add('is-dragging');
         });
-        setTimeout(() => {
-          dragJustEnded = false;
-        }, 0);
-      });
+        cardEl.addEventListener('dragend', () => {
+          draggingOrderId = null;
+          dragJustEnded = true;
+          cardEl.classList.remove('is-dragging');
+          boardEl.querySelectorAll('.is-drop-target').forEach((node) => {
+            node.classList.remove('is-drop-target');
+          });
+          setTimeout(() => {
+            dragJustEnded = false;
+          }, 0);
+        });
+      }
     });
 
     boardEl.querySelectorAll('.kanban-col__body').forEach((columnEl) => {
       columnEl.addEventListener('dragover', (event) => {
+        if (!canEdit) return;
         const status = columnEl.parentElement.getAttribute('data-status');
         const orderId = draggingOrderId || event.dataTransfer?.getData('text/plain');
         const order = store.orderById(orderId);
@@ -135,6 +150,7 @@ export function ProductionOrders(store) {
         if (!columnEl.contains(event.relatedTarget)) columnEl.classList.remove('is-drop-target');
       });
       columnEl.addEventListener('drop', async (event) => {
+        if (!canEdit) return;
         event.preventDefault();
         columnEl.classList.remove('is-drop-target');
         const status = columnEl.parentElement.getAttribute('data-status');
@@ -162,7 +178,7 @@ export function ProductionOrders(store) {
       : '<span class="tag tag--stock">Stock</span>';
     const active = order.id === selectedOrderId ? 'is-active' : '';
     return `
-      <button type="button" class="order-card ${active}" data-order="${escapeHtml(order.id)}" draggable="true" title="Arrastra a otra columna para cambiar el estado">
+      <button type="button" class="order-card ${active}" data-order="${escapeHtml(order.id)}" draggable="${canEdit ? 'true' : 'false'}" title="Arrastra a otra columna para cambiar el estado">
         <div class="order-card__top">
           <strong>${escapeHtml(order.order_number)}</strong>
           <span class="priority priority--${escapeHtml(order.priority)}">${escapeHtml(PRIORITY_LABEL[order.priority] || order.priority)}</span>
@@ -176,6 +192,11 @@ export function ProductionOrders(store) {
   }
 
   function renderDetail() {
+    if (!canView) {
+      detailEl.innerHTML = `<header class="panel__header"><h2>Detalle</h2></header>
+        <div class="panel__body"><p class="empty-note">Sin permiso para ver órdenes.</p></div>`;
+      return;
+    }
     const order = store.orderById(selectedOrderId);
     if (!order) {
       detailEl.innerHTML = `<header class="panel__header"><h2>Detalle</h2></header>
@@ -201,12 +222,14 @@ export function ProductionOrders(store) {
         cancelled: [],
       }[order.status] || [];
 
-    const actions = transitions
-      .map(
-        (t) =>
-          `<button type="button" class="btn btn--small" data-transition="${t}">${ORDER_STATUS_LABEL[t]}</button>`,
-      )
-      .join('');
+    const actions = canEdit
+      ? transitions
+          .map(
+            (t) =>
+              `<button type="button" class="btn btn--small" data-transition="${t}">${ORDER_STATUS_LABEL[t]}</button>`,
+          )
+          .join('')
+      : '';
 
     const opRows = ops
       .map((op) => {
@@ -220,8 +243,8 @@ export function ProductionOrders(store) {
           <td>${fmtNumber(op.planned_time_minutes)}</td>
           <td>${op.actual_time_minutes != null ? fmtNumber(op.actual_time_minutes) : '—'}</td>
           <td class="cell--actions">
-            ${canStart ? `<button type="button" class="btn btn--tiny" data-start="${escapeHtml(op.id)}">Iniciar</button>` : ''}
-            ${canComplete ? `<button type="button" class="btn btn--tiny btn--primary" data-complete="${escapeHtml(op.id)}">Completar</button>` : ''}
+            ${canEdit && canStart ? `<button type="button" class="btn btn--tiny" data-start="${escapeHtml(op.id)}">Iniciar</button>` : ''}
+            ${canEdit && canComplete ? `<button type="button" class="btn btn--tiny btn--primary" data-complete="${escapeHtml(op.id)}">Completar</button>` : ''}
           </td>
         </tr>`;
       })
@@ -283,10 +306,10 @@ export function ProductionOrders(store) {
       </div>
 
       <div class="detail-actions">
-        <button type="button" class="btn btn--small" data-role="consume">Registrar Consumo</button>
-        <button type="button" class="btn btn--small btn--primary" data-role="output">Registrar Salida</button>
-        <button type="button" class="btn btn--small" data-role="open-operator">Estación del operador</button>
-        <button type="button" class="btn btn--small" data-role="open-supervisor">Supervisión de línea</button>
+        ${canEdit ? '<button type="button" class="btn btn--small" data-role="consume">Registrar Consumo</button>' : ''}
+        ${canEdit ? '<button type="button" class="btn btn--small btn--primary" data-role="output">Registrar Salida</button>' : ''}
+        ${canViewStation ? '<button type="button" class="btn btn--small" data-role="open-operator">Estación del operador</button>' : ''}
+        ${canViewSupervision ? '<button type="button" class="btn btn--small" data-role="open-supervisor">Supervisión de línea</button>' : ''}
         </div>
       </div>`;
 
@@ -345,11 +368,13 @@ export function ProductionOrders(store) {
     const operatorBtn = detailEl.querySelector('[data-role="open-operator"]');
     if (operatorBtn)
       operatorBtn.addEventListener('click', () =>
-        openEmbeddedPanel(OperatorWorkstationPanel(store)),
+        openEmbeddedPanel(OperatorWorkstationPanel(store, { role })),
       );
     const supervisorBtn = detailEl.querySelector('[data-role="open-supervisor"]');
     if (supervisorBtn)
-      supervisorBtn.addEventListener('click', () => openEmbeddedPanel(SupervisorLinePanel(store)));
+      supervisorBtn.addEventListener('click', () =>
+        openEmbeddedPanel(SupervisorLinePanel(store, { role })),
+      );
   }
 
   function openEmbeddedPanel(panel) {
@@ -373,6 +398,7 @@ export function ProductionOrders(store) {
   }
 
   function openConsumptionModal(order) {
+    if (!canEdit) return;
     const lines = store.bomComponents.filter((c) => c.bom_id === order.bom_id);
     const options = lines
       .map((line) => {
@@ -446,6 +472,7 @@ export function ProductionOrders(store) {
   }
 
   function openOutputModal(order) {
+    if (!canEdit) return;
     const product = store.productById(order.product_id);
     const warehouseOptions = store.warehouses
       .filter((w) => w.warehouse_type === 'finished_goods')
@@ -515,6 +542,7 @@ export function ProductionOrders(store) {
   }
 
   function openNewOrderModal() {
+    if (!canCreate) return;
     const productOptions = store.products
       .filter((p) => p.product_type === 'finished_good')
       .map(
@@ -617,7 +645,7 @@ export function ProductionOrders(store) {
     priorityFilter = event.target.value;
     renderBoard();
   });
-  root.querySelector('[data-role="new-order"]').addEventListener('click', openNewOrderModal);
+  root.querySelector('[data-role="new-order"]')?.addEventListener('click', openNewOrderModal);
   store.addEventListener('change', renderAll);
   renderAll();
   return root;

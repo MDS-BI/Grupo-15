@@ -16,12 +16,19 @@ import { DelayCorrectionDialog } from './DelayCorrectionDialog.js';
 import { operationLabel, stopEventLabel } from './labels.js';
 import { decimalInput, parseDecimal } from './numeric-field.js';
 import { showToast } from './Toast.js';
+import { can } from '../domain/access-control.js';
 
 /**
  * @param {import('../data/ManufacturingStore.js').ManufacturingStore} store
+ * @param {{role?: string}} [options]
  * @returns {HTMLElement}
  */
-export function OperatorWorkstationPanel(store) {
+export function OperatorWorkstationPanel(store, options = {}) {
+  const role = options.role;
+  const canView = can(role, 'estacion.ver');
+  const canCreate = can(role, 'estacion.crear');
+  const canEdit = can(role, 'estacion.editar');
+  const canApprove = can(role, 'estacion.aprobar');
   let selectedOperationId = null;
 
   const root = el(`
@@ -66,6 +73,10 @@ export function OperatorWorkstationPanel(store) {
   }
 
   function renderBody() {
+    if (!canView) {
+      bodyEl.innerHTML = '<p class="empty-note">Sin permiso para ver la estación.</p>';
+      return;
+    }
     const operation = store.productionOrderOperations.find((op) => op.id === selectedOperationId);
     if (!operation) {
       bodyEl.innerHTML = '<p class="empty-note">Sin operaciones para registrar turno.</p>';
@@ -133,9 +144,19 @@ export function OperatorWorkstationPanel(store) {
             <div class="mini-stat"><span class="mini-stat__value">${formatDurationLong(operation.delay_time_minutes || 0)}</span><span class="mini-stat__label">Atrasos cerrados</span></div>
             <div class="mini-stat"><span class="mini-stat__value">${fmtNumber(operation.quantity_completed)} / ${fmtNumber(plannedQuantity)}</span><span class="mini-stat__label">Avance acumulado</span></div>
           </div>
-          <div class="detail-actions">
-            <button type="button" class="btn btn--primary" data-role="toggle" aria-pressed="${operation.status === 'in_progress'}" ${operation.status === 'completed' ? 'disabled' : ''}>${toggleText}</button>
-          </div>
+          ${
+            operation.status === 'in_progress'
+              ? canApprove
+                ? `<div class="detail-actions">
+            <button type="button" class="btn btn--primary" data-role="toggle" aria-pressed="true" data-action="estacion.aprobar">${toggleText}</button>
+          </div>`
+                : ''
+              : canCreate && operation.status !== 'completed'
+                ? `<div class="detail-actions">
+            <button type="button" class="btn btn--primary" data-role="toggle" aria-pressed="false" data-action="estacion.crear">${toggleText}</button>
+          </div>`
+                : ''
+          }
           <p class="form-error" data-role="error" role="alert"></p>
           </div>
         </article>
@@ -150,12 +171,16 @@ export function OperatorWorkstationPanel(store) {
                 <strong data-role="shift-counter">${fmtNumber(shift ? shift.quantity_counted : 0)}</strong>
                 <span>piezas</span>
               </div>
-              <div class="counter-controls">
-                <button type="button" class="btn btn--tiny" data-counter="dec">−</button>
+              ${
+                canEdit
+                  ? `<div class="counter-controls">
+                <button type="button" class="btn btn--tiny" data-counter="dec" data-action="estacion.editar">−</button>
                 ${decimalInput({ name: 'counter', value: String(shift ? shift.quantity_counted : 0), min: 0, decimals: 0, label: 'El contador del turno', extra: `data-role="counter-input" ${shift ? '' : 'disabled'}` })}
-                <button type="button" class="btn btn--tiny" data-counter="inc" ${atLimit ? 'disabled' : ''}>+</button>
-                <button type="button" class="btn btn--tiny btn--primary" data-role="set-counter" ${shift ? '' : 'disabled'}>Fijar</button>
-              </div>
+                <button type="button" class="btn btn--tiny" data-counter="inc" data-action="estacion.editar" ${atLimit ? 'disabled' : ''}>+</button>
+                <button type="button" class="btn btn--tiny btn--primary" data-role="set-counter" data-action="estacion.editar" ${shift ? '' : 'disabled'}>Fijar</button>
+              </div>`
+                  : ''
+              }
             </section>
             <section class="counter-block counter-block--total" aria-label="Acumulado de la operación">
               <span class="counter-block__label">Acumulado</span>
@@ -185,8 +210,10 @@ export function OperatorWorkstationPanel(store) {
             </table>
           </div>
           <div class="stack-form">
-            <label>Motivo
-              <select data-role="delay-reason" ${shift ? '' : 'disabled'}>
+            ${
+              canCreate
+                ? `<label>Motivo
+              <select data-role="delay-reason" data-action="estacion.crear" ${shift ? '' : 'disabled'}>
                 <option value="">Selecciona…</option>${reasonOptions}
                 <option value="__custom">Nuevo motivo…</option>
               </select>
@@ -196,11 +223,21 @@ export function OperatorWorkstationPanel(store) {
             </label>
             <label>Nota
               <input type="text" data-role="delay-note" placeholder="Detalle opcional" />
-            </label>
+            </label>`
+                : ''
+            }
             <div class="delay-actions" role="group" aria-label="Acciones de atrasos">
-              <button type="button" class="btn btn--small" data-role="start-delay" ${shift && !openDelay ? '' : 'disabled'}>Registrar atraso</button>
-              <button type="button" class="btn btn--small btn--primary" data-role="close-delay" ${openDelay ? '' : 'disabled'}>Finalizar atraso</button>
-              <button type="button" class="btn btn--small" data-role="correct-delay" ${operation.status === 'completed' && openDelay ? '' : 'disabled'}>Corregir atraso abierto</button>
+              ${
+                canCreate
+                  ? `<button type="button" class="btn btn--small" data-role="start-delay" data-action="estacion.crear" ${shift && !openDelay ? '' : 'disabled'}>Registrar atraso</button>`
+                  : ''
+              }
+              ${
+                canEdit
+                  ? `<button type="button" class="btn btn--small btn--primary" data-role="close-delay" data-action="estacion.editar" ${openDelay ? '' : 'disabled'}>Finalizar atraso</button>
+              <button type="button" class="btn btn--small" data-role="correct-delay" data-action="estacion.editar" ${operation.status === 'completed' && openDelay ? '' : 'disabled'}>Corregir atraso abierto</button>`
+                  : ''
+              }
             </div>
           </div>
           <p class="form-error" data-role="delay-error" role="alert"></p>
@@ -211,12 +248,14 @@ export function OperatorWorkstationPanel(store) {
     const errorEl = bodyEl.querySelector('[data-role="error"]');
     const delayError = bodyEl.querySelector('[data-role="delay-error"]');
 
-    bodyEl.querySelector('[data-role="toggle"]').addEventListener('click', () => {
+    bodyEl.querySelector('[data-role="toggle"]')?.addEventListener('click', () => {
       try {
         if (operation.status === 'in_progress') {
+          if (!canApprove) return;
           openFinishConfirmation(operation);
           return;
         }
+        if (!canCreate) return;
         const assignment = store.activeAssignmentForWorkCenter(operation.work_center_id);
         store.startShift(operation.id, {
           operator_id: assignment ? assignment.ext_hr_employee_id : null,
@@ -229,12 +268,14 @@ export function OperatorWorkstationPanel(store) {
     });
 
     const reasonSelect = bodyEl.querySelector('[data-role="delay-reason"]');
-    reasonSelect.addEventListener('change', () => {
+    reasonSelect?.addEventListener('change', () => {
       bodyEl.querySelector('[data-role="custom-label"]').hidden = reasonSelect.value !== '__custom';
     });
-    bodyEl.querySelector('[data-role="custom-label"]').hidden = true;
+    if (bodyEl.querySelector('[data-role="custom-label"]')) {
+      bodyEl.querySelector('[data-role="custom-label"]').hidden = true;
+    }
 
-    bodyEl.querySelector('[data-role="start-delay"]').addEventListener('click', () => {
+    bodyEl.querySelector('[data-role="start-delay"]')?.addEventListener('click', () => {
       try {
         const reasonId = reasonSelect.value === '__custom' ? null : reasonSelect.value;
         const customLabel =
@@ -253,7 +294,7 @@ export function OperatorWorkstationPanel(store) {
       }
     });
 
-    bodyEl.querySelector('[data-role="close-delay"]').addEventListener('click', () => {
+    bodyEl.querySelector('[data-role="close-delay"]')?.addEventListener('click', () => {
       try {
         store.closeDelay(openDelay.id);
         showToast('Atraso cerrado', { tone: 'success' });
@@ -263,7 +304,7 @@ export function OperatorWorkstationPanel(store) {
       }
     });
 
-    bodyEl.querySelector('[data-role="correct-delay"]').addEventListener('click', () => {
+    bodyEl.querySelector('[data-role="correct-delay"]')?.addEventListener('click', () => {
       modalRoot.appendChild(DelayCorrectionDialog(store, operation.id, { onClose: render }));
     });
 
@@ -280,7 +321,7 @@ export function OperatorWorkstationPanel(store) {
       });
     }
     const setButton = bodyEl.querySelector('[data-role="set-counter"]');
-    setButton.addEventListener('click', () => {
+    setButton?.addEventListener('click', () => {
       try {
         store.setShiftCounter(
           operation.id,
@@ -300,6 +341,7 @@ export function OperatorWorkstationPanel(store) {
   }
 
   function openFinishConfirmation(operation) {
+    if (!canApprove) return;
     const shift = store.activeShiftFor(operation.id);
     const openDelays = store
       .delaysForOperation(operation.id)
